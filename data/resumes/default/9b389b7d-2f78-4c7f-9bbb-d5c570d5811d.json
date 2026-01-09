@@ -1,0 +1,226 @@
+{
+  "id": "9b389b7d-2f78-4c7f-9bbb-d5c570d5811d",
+  "contact": {
+    "name": "MARVIN CHAUDHARY",
+    "email": "mchaudhary1s@semo.edu",
+    "phone": "+1(573) 587-1035",
+    "linkedin": "linkedin.com/in/marvin-chaudhary",
+    "github": [
+      "github.com/Marvyn007",
+      "github.com/iammarvin7"
+    ]
+  },
+  "sections": [
+    {
+      "id": "c612dfe8-5fcd-4739-a246-6e84a6a35a61",
+      "type": "education",
+      "title": "Education",
+      "items": [
+        {
+          "id": "01ee5e35-52ae-4b85-8922-2360b04195da",
+          "title": "Southeast Missouri State University",
+          "subtitle": "Bachelor of Computer Science, Minor in Business Administration",
+          "dates": "2022 - 2026",
+          "bullets": [
+            {
+              "id": "8bc82ba3-8359-49b6-8e7c-804ad3bec480",
+              "text": "Relevant Coursework: Algorithms Design & Analysis, Data Structures, Discrete Structures, Object-Oriented Programming, Object-Oriented Design, Data Analytics, Software Engineering, Full-Stack Development.",
+              "isSuggested": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "2b1bf3dc-56ee-4fd6-9978-1ab9528c2cf4",
+      "type": "experience",
+      "title": "Experience",
+      "items": [
+        {
+          "id": "5e94da0f-dc7b-43a3-b5fd-705cfdc78500",
+          "title": "Remster",
+          "subtitle": "Frontend Engineer (Contract)",
+          "dates": "2025-10 - 2025-11",
+          "bullets": [
+            {
+              "id": "9e15b710-9da2-40e8-a6f2-c370636107eb",
+              "text": "Engineered fully responsive web layouts using Framer, implementing precise breakpoint logic to ensure seamless rendering across mobile, tablet, and desktop viewports. Diagnosed and resolved critical UI rendering issues related to absolute positioning and content overflow, optimizing the application for cross-device compatibility.",
+              "isSuggested": false
+            }
+          ]
+        },
+        {
+          "id": "302bec3d-e609-48a8-b0d8-385a0a4520d7",
+          "title": "Southeast Missouri State University",
+          "subtitle": "Undergraduate Researcher",
+          "dates": "2025-01 - null",
+          "bullets": [
+            {
+              "id": "b3f940dc-1267-47ce-94d8-b0f3bb5555f6",
+              "text": "Processed and visualized large-scale financial datasets using Pandas, NumPy, and Matplotlib to support graduate-level research on AI-driven asset allocation strategies.",
+              "isSuggested": false
+            }
+          ]
+        },
+        {
+          "id": "6424ca3c-ed28-4906-9d25-00f80095e768",
+          "title": "HackLabs Club",
+          "subtitle": "Founder & President",
+          "dates": "2025-09 - null",
+          "bullets": [
+            {
+              "id": "d9bb5e54-dd75-43a9-bd7a-56b4c97cefdf",
+              "text": "Established and scaled a technical community to 50+ members, driving innovation through weekly project-based workshops and hackathon training. Led a 9-member delegation to secure three podium finishes at Vibeathon, winning $2,500, directing the rapid delivery of six AI-integrated healthcare solutions in a 22-hour sprint.",
+              "isSuggested": false
+            }
+          ]
+        },
+        {
+          "id": "a98a0e50-8616-4c00-b2a1-788b0b581457",
+          "title": "Atlassian x ForgeHACK Hackathon",
+          "subtitle": "Finalist",
+          "dates": "2025-02 - 2025-02",
+          "bullets": [
+            {
+              "id": "f37ee9f7-579f-423e-9499-3dec4ddc7398",
+              "text": "Architected an AI-powered onboarding assistant on Atlassian Forge using JavaScript and ROVO Agents, implementing Jira tracking and NLP-based Confluence summarization.",
+              "isSuggested": false
+            }
+          ]
+        },
+        {
+          "id": "4ae85d5b-0a71-4f5b-9f5d-ca773e254b00",
+          "title": "Ravi's Study Program (RSP)",
+          "subtitle": "Community Member",
+          "dates": "2024-11 - null",
+          "bullets": [
+            {
+              "id": "ac770e36-91e6-4bbe-97a5-fd24d4014ebf",
+              "text": "Delivered algorithms and system design mentorship to 300+ peers through semi-weekly mock interviews, enhancing technical readiness for top-tier software engineering roles.",
+              "isSuggested": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "331d484a-5b7b-472c-9c75-1bb6ba47f0e7",
+      "type": "projects",
+      "title": "Projects",
+      "items": [
+        {
+          "id": "a0f92fd9-6288-4f5c-aa1d-d9befce54045",
+          "title": "Amor+Chai (E-Commerce Platform)",
+          "technologies": "Next.js, React, Supabase, Stripe, Tailwind, Three.js, PostgreSQL",
+          "bullets": [
+            {
+              "id": "dbcfa2f9-27c0-4b27-a98a-6c12db1d9472",
+              "text": "Architected a revenue-generating platform using Next.js Serverless API routes and Stripe, managing production data via a Supabase (PostgreSQL) schema with Row-Level Security and Authentication. Engineered high-performance 3D product rendering using Three.js and implemented the Provider Pattern (React Context) for scalable global state management of shopping carts and sessions.",
+              "isSuggested": false
+            }
+          ],
+          "links": [
+            {
+              "label": "Live Demo",
+              "url": "https://www.drinkamorchai.store"
+            }
+          ]
+        },
+        {
+          "id": "dfb3f3dc-958c-42c9-8d14-f97c0a16613b",
+          "title": "TurboMC: Sub-Second Monte Carlo Options Pricer",
+          "technologies": "C++, Multi-threading, OpenMP",
+          "bullets": [
+            {
+              "id": "07a9144c-9925-46ec-8afa-5248d6c5dffc",
+              "text": "Implemented Monte Carlo simulation for European options pricing with 10M+ path executions and <0.05% pricing error. Engineered C++ multi-threading solution achieving 6.9x speedup (44.25s → 6.45s) for call options and 6.8x (42.45s → 6.28s) for put options. Optimized with OpenMP parallel processing, reducing 10M simulation runtime by 90% (6.3s → 0.7s) across 8 CPU cores.",
+              "isSuggested": false
+            }
+          ],
+          "links": [
+            {
+              "label": "View",
+              "url": "null"
+            }
+          ]
+        },
+        {
+          "id": "044bfb3d-1dc2-416f-bdd9-b211bf22730b",
+          "title": "Ravi's Study Program: Leetcode Bot",
+          "technologies": "Python, Discord.py, Google API",
+          "bullets": [
+            {
+              "id": "6cab9c13-3014-459f-9bf9-19f41d0ff11a",
+              "text": "Engineered a Discord.py bot with OAuth2 and RESTful API integration to automate LeetCode data tracking, creating a data pipeline that eliminated manual spreadsheet entry for students.",
+              "isSuggested": false
+            }
+          ],
+          "links": [
+            {
+              "label": "View",
+              "url": "null"
+            }
+          ]
+        },
+        {
+          "id": "b38b6abc-3aef-41bb-ad93-c4b6f2cb85b3",
+          "title": "Technical Indicator LFT System",
+          "technologies": "Python, TA-Lib, Pandas",
+          "bullets": [
+            {
+              "id": "b1a29d2c-f6cc-4d95-9ca3-d4aa4bea341b",
+              "text": "Developed an algorithmic trading system using Python and Pandas to back-test RSI/Bollinger strategies, achieving 342.42% ROI on TSLA data (vs. 196% benchmark) via optimized risk parameters.",
+              "isSuggested": false
+            }
+          ],
+          "links": [
+            {
+              "label": "View",
+              "url": "null"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "251ddc13-65e4-489c-8c77-6f3e7f1ed2aa",
+      "type": "community",
+      "title": "Community Involvement",
+      "items": []
+    }
+  ],
+  "skills": {
+    "languages": [
+      "C++",
+      "Python",
+      "Java",
+      "JavaScript (ES6+)",
+      "MongoDB"
+    ],
+    "frameworks": [
+      "Express.js",
+      "React.js",
+      "Node.js"
+    ],
+    "tools": [
+      "Git"
+    ],
+    "databases": [
+      "MongoDB"
+    ]
+  },
+  "design": {
+    "template": "classic",
+    "fontFamily": "Arial, Helvetica, sans-serif",
+    "fontSize": 12.5,
+    "accentColor": "#1a365d",
+    "margins": {
+      "top": 0.5,
+      "right": 0.5,
+      "bottom": 0.5,
+      "left": 0.5
+    }
+  },
+  "createdAt": "2026-01-08T09:05:20.513Z",
+  "updatedAt": "2026-01-08T09:13:10.905Z"
+}

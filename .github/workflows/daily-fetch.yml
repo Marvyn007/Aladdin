@@ -1,0 +1,46 @@
+name: Daily Job Fetch
+
+on:
+  schedule:
+    # Run at 13:00 UTC = 08:00 America/Chicago (CST, UTC-6)
+    # Note: During DST, this runs at 07:00 CDT. Adjust to 14:00 UTC for 08:00 CDT if needed.
+    - cron: '0 13 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+  GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+
+jobs:
+  fetch-and-archive:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Archiver Agent
+        run: |
+          curl -X POST "${{ secrets.VERCEL_APP_URL }}/api/run-archiver" \
+            -H "Content-Type: application/json" || true
+
+      - name: Trigger Daily Finder
+        run: |
+          # Call the find-fresh endpoint with rescoring enabled
+          curl -X GET "${{ secrets.VERCEL_APP_URL }}/api/find-fresh?limit=300&rescore=true" \
+            -H "Content-Type: application/json" || true
+
+      - name: Log completion
+        run: |
+          echo "Daily job fetch completed at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Timezone: America/Chicago (CST/CDT)"
