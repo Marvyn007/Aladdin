@@ -74,6 +74,25 @@ export const SCORER_PROMPT = `System: You are a PRECISION job-matching scorer. Y
 CRITICAL SCORING INSTRUCTION: 
 Your final score MUST have non-zero ones digit (e.g., 73 not 70, 86 not 85, 41 not 40). Round numbers indicate imprecise analysis.
 
+╔════════════════════════════════════════════════════════════════════════════════╗
+║ ANTI-HALLUCINATION RULE - MANDATORY - ZERO TOLERANCE                          ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║ matched_skills and missing_important_skills MUST ONLY contain skills that     ║
+║ are LITERALLY WRITTEN in the job description text.                            ║
+║                                                                                ║
+║ ❌ NEVER infer, assume, or generate skills that are not explicitly stated     ║
+║ ❌ NEVER add synonyms or related technologies not in the text                 ║
+║ ❌ NEVER assume skills based on job title or company name                     ║
+║ ✅ ONLY extract exact skill names that appear verbatim in the job text        ║
+║                                                                                ║
+║ If the job description is vague or doesn't list specific skills, return       ║
+║ EMPTY ARRAYS [ ] for matched_skills and missing_important_skills.             ║
+║                                                                                ║
+║ EXAMPLE - Job says "Must know React and Python":                              ║
+║   ✅ matched_skills: ["React", "Python"] (if resume has them)                 ║
+║   ❌ matched_skills: ["React", "JavaScript", "Django"] (JS/Django not stated) ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
 DETAILED SCORING BREAKDOWN (Calculate each precisely):
 
 1. SKILLS MATCH (40 points max):
@@ -116,8 +135,8 @@ Output Format (strict JSON):
    "role_fit": <0-20>,
    "context": <0-15>
  },
- "matched_skills": ["skill1","skill2",... up to 8],
- "missing_important_skills": ["skillX", ... up to 6],
+ "matched_skills": ["ONLY skills from job text that resume has - EMPTY if none found"],
+ "missing_important_skills": ["ONLY skills from job text that resume lacks - EMPTY if none found"],
  "level_match":"exact|close|no",
  "why":"Brutally honest one-sentence explanation with specific reasoning (max 30 words)"
 }
@@ -267,6 +286,18 @@ CRITICAL:
 2. Scores should be DISTRIBUTED - no two jobs should have the same score
 3. Jobs compete against each other - rank them by fit quality
 
+╔════════════════════════════════════════════════════════════════════════════════╗
+║ ANTI-HALLUCINATION RULE - MANDATORY - ZERO TOLERANCE                          ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║ matched_skills and missing_important_skills MUST ONLY contain skills that     ║
+║ are LITERALLY WRITTEN in the job description text.                            ║
+║                                                                                ║
+║ ❌ NEVER infer, assume, or generate skills not explicitly stated              ║
+║ ❌ NEVER add synonyms or related technologies not in the text                 ║
+║ ✅ ONLY extract exact skill names that appear verbatim in the job text        ║
+║ ✅ If no specific skills listed in job, return EMPTY ARRAYS [ ]               ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
 SCORING METHODOLOGY:
 For each job, calculate a base score using these categories:
 - Skills Match (40 pts max)
@@ -297,8 +328,8 @@ Output Format (strict JSON array):
     "match_score": <EXACT integer 0-100>,
     "rank": <1 = best match, 2 = second best, etc.>,
     "score_breakdown": { "skills": <0-40>, "experience": <0-25>, "role_fit": <0-20>, "context": <0-15> },
-    "matched_skills": ["skill1", "skill2", ...],
-    "missing_important_skills": ["skillX", ...],
+    "matched_skills": ["ONLY verbatim skills from job text - EMPTY if none"],
+    "missing_important_skills": ["ONLY verbatim skills from job text - EMPTY if none"],
     "level_match": "exact|close|no",
     "why": "Brief comparison rationale (max 25 words)"
   },

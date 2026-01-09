@@ -108,19 +108,7 @@ export function JobList({ onJobClick }: JobListProps) {
     };
 
     return (
-        <div
-            style={{
-                width: '380px',
-                minWidth: '380px',
-                height: '100vh',
-                background: 'var(--background)',
-                borderRight: '1px solid var(--border)',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                position: 'relative',
-            }}
-        >
+        <div className="job-list-container">
             <div
                 style={{
                     padding: '16px',

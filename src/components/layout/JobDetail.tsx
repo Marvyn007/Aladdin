@@ -15,9 +15,12 @@ interface JobDetailProps {
     onGenerateCoverLetter: (jobId: string) => void;
     onGenerateTailoredResume: (jobId: string) => void;
     applicationStatus: 'none' | 'applied' | 'loading';
+    // Mobile responsive props
+    isMobileVisible?: boolean;
+    onBack?: () => void;
 }
 
-export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGenerateTailoredResume, applicationStatus }: JobDetailProps) {
+export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGenerateTailoredResume, applicationStatus, isMobileVisible, onBack }: JobDetailProps) {
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingResume, setIsGeneratingResume] = useState(false);
 
@@ -73,13 +76,10 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
     if (!job) {
         return (
             <div
+                className={`job-detail-container ${isMobileVisible ? 'mobile-visible' : ''}`}
                 style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'var(--background)',
                     color: 'var(--text-tertiary)',
                 }}
             >
@@ -103,15 +103,18 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
 
     return (
         <div
-            style={{
-                flex: 1,
-                height: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                background: 'var(--background)',
-                overflow: 'hidden',
-            }}
+            className={`job-detail-container ${isMobileVisible ? 'mobile-visible' : ''}`}
         >
+            {/* Mobile Back Button */}
+            {onBack && (
+                <button className="mobile-back-btn" onClick={onBack}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                    Back to Jobs
+                </button>
+            )}
+
             {/* Header */}
             <div
                 style={{

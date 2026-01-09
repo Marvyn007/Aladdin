@@ -17,6 +17,10 @@ interface SidebarProps {
     isLoading: boolean;
     isScoring: boolean;
     isCleaning: boolean;
+
+    // Mobile responsive props
+    isMobileOpen?: boolean;
+    onCloseMobile?: () => void;
 }
 
 export function Sidebar({
@@ -26,24 +30,30 @@ export function Sidebar({
     onCleanup,
     isLoading,
     isScoring,
-    isCleaning
+    isCleaning,
+    isMobileOpen,
+    onCloseMobile
 }: SidebarProps) {
     const { sidebarOpen, toggleSidebar, theme, toggleTheme, setActiveModal } = useStore();
 
+    // Handle nav item click - close sidebar on mobile
+    const handleNavClick = (action: () => void) => {
+        action();
+        if (onCloseMobile) {
+            onCloseMobile();
+        }
+    };
+
     return (
         <>
+            {/* Mobile overlay backdrop */}
+            <div
+                className={`sidebar-overlay ${isMobileOpen ? 'visible' : ''}`}
+                onClick={onCloseMobile}
+            />
+
             <aside
-                style={{
-                    width: sidebarOpen ? '200px' : '56px',
-                    minWidth: sidebarOpen ? '200px' : '56px',
-                    height: '100vh',
-                    background: 'var(--background)',
-                    borderRight: '1px solid var(--border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    transition: 'width 0.2s ease',
-                    overflow: 'hidden',
-                }}
+                className={`sidebar ${!sidebarOpen ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}
             >
                 {/* Logo/Brand */}
                 <div
@@ -83,12 +93,12 @@ export function Sidebar({
                 </div>
 
                 {/* Navigation */}
-                <nav style={{ flex: 1, padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <nav style={{ flex: 1, padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto' }}>
                     {/* Find Jobs */}
                     <NavItem
                         icon={<SearchIcon />}
                         label="Find Jobs"
-                        onClick={onFindNow}
+                        onClick={() => handleNavClick(onFindNow)}
                         loading={isLoading}
                         active={false}
                         collapsed={!sidebarOpen}
@@ -98,7 +108,7 @@ export function Sidebar({
                     <NavItem
                         icon={<img src="/icons/import-job.png" alt="Import" style={{ width: 22, height: 22, objectFit: 'contain' }} />}
                         label="Import Job"
-                        onClick={onImportJob}
+                        onClick={() => handleNavClick(onImportJob)}
                         collapsed={!sidebarOpen}
                     />
 
@@ -106,7 +116,7 @@ export function Sidebar({
                     <NavItem
                         icon={<img src="/icons/score.png" alt="Score" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
                         label="Score Jobs"
-                        onClick={onScoreJobs}
+                        onClick={() => handleNavClick(onScoreJobs)}
                         loading={isScoring}
                         collapsed={!sidebarOpen}
                         style={{ minHeight: '48px' }}
@@ -116,19 +126,19 @@ export function Sidebar({
                     <NavItem
                         icon={<img src="/icons/broom.png" alt="Cleanup" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
                         label="Run Cleanup"
-                        onClick={onCleanup}
+                        onClick={() => handleNavClick(onCleanup)}
                         loading={isCleaning}
                         collapsed={!sidebarOpen}
                         style={{ minHeight: '48px' }}
                     />
 
-                    <div style={{ height: '1px', background: 'var(--border)', margin: '8px 4px' }} />
+                    <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
 
                     {/* My Resumes */}
                     <NavItem
                         icon={<ResumeIcon />}
                         label="My Resumes"
-                        onClick={() => setActiveModal('resume-selector')}
+                        onClick={() => handleNavClick(() => setActiveModal('resume-selector'))}
                         collapsed={!sidebarOpen}
                     />
 
@@ -136,48 +146,50 @@ export function Sidebar({
                     <NavItem
                         icon={<LinkedInIcon />}
                         label="Upload LinkedIn Profile"
-                        onClick={() => setActiveModal('linkedin-selector')}
+                        onClick={() => handleNavClick(() => setActiveModal('linkedin-selector'))}
                         collapsed={!sidebarOpen}
                     />
 
-                    <div style={{ height: '1px', background: 'var(--border)', margin: '8px 4px' }} />
+                    <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
 
                     {/* Theme Toggle */}
                     <NavItem
                         icon={theme === 'light' ? <MoonIcon /> : <SunIcon />}
                         label={theme === 'light' ? 'Dark Mode' : 'Light Mode'}
-                        onClick={toggleTheme}
+                        onClick={() => handleNavClick(toggleTheme)}
                         collapsed={!sidebarOpen}
                     />
                 </nav>
 
                 {/* Footer - User Info */}
-                {sidebarOpen && (
+                <div
+                    style={{
+                        padding: '12px',
+                        borderTop: '1px solid var(--border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        flexShrink: 0,
+                    }}
+                >
                     <div
                         style={{
-                            padding: '12px',
-                            borderTop: '1px solid var(--border)',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            background: 'var(--accent-muted)',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '10px',
+                            justifyContent: 'center',
+                            color: 'var(--accent)',
+                            fontWeight: 600,
+                            fontSize: '13px',
+                            flexShrink: 0,
                         }}
                     >
-                        <div
-                            style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                background: 'var(--accent-muted)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'var(--accent)',
-                                fontWeight: 600,
-                                fontSize: '13px',
-                            }}
-                        >
-                            U
-                        </div>
+                        U
+                    </div>
+                    {sidebarOpen && (
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
                                 User
@@ -186,8 +198,8 @@ export function Sidebar({
                                 Single-user mode
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </aside>
         </>
     );

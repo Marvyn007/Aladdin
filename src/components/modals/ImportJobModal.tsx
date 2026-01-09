@@ -11,6 +11,7 @@ export function ImportJobModal({ onClose }: ImportJobModalProps) {
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<{ job: any } | null>(null);
     const { addImportedJob } = useStore();
 
     const handleImport = async () => {
@@ -41,7 +42,11 @@ export function ImportJobModal({ onClose }: ImportJobModalProps) {
 
             if (data.success) {
                 addImportedJob(data.job);
-                onClose();
+                setSuccess({ job: data.job });
+                // Auto-close after showing success
+                setTimeout(() => {
+                    onClose();
+                }, 2000);
             } else {
                 setError(data.error || 'Failed to import job');
             }
@@ -51,6 +56,72 @@ export function ImportJobModal({ onClose }: ImportJobModalProps) {
             setIsLoading(false);
         }
     };
+
+    // Success state UI
+    if (success) {
+        return (
+            <div
+                style={{
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                }}
+                onClick={onClose}
+            >
+                <div
+                    style={{
+                        background: 'var(--surface)',
+                        borderRadius: 'var(--radius-lg)',
+                        width: '90%',
+                        maxWidth: '400px',
+                        padding: '32px',
+                        textAlign: 'center',
+                        boxShadow: 'var(--shadow-xl)',
+                        border: '1px solid var(--border)',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Success Icon */}
+                    <div
+                        style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #10b981, #34d399)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px',
+                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                        }}
+                    >
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                    </div>
+
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>
+                        Job Added Successfully!
+                    </h3>
+
+                    <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                        <strong>{success.job.title}</strong>
+                        {success.job.company && (
+                            <span> at {success.job.company}</span>
+                        )}
+                    </p>
+
+                    <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                        Closing automatically...
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div

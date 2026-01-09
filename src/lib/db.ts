@@ -76,7 +76,11 @@ export async function getJobs(status: 'fresh' | 'archived' = 'fresh', limit: num
             .limit(limit);
 
         if (error) throw error;
-        return data as Job[];
+        return (data || []).map((row: any) => ({
+            ...row,
+            isImported: Boolean(row.is_imported),
+            date_posted_relative: Boolean(row.date_posted_relative),
+        })) as Job[];
     } else {
         const db = getSQLiteDB();
         const rows = db.prepare(`
@@ -122,7 +126,11 @@ export async function getJobById(id: string): Promise<Job | null> {
             .single();
 
         if (error) return null;
-        return data as Job;
+        return {
+            ...data,
+            isImported: Boolean(data.is_imported),
+            date_posted_relative: Boolean(data.date_posted_relative),
+        } as Job;
     } else {
         const db = getSQLiteDB();
         const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id) as Record<string, unknown> | undefined;
@@ -189,16 +197,30 @@ export async function insertJob(job: Omit<Job, 'id' | 'fetched_at' | 'status' | 
             .from('jobs')
             .insert({
                 id,
-                ...job,
+                title: job.title,
+                company: job.company,
+                location: job.location,
+                source_url: job.source_url,
+                posted_at: job.posted_at,
+                normalized_text: job.normalized_text,
+                raw_text_summary: job.raw_text_summary,
                 content_hash: contentHash,
                 status: 'fresh',
                 match_score: 0,
                 is_imported: job.isImported ? 1 : 0,
-                original_posted_date: job.original_posted_date,
-                original_posted_raw: job.original_posted_raw,
-                original_posted_source: job.original_posted_source,
-                location_display: job.location_display,
-                import_tag: job.import_tag,
+                original_posted_date: job.original_posted_date || null,
+                original_posted_raw: job.original_posted_raw || null,
+                original_posted_source: job.original_posted_source || null,
+                location_display: job.location_display || null,
+                import_tag: job.import_tag || null,
+                raw_description_html: job.raw_description_html || null,
+                job_description_plain: job.job_description_plain || null,
+                date_posted_iso: job.date_posted_iso || null,
+                date_posted_display: job.date_posted_display || null,
+                date_posted_relative: job.date_posted_relative ? 1 : 0,
+                source_host: job.source_host || null,
+                scraped_at: job.scraped_at || null,
+                extraction_confidence: job.extraction_confidence || null,
             })
             .select()
             .single();

@@ -275,6 +275,10 @@ export default function Home() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Mobile responsive state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobileJobDetailVisible, setIsMobileJobDetailVisible] = useState(false);
+
   const [coverLetterSetupModal, setCoverLetterSetupModal] = useState<{
     isOpen: boolean;
     jobId: string | null;
@@ -402,6 +406,18 @@ export default function Home() {
 
   const handleJobClick = (job: Job) => {
     setSelectedJob(job);
+    // Show job detail on mobile when a job is selected
+    setIsMobileJobDetailVisible(true);
+  };
+
+  // Handle mobile back from job detail
+  const handleMobileBack = () => {
+    setIsMobileJobDetailVisible(false);
+  };
+
+  // Close mobile sidebar
+  const handleCloseMobileSidebar = () => {
+    setIsMobileSidebarOpen(false);
   };
 
 
@@ -688,13 +704,7 @@ export default function Home() {
     : null;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        height: '100vh',
-        overflow: 'hidden',
-      }}
-    >
+    <div className="app-container">
       {/* Left sidebar */}
       <Sidebar
         onFindNow={handleFindNow}
@@ -704,87 +714,75 @@ export default function Home() {
         onCleanup={handleSmartCleanup}
         isScoring={isScoring}
         isCleaning={isCleaning}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={handleCloseMobileSidebar}
       />
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="main-content">
+        {/* Mobile Header */}
+        <div className="mobile-header">
+          <button
+            className="hamburger-btn"
+            onClick={() => setIsMobileSidebarOpen(true)}
+            aria-label="Open menu"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <div className="mobile-header-title">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/aladdin-logo.png" alt="Aladdin" className="mobile-header-logo" />
+            <span>Aladdin</span>
+          </div>
+          <div style={{ width: 44 }}>{/* Spacer for centering */}</div>
+        </div>
+
         {/* View Toggle Tabs */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '0',
-            borderBottom: '1px solid var(--border)',
-            background: 'var(--background-secondary)',
-            padding: '0 16px',
-          }}
-        >
+        <div className="view-tabs">
           <button
             onClick={() => setActiveView('jobs')}
-            style={{
-              padding: '14px 20px',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: activeView === 'jobs' ? 600 : 400,
-              color: activeView === 'jobs' ? 'var(--accent)' : 'var(--text-secondary)',
-              borderBottom: activeView === 'jobs' ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: '-1px',
-            }}
+            className={`view-tab ${activeView === 'jobs' ? 'active' : ''}`}
           >
             Job Listings
           </button>
           <button
             onClick={() => setActiveView('tracker')}
-            style={{
-              padding: '14px 20px',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: activeView === 'tracker' ? 600 : 400,
-              color: activeView === 'tracker' ? 'var(--accent)' : 'var(--text-secondary)',
-              borderBottom: activeView === 'tracker' ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: '-1px',
-            }}
+            className={`view-tab ${activeView === 'tracker' ? 'active' : ''}`}
           >
             Application Tracker ({applications.length})
           </button>
-
         </div>
 
         {/* Content based on active view */}
         {activeView === 'jobs' && (
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <div className="content-area">
             <JobList onJobClick={handleJobClick} />
             <JobDetail
               job={selectedJob}
               onApply={handleApply}
-
               onDelete={handleDeleteJob}
               onGenerateCoverLetter={handleGenerateCoverLetter}
               onGenerateTailoredResume={handleGenerateTailoredResume}
               applicationStatus={selectedJob ? (applicationStatus[selectedJob.id] || 'none') : 'none'}
+              isMobileVisible={isMobileJobDetailVisible}
+              onBack={handleMobileBack}
             />
           </div>
         )}
 
         {activeView === 'tracker' && (
-          <div style={{ flex: 1, padding: '20px', overflowX: 'auto' }}>
+          <div className="tracker-container">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '12px',
-                  minWidth: 'max-content',
-                  height: '100%',
-                }}
-              >
+              <div className="kanban-columns">
                 {COLUMNS.map((column) => (
                   <DroppableColumn
                     key={column}
