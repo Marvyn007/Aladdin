@@ -42,7 +42,7 @@ export function CoverLetterModal({
         }
     }, [coverLetterText]);
 
-    // Handle PDF download using EDITED text
+    // Handle PDF download using EDITED text - CLIENT-SIDE GENERATION
     const handleDownloadPdf = async () => {
         if (!editedText.trim()) {
             alert('No content to download');
@@ -51,50 +51,19 @@ export function CoverLetterModal({
 
         setIsDownloading(true);
         try {
-            // Convert plain text to HTML for PDF generation
-            const htmlContent = `
-                <div style="font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; max-width: 700px; color: #000;">
-                    ${editedText.split('\n\n').map(p =>
-                `<p style="margin-bottom: 1em;">${p.replace(/\n/g, '<br>')}</p>`
-            ).join('')}
-                </div>
-            `;
+            // Import client-side PDF generator dynamically
+            const { generateSimpleCoverLetterPDF } = await import('@/lib/client-pdf');
 
-            // If we have a cover letter ID, use the API
-            if (coverLetterId) {
-                const res = await fetch(`/api/cover-letters/${coverLetterId}/generate-pdf`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content_html: htmlContent }),
-                });
+            // Generate filename based on job
+            const safeCompany = (company || 'company').replace(/[^a-zA-Z0-9]/g, '_');
+            const filename = `marvin_chaudhary_cover_letter_${safeCompany}.pdf`;
 
-                const data = await res.json();
+            // Generate and download PDF entirely client-side
+            generateSimpleCoverLetterPDF(editedText, filename);
 
-                if (data.success && data.url) {
-                    const link = document.createElement('a');
-                    link.href = data.url;
-                    link.download = data.filename || 'marvin_chaudhary_cover_letter.pdf';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                } else {
-                    alert('PDF generation failed: ' + (data.error || 'Unknown error'));
-                }
-            } else {
-                // Fallback: create a simple text file download
-                const blob = new Blob([editedText], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = 'marvin_chaudhary_cover_letter.txt';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-            }
         } catch (error) {
-            console.error('Error downloading PDF:', error);
-            alert('Failed to download PDF');
+            console.error('Error generating PDF:', error);
+            alert('Failed to generate PDF. Please try again.');
         } finally {
             setIsDownloading(false);
         }
