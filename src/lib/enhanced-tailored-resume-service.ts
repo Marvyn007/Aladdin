@@ -251,9 +251,25 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
     ];
 
     const projectItems = [...existingProjects];
+
+    // Helper function to check if a project already exists (more robust matching)
+    const projectExists = (searchTerms: string[]) => {
+        return projectItems.some(p => {
+            const titleLower = (p.title || '').toLowerCase();
+            return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
+        });
+    };
+
     for (const fixed of fixedProjects) {
-        // loose match on title start
-        if (!projectItems.some(p => p.title.toLowerCase().includes(fixed.title.split(':')[0].toLowerCase()))) {
+        // Extract multiple search terms from the fixed project title
+        const titleParts = fixed.title.toLowerCase().split(/[:\s-]+/).filter(p => p.length > 3);
+        // Add specific keywords for better matching
+        const searchTerms = [
+            ...titleParts,
+            fixed.title.split(':')[0].toLowerCase().trim()
+        ];
+
+        if (!projectExists(searchTerms)) {
             projectItems.push({
                 id: uuid(),
                 title: fixed.title,
@@ -293,9 +309,19 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
         }
     ];
 
-    // Add fixed community items to the communityItems array
+    // Add fixed community items to the communityItems array (with robust deduplication)
+    const communityExists = (searchTerms: string[]) => {
+        return communityItems.some(c => {
+            const titleLower = (c.title || '').toLowerCase();
+            return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
+        });
+    };
+
     for (const fixed of fixedCommunityItems) {
-        if (!communityItems.some(c => c.title.toLowerCase().includes(fixed.title.split(' ')[0].toLowerCase()))) {
+        const titleParts = fixed.title.toLowerCase().split(/[\s()]+/).filter(p => p.length > 2);
+        const searchTerms = [...titleParts, fixed.title.split(' ')[0].toLowerCase().trim()];
+
+        if (!communityExists(searchTerms)) {
             communityItems.push({
                 id: uuid(),
                 title: fixed.title,
@@ -624,8 +650,23 @@ Generate the tailored resume JSON now. Remember to:
                 parsed.resume.sections.push(projectSection);
             }
 
+            // Helper function for robust project matching
+            const projectExistsInSection = (searchTerms: string[]) => {
+                return projectSection!.items.some(p => {
+                    const titleLower = (p.title || '').toLowerCase();
+                    return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
+                });
+            };
+
             for (const fixed of fixedProjects) {
-                if (!projectSection.items.some(p => p.title.toLowerCase().includes(fixed.title.split(':')[0].toLowerCase()))) {
+                // Extract multiple search terms from the fixed project title
+                const titleParts = fixed.title.toLowerCase().split(/[:\s-]+/).filter(p => p.length > 3);
+                const searchTerms = [
+                    ...titleParts,
+                    fixed.title.split(':')[0].toLowerCase().trim()
+                ];
+
+                if (!projectExistsInSection(searchTerms)) {
                     projectSection.items.push({
                         id: uuid(),
                         title: fixed.title,
@@ -683,9 +724,19 @@ Generate the tailored resume JSON now. Remember to:
                 }
             }
 
-            // Add fixed community items if not already present
+            // Add fixed community items if not already present (with robust deduplication)
+            const communityExistsInSection = (searchTerms: string[]) => {
+                return communitySection!.items.some(c => {
+                    const titleLower = (c.title || '').toLowerCase();
+                    return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
+                });
+            };
+
             for (const fixed of fixedCommunityItems) {
-                if (!communitySection.items.some(c => c.title.toLowerCase().includes(fixed.title.split(' ')[0].toLowerCase()))) {
+                const titleParts = fixed.title.toLowerCase().split(/[\s()]+/).filter(p => p.length > 2);
+                const searchTerms = [...titleParts, fixed.title.split(' ')[0].toLowerCase().trim()];
+
+                if (!communityExistsInSection(searchTerms)) {
                     communitySection.items.push({
                         id: uuid(),
                         title: fixed.title,
