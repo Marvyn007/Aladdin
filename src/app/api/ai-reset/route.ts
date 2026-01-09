@@ -25,11 +25,16 @@ export async function POST() {
             message: 'AI provider states reset successfully',
             available,
             statusMessage: message,
-            providers: Object.entries(states.providers).map(([key, provider]) => ({
-                id: key,
-                name: provider.name,
-                health: provider.health,
-            })),
+            providers: {
+                openRouter: {
+                    name: states.openRouter.name,
+                    health: states.openRouter.health,
+                },
+                ollama: {
+                    available: states.ollama.available,
+                },
+            },
+            activeProvider: states.activeProvider,
         });
     } catch (error) {
         console.error('Error resetting AI states:', error);

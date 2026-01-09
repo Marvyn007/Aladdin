@@ -13,23 +13,28 @@ export async function GET() {
         const message = getStatusMessage();
 
         // Format provider states for the response
-        const providers = Object.entries(states.providers).map(([key, provider]) => ({
-            id: key,
-            name: provider.name,
-            health: provider.health,
-            available: provider.health !== 'unavailable' &&
-                (!provider.unavailableUntil || Date.now() >= provider.unavailableUntil),
-            unavailableUntil: provider.unavailableUntil
-                ? new Date(provider.unavailableUntil).toISOString()
-                : null,
-            lastError: provider.lastError,
-            consecutiveFailures: provider.consecutiveFailures,
-        }));
+        const providers = {
+            openRouter: {
+                id: 'openRouter',
+                name: states.openRouter.name,
+                health: states.openRouter.health,
+                lastError: states.openRouter.lastError,
+                callsToday: states.openRouter.callsToday,
+                maxCallsPerDay: states.openRouter.maxCallsPerDay,
+            },
+            ollama: {
+                id: 'ollama',
+                name: 'Ollama',
+                available: states.ollama.available,
+                lastCheck: states.ollama.lastCheck,
+            },
+        };
 
         return NextResponse.json({
             available,
             message,
             providers,
+            activeProvider: states.activeProvider,
             lastSuccessfulProvider: states.lastSuccessfulProvider,
         });
     } catch (error) {
