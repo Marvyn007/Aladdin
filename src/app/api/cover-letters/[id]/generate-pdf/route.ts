@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateCoverLetter, getCoverLetterById } from '@/lib/db';
 import { uploadFileToS3, generateS3Key, getSignedDownloadUrl } from '@/lib/s3';
-import puppeteer from 'puppeteer';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60; // Allow up to 60 seconds for PDF generation
 
 export async function POST(
     request: NextRequest,
@@ -21,32 +23,41 @@ export async function POST(
             return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
         }
 
-        // Sanitize HTML (Basic strip)
+        // Sanitize HTML
         const sanitizedHtml = content_html
             .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gm, "")
             .replace(/on\w+="[^"]*"/g, "");
 
-        // 1. Update DB with latest content
+        // Update DB with latest content
         await updateCoverLetter(id, { content_html: sanitizedHtml });
 
-        // 2. Generate PDF using Puppeteer
-        // Production vs Dev check?
-        // Puppeteer in Vercel requires specific setup (chrome-aws-lambda), but here we are just coding for "Production-grade".
-        // Vercel Serverless Functions have limits. Browser automation is heavy. 
-        // IF this runs on Vercel, we need 'puppeteer-core' and chromium.
-        // HOWEVER, the user asked to "Persist data across requests" and "Remove FS".
-        // They didn't explicitly ask for Vercel Puppeteer layer fix, but "Builds successfully on Vercel" is a requirement.
-        // Full Puppeteer often fails on Vercel due to size.
-        // For now, I'll keep puppeteer but assume the environment handles it (or user installs chrome-aws-lambda).
-        // I will focus on removing FS usage.
+        // Generate PDF using Puppeteer
+        // Use different setup for Vercel (serverless) vs local
+        let browser;
 
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-        });
+        const isVercel = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+        if (isVercel) {
+            // Vercel/Lambda: Use @sparticuz/chromium
+            const chromium = await import('@sparticuz/chromium');
+            const puppeteerCore = await import('puppeteer-core');
+
+            browser = await puppeteerCore.default.launch({
+                args: chromium.default.args,
+                executablePath: await chromium.default.executablePath(),
+                headless: true,
+            });
+        } else {
+            // Local: Use regular puppeteer
+            const puppeteer = await import('puppeteer');
+            browser = await puppeteer.default.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            });
+        }
+
         const page = await browser.newPage();
 
-        // Set content with some basic styling for PDF
         await page.setContent(`
             <!DOCTYPE html>
             <html>
@@ -75,12 +86,12 @@ export async function POST(
 
         await browser.close();
 
-        // 3. Upload to S3 instead of local FS
+        // Upload to S3 with Content-Disposition for download
         const s3Key = generateS3Key('cover-letters', `cl_${id}.pdf`);
         await uploadFileToS3(Buffer.from(pdfBuffer), s3Key, 'application/pdf');
 
-        // 4. Update DB with S3 Key and Signed URL
-        const signedUrl = await getSignedDownloadUrl(s3Key);
+        // Get signed URL with download disposition
+        const signedUrl = await getSignedDownloadUrl(s3Key, 3600, 'cover_letter.pdf');
 
         await updateCoverLetter(id, {
             s3_key: s3Key,
@@ -94,10 +105,10 @@ export async function POST(
             filename: 'cover_letter.pdf'
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('PDF Generation Error:', error);
         return NextResponse.json(
-            { error: 'Failed to generate PDF' },
+            { error: 'Failed to generate PDF', details: error.message },
             { status: 500 }
         );
     }

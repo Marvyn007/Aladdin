@@ -57,7 +57,11 @@ export async function uploadFileToS3(
   return key;
 }
 
-export async function getSignedDownloadUrl(key: string, expiresInSeconds: number = 3600): Promise<string> {
+export async function getSignedDownloadUrl(
+  key: string,
+  expiresInSeconds: number = 3600,
+  downloadFilename?: string
+): Promise<string> {
   const client = getS3Client();
   if (!client) {
     throw new Error('S3 client not initialized - missing credentials');
@@ -68,10 +72,17 @@ export async function getSignedDownloadUrl(key: string, expiresInSeconds: number
     throw new Error('Missing AWS_S3_BUCKET or S3_BUCKET_NAME environment variable');
   }
 
-  const command = new GetObjectCommand({
+  const commandOptions: any = {
     Bucket: bucket,
     Key: key,
-  });
+  };
+
+  // If filename provided, set Content-Disposition to force download
+  if (downloadFilename) {
+    commandOptions.ResponseContentDisposition = `attachment; filename="${downloadFilename}"`;
+  }
+
+  const command = new GetObjectCommand(commandOptions);
 
   return await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
 }
