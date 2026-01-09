@@ -333,20 +333,36 @@ export async function generateCoverLetter(
         ? truncateInput(JSON.stringify(linkedinJson, null, 2), INPUT_LIMITS.LINKEDIN_TEXT, 'linkedinText')
         : null;
 
+    // Extract key info for explicit highlighting
+    const candidateName = resumeJson.name || 'Unknown';
+    const candidateEmail = resumeJson.email || '';
+    const recentRole = resumeJson.roles?.[0];
+    const recentProject = resumeJson.projects?.[0];
+    const topSkills = resumeJson.skills?.slice(0, 5).map(s => s.name).join(', ') || '';
+
     const prompt = `${COVER_LETTER_PROMPT}
 
-Resume:
+=== CANDIDATE INFORMATION (USE THIS DATA) ===
+Candidate Name: ${candidateName}
+Email: ${candidateEmail}
+${recentRole ? `Most Recent Role: ${recentRole.title} at ${recentRole.company}` : ''}
+${recentProject ? `Notable Project: ${recentProject.title}` : ''}
+Top Skills: ${topSkills}
+
+=== FULL RESUME DATA (JSON) ===
 ${resumeText}
 
-${linkedinText ? `LinkedIn:\n${linkedinText}` : ''}
+${linkedinText ? `=== LINKEDIN PROFILE DATA (JSON) ===\n${linkedinText}` : ''}
+
+=== JOB TO APPLY FOR ===
+Company: ${jobMeta.company}
+Role: ${jobMeta.title}
+Location: ${jobMeta.location}
 
 Job Description:
 ${jobText}
 
-Job Details:
-Company: ${jobMeta.company}
-Role: ${jobMeta.title}
-Location: ${jobMeta.location}`;
+IMPORTANT: Write the cover letter for ${candidateName}, referencing their experience at ${recentRole?.company || 'their previous company'} and their work on ${recentProject?.title || 'their projects'}. Sign the letter as "${candidateName}".`;
 
     console.log(`[Cover Letter] Prompt length: ${prompt.length} chars`);
 

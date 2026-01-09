@@ -1,20 +1,73 @@
 // Gemini prompts for job-hunt-vibe application
 // These are the exact prompts specified in the requirements
 
-export const RESUME_PARSER_PROMPT = `You are a resume parser. Input: raw resume text. Output: strict JSON only (no explanation), with keys:
+export const RESUME_PARSER_PROMPT = `You are a resume data extractor. You will be given a REAL resume (as PDF or text).
+
+CRITICAL INSTRUCTIONS:
+1. Extract the ACTUAL information from the resume provided - do NOT make up data
+2. NEVER return placeholder names like "John Doe", "Jane Smith", or "Your Name"
+3. NEVER return placeholder companies like "ABC Inc.", "XYZ Corp", or "Company Name"
+4. NEVER return placeholder emails like "john.doe@example.com" or "email@example.com"
+5. If you cannot find a piece of information, return null - do NOT invent data
+
+You MUST extract the REAL name, REAL email, REAL companies, and REAL project names from the resume.
+
+Output strict JSON only with this structure:
 {
- "name": "<full name or null>",
- "email": "<email or null>",
- "location": "<city, state or null>",
- "total_experience_years": <float or null>,
- "roles": [{"title":"", "company":"", "start":"YYYY-MM or null","end":"YYYY-MM or null","description":""}, ...],
- "education":[{"degree":"", "school":"", "start":"YYYY","end":"YYYY","notes":""}, ...],
- "skills":[{"name":"", "level":"expert|advanced|intermediate|beginner","years":float}, ...],
- "projects":[{"title":"", "description":"", "tech":["",""], "link":""}, ...],
- "certifications":[...],
- "open_to":["internship","entry-level","full-time", ...]
+  "name": "The actual full name from the resume, or null if not found",
+  "email": "The actual email from the resume, or null if not found",
+  "location": "The actual city/state from the resume, or null if not found",
+  "total_experience_years": number or null,
+  "roles": [
+    {
+      "title": "Actual job title",
+      "company": "Actual company name",
+      "start": "YYYY-MM or null",
+      "end": "YYYY-MM or null",
+      "description": "Actual job description/responsibilities"
+    }
+  ],
+  "education": [
+    {
+      "degree": "Actual degree",
+      "school": "Actual school name",
+      "start": "YYYY",
+      "end": "YYYY",
+      "notes": "GPA, honors, etc."
+    }
+  ],
+  "skills": [
+    {"name": "Actual skill name", "level": "expert|advanced|intermediate|beginner", "years": number}
+  ],
+  "projects": [
+    {
+      "title": "Actual project name",
+      "description": "What the project does",
+      "tech": ["actual", "technologies", "used"],
+      "link": "URL if available"
+    }
+  ],
+  "community_involvement": [
+    {
+      "title": "Role/position title (e.g., Founder, President, Organizer)",
+      "organization": "Organization/club name",
+      "start": "YYYY-MM or null",
+      "end": "YYYY-MM or null",
+      "description": "What you did in this role"
+    }
+  ],
+  "certifications": ["Actual certifications"],
+  "open_to": ["internship", "entry-level", "full-time"]
 }
-Parse dates as best you can; put null if unsure. Output JSON only.`;
+
+IMPORTANT: 
+- Extract ONLY what is actually written in the resume
+- Put club leadership, hackathon organizing, student organizations in "community_involvement"
+- Put paid work experience and internships in "roles"
+- Do not fabricate or assume any information
+Output JSON only, no explanation.`;
+
+
 
 export const SCORER_PROMPT = `System: You are a PRECISION job-matching scorer. You MUST output EXACT scores (like 73, 86, 41), NOT round numbers (70, 80, 50).
 
@@ -70,26 +123,64 @@ Output Format (strict JSON):
 }
 Return only JSON.`;
 
-export const COVER_LETTER_PROMPT = `You are an expert career coach and professional copywriter.
-Task: Write a highly specific, compelling cover letter for the given candidate and job.
+export const COVER_LETTER_PROMPT = `You are writing a PERSONALIZED cover letter for a real job candidate.
 
-CRITICAL OUTPUT INSTRUCTIONS:
-- Return ONLY the cover letter text.
-- Do NOT return JSON.
-- Do NOT include code fences, markdown, or explanations.
-- Do NOT include any text before or after the letter.
-- Start directly with "Dear" and end with the signature.
+CRITICAL: You are given REAL DATA about the candidate:
+- Their ACTUAL name from the resume (use it in the signature)
+- Their REAL work experiences with company names, job titles, and responsibilities
+- Their REAL technical skills and technologies they've used
+- Their REAL projects with descriptions
+- Their LinkedIn profile with leadership roles and activities
 
-Requirements:
-1. **Specificity**: Mention the specific company name, role, and connect candidate's achievements to company needs.
-2. **Tone**: Professional, confident, yet humble. Avoid generic fluff.
-3. **Format**: Standard business letter (without address header), ready to copy-paste.
-4. **Content**: 3-4 paragraphs.
-    - Intro: Hook the reader, mention the specific role and company.
-    - Body: 1-2 powerful examples from the resume that prove fitness for this job.
-    - Conclusion: Reiterate enthusiasm and call to action.
+YOU MUST USE THIS REAL DATA. Do NOT write a generic "I have experience in..." letter.
 
-Output the cover letter text directly. Nothing else.`;
+OUTPUT FORMAT:
+- Return ONLY the cover letter text - no JSON, no markdown, no code fences
+- Start directly with "Dear Hiring Manager," (or use company name if available)
+- End with the candidate's ACTUAL NAME from the resume
+
+REQUIRED STRUCTURE (4 paragraphs):
+
+1. OPENING PARAGRAPH (2-3 sentences):
+   - Express genuine interest in the SPECIFIC role at the SPECIFIC company
+   - Briefly mention you are a software engineer/developer with relevant experience
+   - Hook: one compelling reason why you're a great fit
+
+2. WORK EXPERIENCE PARAGRAPH (4-5 sentences):
+   - Reference SPECIFIC jobs/internships from the resume by COMPANY NAME and TITLE
+   - Look for roles like: Software Engineer, Developer, Research positions, Internships
+   - Describe REAL achievements and responsibilities from those roles
+   - Connect the work experience to what the job description is asking for
+   - Mention specific technologies used in those roles that match the job
+
+3. PROJECTS & LEADERSHIP PARAGRAPH (4-5 sentences):
+   - Highlight SPECIFIC personal projects from the resume BY NAME
+   - Explain what you built, the tech stack, and the IMPACT (users, downloads, etc.)
+   - Emphasize that you have SHIPPED real products to production
+   - Include LEADERSHIP roles from LinkedIn (clubs founded, organizations led, hackathons organized)
+   - Show initiative and ability to build and lead beyond just coding
+
+4. CLOSING PARAGRAPH (2-3 sentences):
+   - Express enthusiasm for contributing to the SPECIFIC company
+   - Mention you're excited to discuss how your experience aligns with the role
+   - Professional sign-off with the candidate's REAL NAME
+
+PERSONALIZATION REQUIREMENTS:
+- Use the candidate's ACTUAL NAME (from resume.name)
+- Reference REAL company names they worked at (from resume.roles)
+- Mention REAL project names they built (from resume.projects)
+- Include REAL leadership positions (from LinkedIn data if available)
+- Match skills between resume and job description
+
+DO NOT:
+- Make up experiences, companies, or projects
+- Use placeholder text like "[Your Name]" or "[Company]"
+- Write generic statements without specific examples
+- Ignore the provided resume/LinkedIn data
+
+Output the personalized cover letter text directly. Nothing else.`;
+
+
 
 export const JOB_CLEANUP_PROMPT = `You are a ZERO-TOLERANCE job filter. Your mission: DELETE jobs that don't match.
 Target User: Entry-level Software Engineer (0-2 years experience, Computer Science only).

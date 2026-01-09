@@ -47,6 +47,7 @@ export interface Resume {
   upload_at: string;
   parsed_json: ParsedResume | null;
   is_default: boolean;
+  s3_key?: string | null;
 }
 
 export interface ParsedResume {
@@ -107,6 +108,7 @@ export interface LinkedInProfile {
   filename: string;
   upload_at: string;
   parsed_json: ParsedResume | null; // Uses same structure as resume
+  s3_key?: string | null;
 }
 
 // Application tracker types
@@ -144,6 +146,7 @@ export interface CoverLetter {
   content_html: string | null;
   content_text: string | null;
   pdf_blob_url: string | null;
+  s3_key?: string | null;
   status: 'pending' | 'generated' | 'failed';
 }
 

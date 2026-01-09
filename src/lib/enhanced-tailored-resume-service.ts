@@ -3,8 +3,6 @@
  * Handles AI generation with structured JSON output, keyword analysis, and draft management
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 import {
     getJobById,
@@ -12,6 +10,10 @@ import {
     getResumeById,
     updateResume,
     getLinkedInProfile,
+    createDraft,
+    getDraft as getDbDraft,
+    listDrafts as listDbDrafts,
+    deleteDraft as deleteDbDraft,
 } from '@/lib/db';
 import { parseResumeFromPdf } from '@/lib/gemini';
 import { routeAICallWithDetails, isAIAvailable } from '@/lib/ai-router';
@@ -29,9 +31,6 @@ import {
 const rateLimitState: Record<string, { count: number; resetAt: number }> = {};
 const DAILY_QUOTA = 20;
 
-// Log file path
-const LOG_FILE = path.join(process.cwd(), 'logs', 'ai-providers.log');
-
 /**
  * Log AI provider usage for diagnosis
  */
@@ -42,15 +41,12 @@ function logAIProviderUsage(data: {
     error?: string;
     timestamp: string;
 }) {
-    try {
-        const logDir = path.dirname(LOG_FILE);
-        if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir, { recursive: true });
-        }
-        const logLine = JSON.stringify(data) + '\n';
-        fs.appendFileSync(LOG_FILE, logLine);
-    } catch (e) {
-        console.error('Failed to write AI log:', e);
+    // In production (Vercel), we log to stdout/stderr which keeps logs in Vercel/AWS CloudWatch
+    const logEntry = JSON.stringify(data);
+    if (data.error) {
+        console.error('[AI-Log]', logEntry);
+    } else {
+        console.log('[AI-Log]', logEntry);
     }
 }
 
@@ -141,16 +137,21 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
     }));
 
     // 2. Separate Experience and Community Involvement
-    // User wants: HackLabs, Atlassian Hackathon, RSP Community Member moved to Community section
+    // First, check if parsed resume has a dedicated community_involvement field
     const allRoles = parsedResume.roles || [];
-    const communityKeywords = ['hacklabs', 'atlassian', 'rsp', 'hackathon'];
+    const communityFromParsed = parsedResume.community_involvement || [];
 
+    // Keywords to identify community roles if they're mixed in with regular roles
+    const communityKeywords = ['hacklabs', 'atlassian', 'rsp', 'hackathon', 'club', 'founder', 'president', 'organizer'];
+
+    // Filter experience roles (exclude community-related)
     const experienceRoles = allRoles.filter((r: any) =>
-        !communityKeywords.some(k => (r.company || '' + r.title || '').toLowerCase().includes(k))
+        !communityKeywords.some(k => ((r.company || '') + (r.title || '')).toLowerCase().includes(k))
     );
 
-    const communityRoles = allRoles.filter((r: any) =>
-        communityKeywords.some(k => (r.company || '' + r.title || '').toLowerCase().includes(k))
+    // Get community roles from the roles array (if any were mixed in)
+    const communityFromRoles = allRoles.filter((r: any) =>
+        communityKeywords.some(k => ((r.company || '') + (r.title || '')).toLowerCase().includes(k))
     );
 
     const experienceItems = experienceRoles.map((role: any) => ({
@@ -167,19 +168,42 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
             : [],
     }));
 
-    const communityItems = communityRoles.map((role: any) => ({
-        id: uuid(),
-        title: role.company || role.title,
-        subtitle: role.title !== role.company ? role.title : '',
-        dates: `${role.start || ''} - ${role.end || ''}`,
-        bullets: role.description
-            ? role.description.split('\n').filter(Boolean).map((b: string) => ({
-                id: uuid(),
-                text: b.trim(),
-                isSuggested: false,
-            }))
-            : [],
-    }));
+    // Build community items from BOTH the dedicated field AND any roles that match keywords
+    const communityItems: any[] = [];
+
+    // Add items from the dedicated community_involvement field
+    communityFromParsed.forEach((item: any) => {
+        communityItems.push({
+            id: uuid(),
+            title: item.organization || item.title,
+            subtitle: item.title !== item.organization ? item.title : '',
+            dates: `${item.start || ''} - ${item.end || ''}`,
+            bullets: item.description
+                ? item.description.split('\n').filter(Boolean).map((b: string) => ({
+                    id: uuid(),
+                    text: b.trim(),
+                    isSuggested: false,
+                }))
+                : [],
+        });
+    });
+
+    // Also add any community roles that were mixed in with regular roles
+    communityFromRoles.forEach((role: any) => {
+        communityItems.push({
+            id: uuid(),
+            title: role.company || role.title,
+            subtitle: role.title !== role.company ? role.title : '',
+            dates: `${role.start || ''} - ${role.end || ''}`,
+            bullets: role.description
+                ? role.description.split('\n').filter(Boolean).map((b: string) => ({
+                    id: uuid(),
+                    text: b.trim(),
+                    isSuggested: false,
+                }))
+                : [],
+        });
+    });
 
     // 3. Projects section
     const existingProjects = (parsedResume.projects || []).map((proj: any) => {
@@ -236,6 +260,48 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
                 technologies: fixed.technologies,
                 bullets: fixed.bullets.map(b => ({ id: uuid(), text: b, isSuggested: false })),
                 links: []
+            });
+        }
+    }
+
+    // Add fixed community involvement items (always include these)
+    const fixedCommunityItems = [
+        {
+            title: "HackLabs",
+            subtitle: "Founder & President",
+            dates: "",
+            bullets: [
+                "Established and scaled a technical community to 50+ members, driving innovation through weekly project-based workshops and hackathon training.",
+                "Led a 9-member delegation to secure three podium finishes at Vibeathon, winning $2,500, directing the rapid delivery of six AI-integrated healthcare solutions in a 22-hour sprint."
+            ]
+        },
+        {
+            title: "Atlassian Hackathon",
+            subtitle: "Finalist",
+            dates: "",
+            bullets: [
+                "Architected an AI-powered onboarding assistant on Atlassian Forge using JavaScript and ROVO Agents, implementing Jira tracking and NLP-based Confluence summarization."
+            ]
+        },
+        {
+            title: "Ravi's Study Program (RSP)",
+            subtitle: "Community Member",
+            dates: "",
+            bullets: [
+                "Delivered algorithms and system design mentorship to 300+ peers through semi-weekly mock interviews, enhancing technical readiness for top-tier software engineering roles."
+            ]
+        }
+    ];
+
+    // Add fixed community items to the communityItems array
+    for (const fixed of fixedCommunityItems) {
+        if (!communityItems.some(c => c.title.toLowerCase().includes(fixed.title.split(' ')[0].toLowerCase()))) {
+            communityItems.push({
+                id: uuid(),
+                title: fixed.title,
+                subtitle: fixed.subtitle,
+                dates: fixed.dates,
+                bullets: fixed.bullets.map(b => ({ id: uuid(), text: b, isSuggested: false }))
             });
         }
     }
@@ -577,6 +643,59 @@ Generate the tailored resume JSON now. Remember to:
                 }
             });
 
+            // 3.5. Enforce Fixed Community Involvement Items
+            const fixedCommunityItems = [
+                {
+                    title: "HackLabs",
+                    subtitle: "Founder & President",
+                    dates: "",
+                    bullets: [
+                        "Established and scaled a technical community to 50+ members, driving innovation through weekly project-based workshops and hackathon training.",
+                        "Led a 9-member delegation to secure three podium finishes at Vibeathon, winning $2,500, directing the rapid delivery of six AI-integrated healthcare solutions in a 22-hour sprint."
+                    ]
+                },
+                {
+                    title: "Atlassian Hackathon",
+                    subtitle: "Finalist",
+                    dates: "",
+                    bullets: [
+                        "Architected an AI-powered onboarding assistant on Atlassian Forge using JavaScript and ROVO Agents, implementing Jira tracking and NLP-based Confluence summarization."
+                    ]
+                },
+                {
+                    title: "Ravi's Study Program (RSP)",
+                    subtitle: "Community Member",
+                    dates: "",
+                    bullets: [
+                        "Delivered algorithms and system design mentorship to 300+ peers through semi-weekly mock interviews, enhancing technical readiness for top-tier software engineering roles."
+                    ]
+                }
+            ];
+
+            // Ensure community section exists
+            if (!communitySection) {
+                communitySection = { id: uuid(), type: 'community', title: 'Community Involvement', items: [] };
+                const projIndex = parsed.resume.sections.findIndex(s => s.type === 'projects');
+                if (projIndex !== -1) {
+                    parsed.resume.sections.splice(projIndex + 1, 0, communitySection);
+                } else {
+                    parsed.resume.sections.push(communitySection);
+                }
+            }
+
+            // Add fixed community items if not already present
+            for (const fixed of fixedCommunityItems) {
+                if (!communitySection.items.some(c => c.title.toLowerCase().includes(fixed.title.split(' ')[0].toLowerCase()))) {
+                    communitySection.items.push({
+                        id: uuid(),
+                        title: fixed.title,
+                        subtitle: fixed.subtitle,
+                        dates: fixed.dates,
+                        bullets: fixed.bullets.map(b => ({ id: uuid(), text: b, isSuggested: false }))
+                    });
+                }
+            }
+
             // 4. Ensure ALL Source Skills are present
             const sourceSkills = parsedResume.skills || [];
             const destSkills = parsed.resume.skills || { languages: [], frameworks: [], tools: [], databases: [] };
@@ -690,13 +809,9 @@ Generate the tailored resume JSON now. Remember to:
 // Draft Management
 // ============================================================================
 
-const DRAFTS_DIR = path.join(process.cwd(), 'data', 'resumes');
-
-function ensureDraftsDir() {
-    if (!fs.existsSync(DRAFTS_DIR)) {
-        fs.mkdirSync(DRAFTS_DIR, { recursive: true });
-    }
-}
+// ============================================================================
+// Draft Management
+// ============================================================================
 
 /**
  * Save a resume draft
@@ -706,18 +821,7 @@ export async function saveDraft(
     resumeData: TailoredResumeData
 ): Promise<{ success: boolean; id: string; error?: string }> {
     try {
-        ensureDraftsDir();
-
-        const userDir = path.join(DRAFTS_DIR, userId);
-        if (!fs.existsSync(userDir)) {
-            fs.mkdirSync(userDir, { recursive: true });
-        }
-
-        const draftPath = path.join(userDir, `${resumeData.id}.json`);
-        resumeData.updatedAt = new Date().toISOString();
-
-        fs.writeFileSync(draftPath, JSON.stringify(resumeData, null, 2));
-
+        await createDraft(resumeData.id, userId, resumeData, resumeData.jobId);
         return { success: true, id: resumeData.id };
     } catch (error: any) {
         return { success: false, id: resumeData.id, error: error.message };
@@ -732,14 +836,11 @@ export async function loadDraft(
     draftId: string
 ): Promise<TailoredResumeData | null> {
     try {
-        const draftPath = path.join(DRAFTS_DIR, userId, `${draftId}.json`);
-
-        if (!fs.existsSync(draftPath)) {
-            return null;
+        const draft = await getDbDraft(draftId);
+        if (draft && typeof draft === 'object' && 'id' in draft) {
+            return draft as TailoredResumeData;
         }
-
-        const content = fs.readFileSync(draftPath, 'utf-8');
-        return JSON.parse(content);
+        return draft;
     } catch (error) {
         console.error('Failed to load draft:', error);
         return null;
@@ -751,27 +852,8 @@ export async function loadDraft(
  */
 export async function listDrafts(userId: string): Promise<TailoredResumeData[]> {
     try {
-        const userDir = path.join(DRAFTS_DIR, userId);
-
-        if (!fs.existsSync(userDir)) {
-            return [];
-        }
-
-        const files = fs.readdirSync(userDir).filter(f => f.endsWith('.json'));
-        const drafts: TailoredResumeData[] = [];
-
-        for (const file of files) {
-            try {
-                const content = fs.readFileSync(path.join(userDir, file), 'utf-8');
-                drafts.push(JSON.parse(content));
-            } catch (e) {
-                // Skip invalid files
-            }
-        }
-
-        return drafts.sort((a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        );
+        const drafts = await listDbDrafts(userId);
+        return drafts as TailoredResumeData[];
     } catch (error) {
         console.error('Failed to list drafts:', error);
         return [];
@@ -779,18 +861,12 @@ export async function listDrafts(userId: string): Promise<TailoredResumeData[]> 
 }
 
 /**
- * Delete a draft
+ * delete a draft
  */
 export async function deleteDraft(userId: string, draftId: string): Promise<boolean> {
     try {
-        const draftPath = path.join(DRAFTS_DIR, userId, `${draftId}.json`);
-
-        if (fs.existsSync(draftPath)) {
-            fs.unlinkSync(draftPath);
-            return true;
-        }
-
-        return false;
+        await deleteDbDraft(draftId);
+        return true;
     } catch (error) {
         console.error('Failed to delete draft:', error);
         return false;

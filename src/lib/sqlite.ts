@@ -1,16 +1,20 @@
 // SQLite fallback for local development
 // Uses better-sqlite3 for synchronous operations
 
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import type { Database as DatabaseType } from 'better-sqlite3';
 
-let db: Database.Database | null = null;
+let db: DatabaseType | null = null;
+const DB_NAME = 'job-hunt-vibe.sqlite';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'job-hunt-vibe.sqlite');
-
-export function getSQLiteDB(): Database.Database {
+export function getSQLiteDB(): DatabaseType {
   if (db) return db;
+
+  // Dynamic import to prevent Vercel build errors (fs/better-sqlite3)
+  const Database = require('better-sqlite3');
+  const path = require('path');
+  const fs = require('fs');
+
+  const DB_PATH = path.join(process.cwd(), 'data', DB_NAME);
 
   // Ensure data directory exists
   const dataDir = path.dirname(DB_PATH);
@@ -21,15 +25,15 @@ export function getSQLiteDB(): Database.Database {
   db = new Database(DB_PATH);
 
   // Enable WAL mode for better concurrency
-  db.pragma('journal_mode = WAL');
+  db!.pragma('journal_mode = WAL');
 
   // Initialize schema
-  initializeSchema(db);
+  initializeSchema(db!);
 
-  return db;
+  return db!;
 }
 
-function initializeSchema(database: Database.Database): void {
+function initializeSchema(database: DatabaseType): void {
   database.exec(`
     -- Jobs table
     CREATE TABLE IF NOT EXISTS jobs (
@@ -146,7 +150,7 @@ function initializeSchema(database: Database.Database): void {
 }
 
 // Run schema migrations for existing databases
-function runMigrations(database: Database.Database): void {
+function runMigrations(database: DatabaseType): void {
   // Check if archived_at column exists in jobs table
   const tableInfo = database.prepare("PRAGMA table_info(jobs)").all() as { name: string }[];
   const hasArchivedAt = tableInfo.some(col => col.name === 'archived_at');

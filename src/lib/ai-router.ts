@@ -380,15 +380,28 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
 }
 
 /**
- * Route multimodal call (text-only for now)
+ * Route multimodal call - NOT SUPPORTED via OpenRouter
+ * This will always fail, triggering the text extraction fallback in gemini.ts
  */
 export async function routeMultimodalCall(prompt: any[]): Promise<string> {
+    // Check if this is a multimodal call with binary data
+    const hasBinaryData = prompt.some(item =>
+        typeof item === 'object' && item?.inlineData
+    );
+
+    if (hasBinaryData) {
+        // OpenRouter/Claude do NOT support direct PDF parsing
+        // Force the text extraction fallback by throwing an error
+        throw new Error('Multimodal PDF parsing not supported by current provider. Using text extraction fallback.');
+    }
+
+    // If it's just text, route normally
     const textContent = prompt
         .filter(item => typeof item === 'string')
         .join('\n');
 
     if (!textContent) {
-        throw new Error('Multimodal content not supported without text');
+        throw new Error('No text content in multimodal call');
     }
 
     return routeAICall(textContent);

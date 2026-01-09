@@ -12,6 +12,8 @@
     "daily-fetch": "node --loader ts-node/esm scripts/seed-data.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.965.0",
+    "@aws-sdk/s3-request-presigner": "^3.965.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -26,6 +28,7 @@
     "next": "16.1.1",
     "nodemon": "^3.1.11",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.16.3",
     "puppeteer": "^24.34.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -40,6 +43,7 @@
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^20.19.27",
     "@types/pdf-parse": "^1.1.5",
+    "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",

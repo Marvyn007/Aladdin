@@ -10,11 +10,12 @@ export function getSupabaseClient(): SupabaseClient {
         return supabaseClient;
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_KEY;
+    // Support both naming conventions
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-        throw new Error('Missing Supabase environment variables: SUPABASE_URL and SUPABASE_KEY must be set');
+        throw new Error('Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or SUPABASE_URL/KEY) must be set');
     }
 
     supabaseClient = createClient(supabaseUrl, supabaseKey, {
@@ -28,7 +29,9 @@ export function getSupabaseClient(): SupabaseClient {
 
 // Check if Supabase is configured
 export function isSupabaseConfigured(): boolean {
-    return !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY);
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    return !!(url && key);
 }
 
 // Helper to check connection

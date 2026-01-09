@@ -235,29 +235,28 @@ export class JobSourceCoordinator {
         const now = Date.now();
         const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-        let stats = { whitelist: 0, blacklist: 0, location: 0, date: 0 };
+        let stats = { whitelist: 0, location: 0, date: 0 };
 
         const filtered = jobs.filter(job => {
             const titleLower = job.title.toLowerCase();
             const locationLower = (job.location || '').toLowerCase();
-            const descLower = (job.description || '').toLowerCase();
 
-            // RULE 1: MUST match whitelist
+            // RULE 1: MUST match whitelist (is a SWE-related role)
             const matchesWhitelist = SWE_WHITELIST.some(term => titleLower.includes(term));
             if (!matchesWhitelist) {
                 stats.whitelist++;
                 return false;
             }
 
-            // RULE 2: MUST NOT match blacklist
-            const matchesBlacklist = BLACKLIST.some(term => titleLower.includes(term));
-            if (matchesBlacklist) {
-                console.log(`BLOCKED: "${job.title}" (blacklist match)`);
-                stats.blacklist++;
-                return false;
-            }
+            // NOTE: Seniority/blacklist filtering is NO LONGER done here.
+            // ALL whitelist-matching jobs are added to the database.
+            // The "Run AI Cleanup" feature handles intelligent filtering of:
+            // - Senior/Staff/Lead roles
+            // - Non-SWE roles (security, qa, etc.)
+            // - Other false positives
+            // This allows users to see all jobs and reduces false positive blocks.
 
-            // RULE 3: US location only
+            // RULE 2: US location only
             const isForeign = FOREIGN_PATTERNS.some(p => p.test(locationLower));
             if (isForeign) {
                 stats.location++;
@@ -270,7 +269,7 @@ export class JobSourceCoordinator {
                 return false;
             }
 
-            // RULE 4: Posted within 24h
+            // RULE 3: Posted within 24h
             if (!job.posted_at) {
                 stats.date++;
                 return false;
@@ -284,7 +283,7 @@ export class JobSourceCoordinator {
             return true;
         });
 
-        console.log(`Filter stats: whitelist=${stats.whitelist}, blacklist=${stats.blacklist}, location=${stats.location}, date=${stats.date}`);
+        console.log(`Filter stats: whitelist=${stats.whitelist}, location=${stats.location}, date=${stats.date}`);
         return filtered;
     }
 
