@@ -56,9 +56,6 @@ interface AppState {
     // Settings
     loadSettings: () => Promise<void>;
     updateExcludedKeywords: (keywords: string[]) => Promise<void>;
-    // Settings
-    loadSettings: () => Promise<void>;
-    updateExcludedKeywords: (keywords: string[]) => Promise<void>;
 
     // Cookie Persistence
     initializeFilters: () => void;
