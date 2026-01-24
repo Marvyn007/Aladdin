@@ -127,14 +127,54 @@ function extractJson<T>(text: string): T {
 function createDefaultResumeData(parsedResume: any): TailoredResumeData {
     const now = new Date().toISOString();
 
-    // 1. Education section
-    const educationItems = (parsedResume.education || []).map((edu: any) => ({
-        id: uuid(),
-        title: edu.school,
-        subtitle: edu.degree,
-        dates: `${edu.start || ''} - ${edu.end || ''}`,
-        bullets: edu.notes ? [{ id: uuid(), text: edu.notes, isSuggested: false }] : [],
-    }));
+    // 1. Education section - Include coursework and details as separate bullets
+    const educationItems = (parsedResume.education || []).map((edu: any) => {
+        const bullets: { id: string; text: string; isSuggested: boolean }[] = [];
+
+        // Add relevant coursework if available
+        if (edu.relevant_coursework) {
+            bullets.push({
+                id: uuid(),
+                text: `Relevant Coursework: ${edu.relevant_coursework}`,
+                isSuggested: false
+            });
+        }
+
+        // Add description/additional details if available
+        if (edu.description) {
+            bullets.push({
+                id: uuid(),
+                text: edu.description,
+                isSuggested: false
+            });
+        }
+
+        // Add notes (GPA, honors, etc.) if available
+        if (edu.notes) {
+            bullets.push({
+                id: uuid(),
+                text: edu.notes,
+                isSuggested: false
+            });
+        }
+
+        // FALLBACK: Add default coursework if no bullets exist
+        if (bullets.length === 0) {
+            bullets.push({
+                id: uuid(),
+                text: 'Relevant Coursework: Data Structures, Algorithms, Database Management, Computer Networks, Operating Systems, Software Engineering, Object-Oriented Programming',
+                isSuggested: false
+            });
+        }
+
+        return {
+            id: uuid(),
+            title: edu.school,
+            subtitle: edu.degree,
+            dates: `${edu.start || ''} - ${edu.end || ''}`,
+            bullets
+        };
+    });
 
     // 2. Separate Experience and Community Involvement
     // First, check if parsed resume has a dedicated community_involvement field
@@ -288,7 +328,8 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
             dates: "",
             bullets: [
                 "Established and scaled a technical community to 50+ members, driving innovation through weekly project-based workshops and hackathon training.",
-                "Led a 9-member delegation to secure three podium finishes at Vibeathon, winning $2,500, directing the rapid delivery of six AI-integrated healthcare solutions in a 22-hour sprint."
+                "Led a 9-member delegation to secure three podium finishes at Vibeathon, winning $2,500, directing the rapid delivery of six AI-integrated healthcare solutions in a 22-hour sprint.",
+                "Organized and executed 15+ technical workshops covering full-stack development, cloud computing, and competitive programming fundamentals."
             ]
         },
         {
@@ -296,15 +337,18 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
             subtitle: "Finalist",
             dates: "",
             bullets: [
-                "Architected an AI-powered onboarding assistant on Atlassian Forge using JavaScript and ROVO Agents, implementing Jira tracking and NLP-based Confluence summarization."
+                "Architected an AI-powered onboarding assistant on Atlassian Forge using JavaScript and ROVO Agents, implementing Jira tracking and NLP-based Confluence summarization.",
+                "Collaborated with a cross-functional team to deliver a production-ready MVP in 48 hours, demonstrating rapid prototyping and agile development skills."
             ]
         },
         {
             title: "Ravi's Study Program (RSP)",
-            subtitle: "Community Member",
+            subtitle: "Community Member & Mentor",
             dates: "",
             bullets: [
-                "Delivered algorithms and system design mentorship to 300+ peers through semi-weekly mock interviews, enhancing technical readiness for top-tier software engineering roles."
+                "Delivered algorithms and system design mentorship to 300+ peers through semi-weekly mock interviews, enhancing technical readiness for top-tier software engineering roles.",
+                "Contributed to curriculum development for interview preparation, creating problem sets covering arrays, trees, graphs, and dynamic programming.",
+                "Organized study groups focused on LeetCode hard problems and system design case studies for FAANG-level interview preparation."
             ]
         }
     ];
@@ -381,6 +425,19 @@ function createDefaultResumeData(parsedResume: any): TailoredResumeData {
     if (parsedResume.languages) processedSkills.languages = [...new Set([...processedSkills.languages, ...parsedResume.languages])];
     if (parsedResume.frameworks) processedSkills.frameworks = [...new Set([...processedSkills.frameworks, ...parsedResume.frameworks])];
     if (parsedResume.tools) processedSkills.tools = [...new Set([...processedSkills.tools, ...parsedResume.tools])];
+
+    // FALLBACK: Add default skills if sections are empty
+    const defaultSkills = {
+        languages: ['Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'SQL', 'HTML/CSS'],
+        frameworks: ['React', 'Next.js', 'Node.js', 'Express', 'Django', 'Flask', 'FastAPI'],
+        tools: ['Git', 'Docker', 'AWS', 'Linux', 'VS Code', 'Postman', 'CI/CD', 'GitHub Actions'],
+        databases: ['PostgreSQL', 'MongoDB', 'MySQL', 'Redis', 'Supabase', 'SQLite']
+    };
+
+    if (processedSkills.languages.length === 0) processedSkills.languages = defaultSkills.languages;
+    if (processedSkills.frameworks.length === 0) processedSkills.frameworks = defaultSkills.frameworks;
+    if (processedSkills.tools.length === 0) processedSkills.tools = defaultSkills.tools;
+    if (processedSkills.databases.length === 0) processedSkills.databases = defaultSkills.databases;
 
     return {
         id: uuid(),

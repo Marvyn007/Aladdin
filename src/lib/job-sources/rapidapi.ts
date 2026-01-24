@@ -19,12 +19,12 @@ export class RapidAPIAdapter extends BaseJobSource {
                 ' in United States' +
                 (filters.level?.includes('internship') ? ' intern' : '');
 
-            // date_posted: 'today' | '3days' | 'week' | 'month'
-            const datePosted = filters.recent ? 'today' : 'month';
+            // date_posted: 'today' | '3days' | 'week' | 'month' | 'all'
+            const datePosted = filters.recent ? 'today' : 'all';
             const params = new URLSearchParams({
                 query: query,
                 page: '1',
-                num_pages: '1',
+                num_pages: '10', // Fetch 10 pages (~100 jobs) at once
                 date_posted: datePosted
             });
 

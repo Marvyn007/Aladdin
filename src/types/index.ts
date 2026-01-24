@@ -210,6 +210,7 @@ export interface FilterState {
 export interface AppSettings {
   freshLimit: number;
   lastUpdated: string | null;
+  excludedKeywords: string[];
 }
 
 // Bookmarklet payload

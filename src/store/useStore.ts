@@ -27,6 +27,7 @@ interface AppState {
     // Filters
     filters: FilterState;
     freshLimit: number;
+    excludedKeywords?: string[];
 
     // UI State
     sidebarOpen: boolean;
@@ -51,11 +52,46 @@ interface AppState {
     setFreshLimit: (limit: number) => void;
     toggleSidebar: () => void;
     setActiveModal: (modal: AppState['activeModal']) => void;
+
+    // Settings
+    loadSettings: () => Promise<void>;
+    updateExcludedKeywords: (keywords: string[]) => Promise<void>;
+    // Settings
+    loadSettings: () => Promise<void>;
+    updateExcludedKeywords: (keywords: string[]) => Promise<void>;
+
+    // Cookie Persistence
+    initializeFilters: () => void;
 }
+
+const COOKIES_KEY = 'job_filter_tags';
+
+// Helper to set cookie
+const setTagsCookie = (tags: string[]) => {
+    if (typeof document === 'undefined') return;
+    const value = JSON.stringify(tags);
+    const date = new Date();
+    date.setTime(date.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days
+    document.cookie = `${COOKIES_KEY}=${encodeURIComponent(value)}; expires=${date.toUTCString()}; path=/`;
+};
+
+// Helper to get cookie
+const getTagsCookie = (): string[] => {
+    if (typeof document === 'undefined') return [];
+    try {
+        const matches = document.cookie.match(new RegExp(
+            "(?:^|; )" + COOKIES_KEY.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+        ));
+        return matches ? JSON.parse(decodeURIComponent(matches[1])) : [];
+    } catch (e) {
+        console.error('Failed to parse tags cookie', e);
+        return [];
+    }
+};
 
 export const useStore = create<AppState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             // Initial state
             theme: 'light',
             jobs: [],
@@ -72,6 +108,7 @@ export const useStore = create<AppState>()(
                 techTags: [],
             },
             freshLimit: 300,
+            excludedKeywords: [],
             sidebarOpen: true,
             activeModal: null,
 
@@ -119,13 +156,59 @@ export const useStore = create<AppState>()(
                 })),
 
             setFilters: (filters) =>
-                set((state) => ({ filters: { ...state.filters, ...filters } })),
+                set((state) => {
+                    const newFilters = { ...state.filters, ...filters };
+                    // Persist tags to cookie if they changed
+                    if (filters.techTags) {
+                        setTagsCookie(newFilters.techTags);
+                    }
+                    return { filters: newFilters };
+                }),
 
             setFreshLimit: (limit) => set({ freshLimit: limit }),
 
             toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
             setActiveModal: (modal) => set({ activeModal: modal }),
+
+            loadSettings: async () => {
+                try {
+                    const res = await fetch('/api/settings');
+                    const settings = await res.json();
+                    set({
+                        freshLimit: settings.freshLimit || 300,
+                        excludedKeywords: settings.excludedKeywords || []
+                    });
+                } catch (e) {
+                    console.error('Failed to load settings', e);
+                }
+            },
+
+            updateExcludedKeywords: async (keywords) => {
+                // Update local state immediately (optimistic update)
+                set({ excludedKeywords: keywords });
+
+                // Persist to database
+                try {
+                    await fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ excludedKeywords: keywords })
+                    });
+                } catch (e) {
+                    console.error('Failed to save keywords', e);
+                }
+            },
+
+            initializeFilters: () => {
+                const tags = getTagsCookie();
+                if (tags.length > 0) {
+                    set((state) => ({
+                        filters: { ...state.filters, techTags: tags }
+                    }));
+                }
+            }
+
         }),
         {
             name: 'job-hunt-vibe-storage',
@@ -144,3 +227,10 @@ export const useSelectedJob = () => useStore((state) => state.selectedJob);
 export const useApplications = () => useStore((state) => state.applications);
 export const useFilters = () => useStore((state) => state.filters);
 export const useTheme = () => useStore((state) => state.theme);
+// Export new hook
+export const useStoreActions = () => useStore((state) => ({
+    loadSettings: state.loadSettings,
+    updateExcludedKeywords: state.updateExcludedKeywords,
+    setFilters: state.setFilters,
+    initializeFilters: state.initializeFilters
+}));

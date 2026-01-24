@@ -11,12 +11,12 @@ interface SidebarProps {
     // New actions
     onScoreJobs: () => void;
     onImportJob: () => void;
-    onCleanup: () => void;
+    onFilter: () => void;
 
     // Loading states
     isLoading: boolean;
     isScoring: boolean;
-    isCleaning: boolean;
+    isFiltering: boolean;
 
     // Mobile responsive props
     isMobileOpen?: boolean;
@@ -27,10 +27,10 @@ export function Sidebar({
     onFindNow,
     onScoreJobs,
     onImportJob,
-    onCleanup,
+    onFilter,
     isLoading,
     isScoring,
-    isCleaning,
+    isFiltering,
     isMobileOpen,
     onCloseMobile
 }: SidebarProps) {
@@ -122,12 +122,12 @@ export function Sidebar({
                         style={{ minHeight: '48px' }}
                     />
 
-                    {/* Run Cleanup (Moved) */}
+                    {/* Filter (was Run Cleanup) */}
                     <NavItem
-                        icon={<img src="/icons/broom.png" alt="Cleanup" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
-                        label="Run Cleanup"
-                        onClick={() => handleNavClick(onCleanup)}
-                        loading={isCleaning}
+                        icon={<img src="/icons/broom.png" alt="Filter" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
+                        label="Filter"
+                        onClick={() => handleNavClick(onFilter)}
+                        loading={isFiltering}
                         collapsed={!sidebarOpen}
                         style={{ minHeight: '48px' }}
                     />

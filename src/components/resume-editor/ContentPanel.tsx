@@ -76,7 +76,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                         ...s, items: s.items.map(item =>
                             item.id === itemId
                                 ? {
-                                    ...item, bullets: item.bullets.map(b =>
+                                    ...item, bullets: (item.bullets || []).map(b =>
                                         b.id === bulletId ? { ...b, text, isSuggested: false } : b
                                     )
                                 }
@@ -103,7 +103,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                     ? {
                         ...s, items: s.items.map(item =>
                             item.id === itemId
-                                ? { ...item, bullets: [...item.bullets, newBullet] }
+                                ? { ...item, bullets: [...(item.bullets || []), newBullet] }
                                 : item
                         )
                     }
@@ -121,7 +121,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                     ? {
                         ...s, items: s.items.map(item =>
                             item.id === itemId
-                                ? { ...item, bullets: item.bullets.filter(b => b.id !== bulletId) }
+                                ? { ...item, bullets: (item.bullets || []).filter(b => b.id !== bulletId) }
                                 : item
                         )
                     }
@@ -415,7 +415,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
 
                                             {/* Bullets */}
                                             <div style={{ marginLeft: '8px' }}>
-                                                {item.bullets.map((bullet) => (
+                                                {(item.bullets || []).map((bullet) => (
                                                     <div
                                                         key={bullet.id}
                                                         style={{

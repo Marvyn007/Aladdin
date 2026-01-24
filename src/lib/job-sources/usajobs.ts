@@ -23,41 +23,54 @@ export class USAJobsAdapter extends BaseJobSource {
             const host = 'data.usajobs.gov';
             const userAgent = 'job-hunt-vibe-bot/1.0';
 
-            const url = `https://${host}/api/search?Keyword=${encodeURIComponent(keywords)}&PositionSensitivity=Low&ResultsPerPage=50`;
+            const results: ScrapedJob[] = [];
 
-            const response = await fetch(url, {
-                headers: {
-                    'Host': host,
-                    'User-Agent': userAgent,
-                    'Authorization-Key': this.config.apiKey || ''
-                },
-                next: { revalidate: 3600 }
-            });
+            // Loop pages 1 to 4 (200 jobs max)
+            for (let page = 1; page <= 4; page++) {
+                console.log(`[USAJOBS] Fetching page ${page}...`);
+                const url = `https://${host}/api/search?Keyword=${encodeURIComponent(keywords)}&PositionSensitivity=Low&ResultsPerPage=50&Page=${page}`;
 
-            if (!response.ok) {
-                console.warn(`USAJOBS API error: ${response.status} ${response.statusText}`);
-                return [];
+                const response = await fetch(url, {
+                    headers: {
+                        'Host': host,
+                        'User-Agent': userAgent,
+                        'Authorization-Key': this.config.apiKey || ''
+                    },
+                    next: { revalidate: 3600 }
+                });
+
+                if (!response.ok) {
+                    console.warn(`USAJOBS API error on page ${page}: ${response.status} ${response.statusText}`);
+                    break;
+                }
+
+                const data = await response.json();
+                const items = data.SearchResult?.SearchResultItems || [];
+
+                if (items.length === 0) break;
+
+                const mapped = items.map((item: any) => {
+                    const desc = item.MatchedObjectDescriptor;
+                    return {
+                        id: String(desc.PositionID),
+                        title: desc.PositionTitle,
+                        company: desc.OrganizationName,
+                        location: desc.PositionLocation?.[0]?.LocationName || 'US',
+                        posted_at: desc.PublicationStartDate, // Already ISO-like
+                        source_url: desc.PositionURI,
+                        description: desc.UserArea?.Details?.JobSummary || desc.Description,
+                        salary: desc.PositionRemuneration?.[0]?.MinimumRange ?
+                            `$${desc.PositionRemuneration[0].MinimumRange} - $${desc.PositionRemuneration[0].MaximumRange}` : undefined,
+                        original_source: 'usajobs',
+                        raw_source_data: item
+                    };
+                });
+
+                results.push(...mapped);
+                await this.delay(500);
             }
 
-            const data = await response.json();
-            const items = data.SearchResult?.SearchResultItems || [];
-
-            return items.map((item: any) => {
-                const desc = item.MatchedObjectDescriptor;
-                return {
-                    id: String(desc.PositionID),
-                    title: desc.PositionTitle,
-                    company: desc.OrganizationName,
-                    location: desc.PositionLocation?.[0]?.LocationName || 'US',
-                    posted_at: desc.PublicationStartDate, // Already ISO-like
-                    source_url: desc.PositionURI,
-                    description: desc.UserArea?.Details?.JobSummary || desc.Description,
-                    salary: desc.PositionRemuneration?.[0]?.MinimumRange ?
-                        `$${desc.PositionRemuneration[0].MinimumRange} - $${desc.PositionRemuneration[0].MaximumRange}` : undefined,
-                    original_source: 'usajobs',
-                    raw_source_data: item
-                };
-            });
+            return results;
 
         } catch (error) {
             console.error('USAJOBS fetch failed:', error);

@@ -12,6 +12,7 @@ import { TailoredResumeEditor } from '@/components/resume-editor/TailoredResumeE
 import { ResumeSelector } from '@/components/modals/ResumeSelector';
 import { LinkedInSelector } from '@/components/modals/LinkedInSelector';
 import { ImportJobModal } from '@/components/modals/ImportJobModal';
+import { FilterModal } from '@/components/modals/FilterModal';
 import { useStore } from '@/store/useStore';
 import type { Job, Application, ApplicationColumn } from '@/types';
 import {
@@ -344,6 +345,9 @@ export default function Home() {
   );
 
   useEffect(() => {
+    // Initialize filters from cookies
+    useStore.getState().initializeFilters();
+
     loadJobs(false);
     loadApplications();
 
@@ -660,7 +664,7 @@ export default function Home() {
   };
 
   const [isScoring, setIsScoring] = useState(false);
-  const [isCleaning, setIsCleaning] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const handleScoreJobs = async () => {
     setIsScoring(true);
@@ -679,24 +683,8 @@ export default function Home() {
     }
   };
 
-  const handleSmartCleanup = async () => {
-    if (!confirm('Run Smart Cleanup? This will use AI to analyze all fresh jobs and DELETE strictly invalid ones (Senior, Clearance, etc.). This may take a minute.')) return;
-
-    setIsCleaning(true);
-    try {
-      const res = await fetch('/api/run-ai-cleanup', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Cleanup complete!\nAnalyzed: ${data.stats.analyzed}\nDeleted: ${data.stats.deleted}`);
-        loadJobs(false);
-      } else {
-        alert('Cleanup failed: ' + (data.error || 'Unknown error'));
-      }
-    } catch (err) {
-      alert('Cleanup error: ' + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setIsCleaning(false);
-    }
+  const handleOpenFilter = () => {
+    setIsFilterModalOpen(true);
   };
 
   const activeApplication = activeId
@@ -711,9 +699,9 @@ export default function Home() {
         isLoading={isLoadingJobs}
         onScoreJobs={handleScoreJobs}
         onImportJob={() => setActiveModal('import-job')}
-        onCleanup={handleSmartCleanup}
+        onFilter={handleOpenFilter}
         isScoring={isScoring}
-        isCleaning={isCleaning}
+        isFiltering={false}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={handleCloseMobileSidebar}
       />
@@ -881,6 +869,12 @@ export default function Home() {
       {activeModal === 'linkedin-selector' && (
         <LinkedInSelector onClose={() => setActiveModal(null)} />
       )}
+
+      {/* Filter Modal */}
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+      />
     </div>
   );
 }

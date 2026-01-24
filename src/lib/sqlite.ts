@@ -120,6 +120,7 @@ function initializeSchema(database: DatabaseType): void {
       id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
       fresh_limit INTEGER DEFAULT 300,
       last_updated TEXT,
+      excluded_keywords TEXT, -- JSON array
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -201,6 +202,13 @@ function runMigrations(database: DatabaseType): void {
     database.exec("ALTER TABLE jobs ADD COLUMN scraped_at TEXT");
     database.exec("ALTER TABLE jobs ADD COLUMN extraction_confidence TEXT"); // JSON string
     console.log('Migration: scraper v2 fields added successfully.');
+  }
+  // Migration: Add excluded_keywords to app_settings
+  const settingsInfo = database.prepare("PRAGMA table_info(app_settings)").all() as { name: string }[];
+  if (!settingsInfo.some(col => col.name === 'excluded_keywords')) {
+    console.log('Migration: Adding excluded_keywords to app_settings...');
+    database.exec("ALTER TABLE app_settings ADD COLUMN excluded_keywords TEXT");
+    console.log('Migration: excluded_keywords added successfully.');
   }
 }
 

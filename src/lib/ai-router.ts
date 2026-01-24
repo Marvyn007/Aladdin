@@ -1,17 +1,17 @@
 /**
- * AI Provider Router - OpenRouter-First Architecture
+ * AI Provider Router - Multi-Fallback Architecture
  * 
- * Priority: OPENROUTER → OLLAMA (fallback)
+ * Priority Order:
+ * 1. OPENROUTER (Primary Key) with Gemini 2.0 Flash
+ * 2. OPENROUTER (Primary Key) with Claude Haiku
+ * 3. OPENROUTER (Fallback Key) with Gemini 2.0 Flash
+ * 4. OPENROUTER (Fallback Key) with Claude Haiku
+ * 5. Direct GOOGLE GEMINI API (using GEMINI_API_KEY_A/B)
+ * 6. OLLAMA (local, if running)
  * 
  * OpenRouter Models:
- * - Primary: google/gemini-flash-1.5
- * - Fallback: anthropic/claude-3-haiku
- * 
- * Features:
- * - OpenRouter is PRIMARY for reliability
- * - Ollama is OPTIONAL fallback only
- * - Structured response with provider info
- * - 30s timeout for cloud, 90s for local
+ * - Primary: google/gemini-2.0-flash-001
+ * - Secondary: anthropic/claude-3-haiku
  */
 
 import { checkOllama, callOllama, isOllamaHealthy } from './adapters/ollama';
@@ -61,9 +61,9 @@ const MAX_PROMPT_SIZE = 6000;        // Hard limit
 
 const OPENROUTER_DAILY_LIMIT = parseInt(process.env.OPENROUTER_MAX_CALLS_PER_DAY || '100');
 
-// OpenRouter models
-const OPENROUTER_PRIMARY_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-flash-1.5';
-const OPENROUTER_FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL || 'anthropic/claude-3-haiku';
+// OpenRouter models - Gemini 2.0 Flash as primary, Claude Haiku as fallback
+const OPENROUTER_PRIMARY_MODEL = 'google/gemini-2.0-flash-001';
+const OPENROUTER_SECONDARY_MODEL = 'anthropic/claude-3-haiku';
 
 const BILLING_ERROR_PATTERNS = ['insufficient credits', 'payment required', 'billing', 'no credits', '402'];
 const RATE_LIMIT_PATTERNS = ['429', 'rate limit', 'quota exceeded', 'too many requests'];
@@ -142,14 +142,15 @@ async function syncOpenRouterState(): Promise<void> {
 // OPENROUTER CALLER
 // ============================================================================
 
-async function callOpenRouterModel(prompt: string, model: string): Promise<AIGenerateResult> {
-    const key = process.env.OPENROUTER_API_KEY!;
+async function callOpenRouterModel(prompt: string, model: string, apiKey?: string): Promise<AIGenerateResult> {
+    const key = apiKey || process.env.OPENROUTER_API_KEY!;
     const start = Date.now();
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS);
 
-    console.log(`[AI Router] Trying OpenRouter (${model})...`);
+    const keyLabel = apiKey ? 'FALLBACK' : 'PRIMARY';
+    console.log(`[AI Router] Trying OpenRouter (${model}) with ${keyLabel} key...`);
 
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -306,37 +307,106 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
     // Truncate prompt if too long
     const truncatedPrompt = truncatePrompt(prompt);
 
-    // 1. Try OpenRouter Primary
+    // 1. Try OpenRouter with PRIMARY KEY
     if (isOpenRouterAvailable()) {
-        const result = await callOpenRouterModel(truncatedPrompt, OPENROUTER_PRIMARY_MODEL);
+        // Try Gemini 2.0 Flash with primary key
+        const geminiResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_PRIMARY_MODEL);
 
-        if (result.success) {
+        if (geminiResult.success) {
             await handleOpenRouterSuccess();
             routerState.activeProvider = 'openrouter';
             routerState.lastSuccessfulProvider = 'openrouter';
-            return result;
+            return geminiResult;
         }
 
-        // Primary failed - try fallback model
-        console.log(`[AI Router] Primary model failed (${result.error}), trying fallback...`);
+        // Gemini failed - always try Claude Haiku with primary key
+        console.log(`[AI Router] Gemini 2.0 Flash failed (${geminiResult.error}), trying Claude Haiku...`);
+        const haikuResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_SECONDARY_MODEL);
 
-        if (result.error !== 'billing_error') {
-            const fallbackResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_FALLBACK_MODEL);
-
-            if (fallbackResult.success) {
-                await handleOpenRouterSuccess();
-                routerState.activeProvider = 'openrouter';
-                routerState.lastSuccessfulProvider = 'openrouter';
-                return fallbackResult;
-            }
-
-            console.log(`[AI Router] Fallback model also failed: ${fallbackResult.error}`);
+        if (haikuResult.success) {
+            await handleOpenRouterSuccess();
+            routerState.activeProvider = 'openrouter';
+            routerState.lastSuccessfulProvider = 'openrouter';
+            return haikuResult;
         }
 
-        await handleOpenRouterError(result.error || 'unknown');
+        console.log(`[AI Router] Claude Haiku also failed with primary key: ${haikuResult.error}`);
+        await handleOpenRouterError(haikuResult.error || 'unknown');
     }
 
-    // 2. Try Ollama as last resort
+    // 2. Try OpenRouter with FALLBACK KEY (if configured)
+    const fallbackKey = process.env.OPENROUTER_API_FALLBACK_KEY;
+    if (fallbackKey) {
+        console.log('[AI Router] Trying with FALLBACK API key...');
+
+        // Try Gemini 2.0 Flash with fallback key
+        const geminiResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_PRIMARY_MODEL, fallbackKey);
+
+        if (geminiResult.success) {
+            routerState.activeProvider = 'openrouter-fallback';
+            routerState.lastSuccessfulProvider = 'openrouter-fallback';
+            return geminiResult;
+        }
+
+        // Gemini failed - always try Claude Haiku with fallback key
+        console.log(`[AI Router] Gemini 2.0 Flash failed with fallback key (${geminiResult.error}), trying Claude Haiku...`);
+        const haikuResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_SECONDARY_MODEL, fallbackKey);
+
+        if (haikuResult.success) {
+            routerState.activeProvider = 'openrouter-fallback';
+            routerState.lastSuccessfulProvider = 'openrouter-fallback';
+            console.log(`[AI Router] ✓ Claude Haiku succeeded with fallback key!`);
+            return haikuResult;
+        }
+
+        console.log(`[AI Router] Claude Haiku also failed with fallback key: ${haikuResult.error}`);
+        console.log('[AI Router] All OpenRouter attempts exhausted');
+    }
+
+    // 3. Try direct Google Gemini API as fallback (if configured)
+    const geminiKey = process.env.GEMINI_API_KEY_A || process.env.GEMINI_API_KEY_B;
+    if (geminiKey) {
+        console.log('[AI Router] Trying direct Google Gemini API...');
+        try {
+            const start = Date.now();
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: truncatedPrompt }] }],
+                        generationConfig: { maxOutputTokens: 2000 }
+                    })
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                    const elapsed_ms = Date.now() - start;
+                    console.log(`[Gemini Direct] ✓ Generated ${text.length} chars in ${elapsed_ms}ms`);
+                    routerState.activeProvider = 'gemini-direct';
+                    routerState.lastSuccessfulProvider = 'gemini-direct';
+                    return {
+                        success: true,
+                        provider: 'gemini-direct',
+                        model: 'gemini-2.0-flash',
+                        text,
+                        elapsed_ms
+                    };
+                }
+            } else {
+                const errorText = await response.text();
+                console.log(`[Gemini Direct] Failed: ${response.status} - ${errorText.slice(0, 100)}`);
+            }
+        } catch (error: any) {
+            console.log(`[Gemini Direct] Error: ${error.message}`);
+        }
+    }
+
+    // 4. Try Ollama as last resort
     console.log('[AI Router] OpenRouter unavailable, trying Ollama...');
 
     const ollamaHealth = await checkOllama();
@@ -469,7 +539,7 @@ export async function getAIStatus(): Promise<{
         openrouter: {
             status: routerState.openRouter.health,
             primary_model: OPENROUTER_PRIMARY_MODEL,
-            fallback_model: OPENROUTER_FALLBACK_MODEL,
+            fallback_model: OPENROUTER_SECONDARY_MODEL,
             calls_today: routerState.openRouter.callsToday,
             max_calls: routerState.openRouter.maxCallsPerDay
         },

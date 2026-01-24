@@ -269,16 +269,12 @@ export class JobSourceCoordinator {
                 return false;
             }
 
-            // RULE 3: Posted within 24h
-            if (!job.posted_at) {
-                stats.date++;
-                return false;
-            }
-            const posted = new Date(job.posted_at).getTime();
-            if (isNaN(posted) || (now - posted) > ONE_DAY_MS) {
-                stats.date++;
-                return false;
-            }
+            // RULE 3: Posted within 24h - DISABLED per user request
+            // const posted = new Date(job.posted_at).getTime();
+            // if (isNaN(posted) || (now - posted) > ONE_DAY_MS) {
+            //     stats.date++;
+            //     return false;
+            // }
 
             return true;
         });

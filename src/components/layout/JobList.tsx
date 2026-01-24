@@ -46,7 +46,12 @@ function isRecentlyPosted(postedAt: string | null): boolean {
 }
 
 export function JobList({ onJobClick }: JobListProps) {
-    const { jobs, selectedJob, isLoadingJobs, filters, lastUpdated } = useStore();
+    const jobs = useStore(state => state.jobs);
+    const selectedJob = useStore(state => state.selectedJob);
+    const isLoadingJobs = useStore(state => state.isLoadingJobs);
+    const filters = useStore(state => state.filters);
+    const lastUpdated = useStore(state => state.lastUpdated);
+    const excludedKeywords = useStore(state => state.excludedKeywords);
 
     // Filter jobs based on filters
     const filteredJobs = jobs.filter((job) => {
@@ -62,6 +67,14 @@ export function JobList({ onJobClick }: JobListProps) {
         if (filters.remoteOnly) {
             const location = job.location?.toLowerCase() || '';
             if (!location.includes('remote')) {
+                return false;
+            }
+        }
+
+        // Check excluded keywords
+        if (excludedKeywords && excludedKeywords.length > 0) {
+            const titleLower = job.title.toLowerCase();
+            if (excludedKeywords.some(keyword => titleLower.includes(keyword))) {
                 return false;
             }
         }
@@ -231,7 +244,7 @@ export function JobList({ onJobClick }: JobListProps) {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', margin: 0 }}>
+                    <p suppressHydrationWarning style={{ fontSize: '11px', color: 'var(--text-tertiary)', margin: 0 }}>
                         Updated: {lastUpdated ? formatDistanceToNow(new Date(lastUpdated), { addSuffix: true }) : 'Never'}
                     </p>
                 </div>
@@ -363,6 +376,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                         </span>
                                     )}
                                     <span
+                                        suppressHydrationWarning
                                         style={{
                                             color: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 'var(--success)' : 'var(--error)'
                                         }}

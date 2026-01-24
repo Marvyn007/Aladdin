@@ -21,17 +21,21 @@ export class AdzunaAdapter extends BaseJobSource {
         try {
             const results: ScrapedJob[] = [];
             // Adzuna requires one keyword at a time or complex queries.
-            // We'll iterate through main "role" keywords
+            // Iterate through ALL keywords now for maximum volume
             const keywords = filters.keywords.length > 0 ? filters.keywords : ['software engineer'];
 
-            // Limit calls to avoid rate limits (loop max 3 keywords)
-            const searchKeywords = keywords.slice(0, 3);
+            // Loop through ALL keywords
+            for (const keyword of keywords) {
+                // Fetch up to 3 pages for each keyword
+                for (let page = 1; page <= 3; page++) {
+                    console.log(`[Adzuna] Fetching '${keyword}' page ${page}...`);
+                    const jobs = await this.fetchForKeyword(keyword, page, filters);
+                    if (jobs.length === 0) break; // Stop pagination if no more results
+                    results.push(...jobs);
 
-            for (const keyword of searchKeywords) {
-                const jobs = await this.fetchForKeyword(keyword, filters);
-                results.push(...jobs);
-                // Mild delay between keywords
-                await this.delay(1000);
+                    // Mild delay to be nice to API
+                    await this.delay(500);
+                }
             }
 
             return results;
@@ -41,15 +45,14 @@ export class AdzunaAdapter extends BaseJobSource {
         }
     }
 
-    private async fetchForKeyword(keyword: string, filters: JobFilter): Promise<ScrapedJob[]> {
+    private async fetchForKeyword(keyword: string, page: number, filters: JobFilter): Promise<ScrapedJob[]> {
         const country = 'us'; // api.adzuna.com/v1/api/jobs/us/search/1
-        const page = 1;
         const what = encodeURIComponent(keyword + (filters.level?.includes('internship') ? ' intern' : ''));
 
         // Adzuna API URL
-        // max_days_old: 1 if recent, else 30
-        const maxDays = filters.recent ? 1 : 30;
-        const url = `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?app_id=${this.config.appId}&app_key=${this.config.apiKey}&results_per_page=50&what=${what}&max_days_old=${maxDays}&sort_by=date&content-type=application/json`;
+        // max_days_old: 1 if recent, else omit for all time
+        const maxDaysParam = filters.recent ? '&max_days_old=1' : '';
+        const url = `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?app_id=${this.config.appId}&app_key=${this.config.apiKey}&results_per_page=50&what=${what}${maxDaysParam}&sort_by=date&content-type=application/json`;
 
         const response = await fetch(url, {
             headers: { 'Accept': 'application/json' },
