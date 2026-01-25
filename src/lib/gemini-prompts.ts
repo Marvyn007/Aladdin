@@ -12,25 +12,10 @@ CRITICAL INSTRUCTIONS:
 
 You MUST extract the REAL name, REAL email, REAL companies, and REAL project names from the resume.
 
-TECHNICAL SKILLS EXTRACTION (CRITICAL):
-- Look for a "Technical Skills" or "Skills" section in the resume
-- Extract AND CATEGORIZE all skills into: languages, frameworks, tools, databases
-- Common languages: JavaScript, TypeScript, Python, Java, C++, C#, Go, Rust, Ruby, PHP, Swift, Kotlin, SQL
-- Common frameworks: React, Next.js, Node.js, Express, Django, Flask, Spring Boot, Angular, Vue.js, FastAPI
-- Common tools: Git, Docker, Kubernetes, AWS, Azure, GCP, Jenkins, Terraform, Linux, Bash
-- Common databases: PostgreSQL, MySQL, MongoDB, Redis, DynamoDB, SQLite, Supabase, Cassandra
-- DO NOT miss any skills listed in the resume
-
-EDUCATION EXTRACTION (CRITICAL):
-- Include "relevant_coursework" field with course names from the resume
-- Include "description" field with any additional details (minor, concentrations, honors, GPA)
-- Copy ALL text associated with each education entry
-
 Output strict JSON only with this structure:
 {
   "name": "The actual full name from the resume, or null if not found",
   "email": "The actual email from the resume, or null if not found",
-  "phone": "The actual phone number from the resume, or null if not found",
   "location": "The actual city/state from the resume, or null if not found",
   "total_experience_years": number or null,
   "roles": [
@@ -39,31 +24,25 @@ Output strict JSON only with this structure:
       "company": "Actual company name",
       "start": "YYYY-MM or null",
       "end": "YYYY-MM or null",
-      "description": "Full job description with ALL bullet points preserved, separated by newlines"
+      "description": "Actual job description/responsibilities"
     }
   ],
   "education": [
     {
-      "degree": "Actual degree (e.g., Bachelor of Computer Science)",
+      "degree": "Actual degree",
       "school": "Actual school name",
       "start": "YYYY",
       "end": "YYYY",
-      "notes": "GPA, honors, etc.",
-      "relevant_coursework": "Comma-separated list of courses if listed",
-      "description": "Any additional details like minor, concentration, academic achievements"
+      "notes": "GPA, honors, etc."
     }
   ],
   "skills": [
     {"name": "Actual skill name", "level": "expert|advanced|intermediate|beginner", "years": number}
   ],
-  "languages": ["JavaScript", "Python", "...all programming languages from Technical Skills section"],
-  "frameworks": ["React", "Node.js", "...all frameworks from Technical Skills section"],
-  "tools": ["Git", "Docker", "...all tools from Technical Skills section"],
-  "databases": ["PostgreSQL", "MongoDB", "...all databases from Technical Skills section"],
   "projects": [
     {
       "title": "Actual project name",
-      "description": "Full project description with ALL bullet points, separated by newlines",
+      "description": "What the project does",
       "tech": ["actual", "technologies", "used"],
       "link": "URL if available"
     }
@@ -74,7 +53,7 @@ Output strict JSON only with this structure:
       "organization": "Organization/club name",
       "start": "YYYY-MM or null",
       "end": "YYYY-MM or null",
-      "description": "Full description with ALL bullet points, separated by newlines"
+      "description": "What you did in this role"
     }
   ],
   "certifications": ["Actual certifications"],
@@ -85,10 +64,9 @@ IMPORTANT:
 - Extract ONLY what is actually written in the resume
 - Put club leadership, hackathon organizing, student organizations in "community_involvement"
 - Put paid work experience and internships in "roles"
-- PRESERVE ALL BULLET POINTS - do not summarize or skip any
-- Technical skills MUST be categorized into languages, frameworks, tools, databases
 - Do not fabricate or assume any information
-Output JSON only, no explanation.`;
+Output JSON only, no explanation.\ `;
+
 
 
 // ============================================================================
@@ -134,13 +112,13 @@ DETAILED SCORING BREAKDOWN (Calculate each precisely):
 
 PRECISION RULES:
 - Final score MUST have a non-zero ones digit (e.g., 73 not 70, 41 not 40).
-- Add 1-4 points variance based on unique factors (culture hints, growth stack).`;
+- Add 1-4 points variance based on unique factors (culture hints, growth stack).\ `;
 
 // ============================================================================
 // EXPORTED PROMPTS
 // ============================================================================
 
-export const SCORER_PROMPT = `${CORE_SCORING_LOGIC}
+export const SCORER_PROMPT = `\${CORE_SCORING_LOGIC}
 
 FINAL SCORE CALCULATION:
 Add all sub-scores. The result MUST be a specific number between 0-100.
@@ -168,9 +146,9 @@ Output Format (strict JSON):
  "level_match":"exact|close|no",
  "why":"Brutally honest one-sentence explanation with specific reasoning (max 30 words)"
 }
-Return only JSON.`;
+Return only JSON.\ `;
 
-export const BATCH_SCORER_PROMPT = `${CORE_SCORING_LOGIC}
+export const BATCH_SCORER_PROMPT = `\${CORE_SCORING_LOGIC}
 
 DISTRIBUTION RULES (Relative Ranking):
 - Best job in this batch should be 85+
@@ -193,32 +171,32 @@ Output Format (strict JSON array):
   },
   ...
 ]
-Return only JSON array.`;
+Return only JSON array.\ `;
 
 export const TAILORED_RESUME_PROMPT = `System: You are a professional resume optimizer for software engineering jobs.
-You MUST NOT fabricate experience. You MAY enhance wording and add missing technologies ONLY when contextually reasonable.
+You MUST NOT fabricate experience.You MAY enhance wording and add missing technologies ONLY when contextually reasonable.
 
 CRITICAL RULES:
 - Do NOT add fake companies, roles, or years
-- Do NOT exaggerate seniority (e.g., don't change "Developer" to "Lead Developer")
-- Do NOT keyword-stuff (max 2-3 new technologies per bullet point)
-- Resume must look human-written
+  - Do NOT exaggerate seniority(e.g., don't change "Developer" to "Lead Developer")
+    - Do NOT keyword - stuff(max 2 - 3 new technologies per bullet point)
+  - Resume must look human - written
 
 WHAT YOU MAY DO:
-- Enhance bullet points with missing tools if contextually reasonable
-- Add technologies as "built with", "using", or "leveraging"
-- Reword bullets for ATS optimization
-- Reorder skills to prioritize job-relevant ones first
+    - Enhance bullet points with missing tools if contextually reasonable
+      - Add technologies as "built with", "using", or "leveraging"
+        - Reword bullets for ATS optimization
+          - Reorder skills to prioritize job - relevant ones first
 
-EXAMPLE (ALLOWED):
+EXAMPLE(ALLOWED):
 Original: "Built REST APIs using Node.js"
 Enhanced: "Built REST APIs using Node.js and Express, containerized with Docker"
 
-EXAMPLE (NOT ALLOWED):
-"Led Kubernetes migration at Google" (fabricated company/role)
+EXAMPLE(NOT ALLOWED):
+"Led Kubernetes migration at Google"(fabricated company / role)
 
-RESUME HTML STRUCTURE (follow exactly):
-\`\`\`html
+RESUME HTML STRUCTURE(follow exactly):
+\`\`\`html 
 <div class="resume">
   <header>
     <h1>{NAME}</h1>
@@ -288,7 +266,7 @@ OUTPUT FORMAT:
   "confidence_score": 0.0-1.0
 }
 
-Return only JSON.`;
+Return only JSON.\ `;
 
 export const COVER_LETTER_PROMPT = `System: You are a professional career coach and resume writer.
 Your goal is to write a highly effective, human-sounding cover letter that connects the candidate's unique background to the specific job requirements.
@@ -311,9 +289,10 @@ GUIDELINES:
 IMPORTANT:
 - Do NOT use placeholders like "[Company Name]" - verify the company name from the input.
 - Do NOT make up experience. Only use what is provided in the candidate info.
-- If information is missing, focus on the strengths present in the resume.`;
+- If information is missing, focus on the strengths present in the resume.
+\`;
 
-export const JOB_CLEANUP_PROMPT = `System: You are an expert technical recruiter filtering a list of job postings.
+export const JOB_CLEANUP_PROMPT = \`System: You are an expert technical recruiter filtering a list of job postings.
 Your specific goal is to identify "low quality", "irrelevant", or "spam" job listings that should be removed from a high-quality job board.
 
 Criteria for Deletion:
@@ -332,4 +311,4 @@ Output strict JSON:
 }
 
 Return an empty list if all jobs look legitimate.
-Output ONLY valid JSON.`;
+Output ONLY valid JSON.\ `;
