@@ -220,6 +220,63 @@ export class JobSourceCoordinator {
         return sorted;
     }
 
+    /**
+     * Fetch ALL jobs without any filtering (for public jobs persistence)
+     * This ensures every fetched job is persisted to the database
+     */
+    async fetchAllJobsUnfiltered(filters: JobFilter): Promise<ScrapedJob[]> {
+        console.log('=== UNFILTERED JOB FETCH (ALL JOBS) ===');
+
+        // Log adapter status
+        console.log('\n[Job Sources] Checking adapter configurations:');
+        this.adapters.forEach(a => {
+            const enabled = a.isEnabled();
+            const status = enabled ? '✓ ENABLED' : '✗ DISABLED (missing API key)';
+            console.log(`  ${a.sourceName}: ${status}`);
+        });
+
+        const allResults: ScrapedJob[] = [];
+        const activeAdapters = this.adapters.filter(a => a.isEnabled());
+
+        if (activeAdapters.length === 0) {
+            console.error('\n[Job Sources] ⚠️  NO ADAPTERS ARE ENABLED!');
+            return [];
+        }
+
+        console.log(`\n[Job Sources] Active adapters: ${activeAdapters.map(a => a.sourceName).join(', ')}`);
+        console.log('[Job Sources] Fetching ALL jobs from all active sources (NO FILTERS)...\n');
+
+        const results = await Promise.allSettled(
+            activeAdapters.map(async (adapter) => {
+                const start = Date.now();
+                try {
+                    console.log(`[${adapter.sourceName}] Fetching...`);
+                    const jobs = await adapter.fetchJobs(filters);
+                    console.log(`[${adapter.sourceName}] ✓ Fetched ${jobs.length} jobs in ${Date.now() - start}ms`);
+                    return jobs;
+                } catch (error) {
+                    console.error(`[${adapter.sourceName}] ✗ Error:`, error);
+                    return [];
+                }
+            })
+        );
+
+        results.forEach(result => {
+            if (result.status === 'fulfilled') {
+                allResults.push(...result.value);
+            }
+        });
+
+        console.log(`\n[Job Sources] Total raw jobs: ${allResults.length}`);
+
+        // Only deduplicate - NO filtering applied
+        const deduped = this.deduplicate(allResults);
+        console.log(`After dedup: ${deduped.length} (NO FILTERS APPLIED)`);
+        console.log(`=== FINAL: ${deduped.length} jobs for persistence ===`);
+
+        return deduped;
+    }
+
     private deduplicate(jobs: ScrapedJob[]): ScrapedJob[] {
         const seen = new Set<string>();
         return jobs.filter(job => {

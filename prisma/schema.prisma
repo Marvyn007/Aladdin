@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id
+  email            String?
+  name             String?
+  imageUrl         String?           @map("image_url")
+  createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime?         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  appSettings      AppSettings?
+  applications     Application[]
+  coverLetters     CoverLetter[]
+  jobs             Job[]
+  linkedInProfiles LinkedInProfile[]
+  resumes          Resume[]
+  userJobs         UserJob[]
+
+  @@index([email], map: "idx_users_email")
+  @@map("users")
+}
+
+model Job {
+  id                   String        @id @default(uuid()) @db.Uuid
+  title                String
+  company              String?
+  location             String?
+  sourceUrl            String        @map("source_url")
+  postedAt             DateTime?     @map("posted_at") @db.Timestamptz(6)
+  fetchedAt            DateTime?     @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  status               String?       @default("fresh")
+  archived_at          DateTime?     @db.Timestamptz(6)
+  match_score          Int?          @default(0)
+  matched_skills       Json?
+  missing_skills       Json?
+  why                  String?
+  normalizedText       String?       @map("normalized_text")
+  rawTextSummary       String?       @map("raw_text_summary")
+  contentHash          String?       @unique @map("content_hash")
+  createdAt            DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime?     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isImported           Int?          @default(0) @map("is_imported")
+  originalPostedDate   String?       @map("original_posted_date")
+  originalPostedRaw    String?       @map("original_posted_raw")
+  originalPostedSource String?       @map("original_posted_source")
+  locationDisplay      String?       @map("location_display")
+  importTag            String?       @map("import_tag")
+  rawDescriptionHtml   String?       @map("raw_description_html")
+  jobDescriptionPlain  String?       @map("job_description_plain")
+  datePostedIso        String?       @map("date_posted_iso")
+  datePostedDisplay    String?       @map("date_posted_display")
+  datePostedRelative   Int?          @default(0) @map("date_posted_relative")
+  sourceHost           String?       @map("source_host")
+  scrapedAt            DateTime?     @map("scraped_at") @db.Timestamptz(6)
+  extractionConfidence Json?         @map("extraction_confidence")
+  user_id              String
+  applications         Application[]
+  coverLetters         CoverLetter[]
+  users                User          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_jobs_user")
+  userJobs             UserJob[]
+
+  @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
+  @@index([contentHash], map: "idx_jobs_content_hash")
+  @@index([importTag], map: "idx_jobs_import_tag")
+  @@index([match_score(sort: Desc)], map: "idx_jobs_match_score")
+  @@index([status], map: "idx_jobs_status")
+  @@index([user_id], map: "idx_jobs_user_id")
+  @@index([user_id, status, match_score(sort: Desc)], map: "idx_jobs_user_status_score")
+  @@map("jobs")
+}
+
+model UserJob {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id")
+  jobId           String    @map("job_id") @db.Uuid
+  status          String?   @default("fresh")
+  matchScore      Int?      @map("match_score")
+  matching_skills Json?
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  job             Job       @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_jobs_job")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_jobs_user")
+
+  @@unique([userId, jobId], map: "uniq_user_job")
+  @@map("user_jobs")
+}
+
+model Resume {
+  id           String        @id @default(uuid()) @db.Uuid
+  filename     String
+  uploadAt     DateTime?     @default(now()) @map("upload_at") @db.Timestamptz(6)
+  parsedJson   Json?         @map("parsed_json")
+  isDefault    Boolean?      @default(false) @map("is_default")
+  fileData     Bytes?        @map("file_data")
+  s3Key        String?       @map("s3_key")
+  createdAt    DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  userId       String        @map("user_id")
+  applications Application[]
+  coverLetters CoverLetter[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_resumes_user")
+
+  @@index([userId], map: "idx_resumes_user_id")
+  @@index([userId, isDefault], map: "idx_resumes_user_default")
+  @@map("resumes")
+}
+
+model LinkedInProfile {
+  id         String    @id @default(uuid()) @db.Uuid
+  filename   String
+  uploadAt   DateTime? @default(now()) @map("upload_at") @db.Timestamptz(6)
+  parsedJson Json?     @map("parsed_json")
+  fileData   Bytes?    @map("file_data")
+  s3Key      String?   @map("s3_key")
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_linkedin_profiles_user")
+
+  @@index([userId], map: "idx_linkedin_user_id")
+  @@map("linkedin_profiles")
+}
+
+model CoverLetter {
+  id           String        @id @default(uuid()) @db.Uuid
+  jobId        String?       @map("job_id") @db.Uuid
+  resumeId     String?       @map("resume_id") @db.Uuid
+  generatedAt  DateTime?     @default(now()) @map("generated_at") @db.Timestamptz(6)
+  contentHtml  String?       @map("content_html")
+  contentText  String?       @map("content_text")
+  pdfBlobUrl   String?       @map("pdf_blob_url")
+  status       String?       @default("generated")
+  s3Key        String?       @map("s3_key")
+  createdAt    DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  userId       String        @map("user_id")
+  applications Application[]
+  job          Job?          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume       Resume?       @relation(fields: [resumeId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cover_letters_user")
+
+  @@index([userId], map: "idx_cover_letters_user_id")
+  @@map("cover_letters")
+}
+
+model Application {
+  id            String       @id @default(uuid()) @db.Uuid
+  jobId         String?      @map("job_id") @db.Uuid
+  columnName    String?      @default("Applied") @map("column_name")
+  appliedAt     DateTime?    @default(now()) @map("applied_at") @db.Timestamptz(6)
+  notes         String?
+  resumeId      String?      @map("resume_id") @db.Uuid
+  coverLetterId String?      @map("cover_letter_id") @db.Uuid
+  externalLink  String?      @map("external_link")
+  deleted       Boolean?     @default(false)
+  createdAt     DateTime?    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime?    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userId        String       @map("user_id")
+  coverLetter   CoverLetter? @relation(fields: [coverLetterId], references: [id])
+  job           Job?         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume        Resume?      @relation(fields: [resumeId], references: [id])
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_applications_user")
+
+  @@index([userId], map: "idx_applications_user_id")
+  @@index([userId, jobId], map: "idx_applications_user_job")
+  @@index([columnName], map: "idx_applications_column")
+  @@map("applications")
+}
+
+model AppSettings {
+  id               Int       @id @default(autoincrement())
+  freshLimit       Int?      @default(300) @map("fresh_limit")
+  lastUpdated      DateTime? @map("last_updated") @db.Timestamptz(6)
+  createdAt        DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  excludedKeywords Json?     @map("excluded_keywords")
+  userId           String    @unique @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_app_settings_user")
+
+  @@index([userId], map: "idx_app_settings_user_id")
+  @@map("app_settings")
+}
+
+model playing_with_neon {
+  id    Int    @id @default(autoincrement())
+  name  String
+  value Float? @db.Real
+}

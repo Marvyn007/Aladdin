@@ -4,6 +4,7 @@
 
 import { useState, useRef } from 'react';
 import { useStore } from '@/store/useStore';
+import { UserAccountSection } from './UserAccountSection';
 
 interface SidebarProps {
     onFindNow: () => void;
@@ -34,7 +35,7 @@ export function Sidebar({
     isMobileOpen,
     onCloseMobile
 }: SidebarProps) {
-    const { sidebarOpen, toggleSidebar, theme, toggleTheme, setActiveModal } = useStore();
+    const { sidebarOpen, toggleSidebar, setActiveModal } = useStore();
 
     // Handle nav item click - close sidebar on mobile
     const handleNavClick = (action: () => void) => {
@@ -149,57 +150,10 @@ export function Sidebar({
                         onClick={() => handleNavClick(() => setActiveModal('linkedin-selector'))}
                         collapsed={!sidebarOpen}
                     />
-
-                    <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
-
-                    {/* Theme Toggle */}
-                    <NavItem
-                        icon={theme === 'light' ? <MoonIcon /> : <SunIcon />}
-                        label={theme === 'light' ? 'Dark Mode' : 'Light Mode'}
-                        onClick={() => handleNavClick(toggleTheme)}
-                        collapsed={!sidebarOpen}
-                    />
                 </nav>
 
-                {/* Footer - User Info */}
-                <div
-                    style={{
-                        padding: '12px',
-                        borderTop: '1px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        flexShrink: 0,
-                    }}
-                >
-                    <div
-                        style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            background: 'var(--accent-muted)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--accent)',
-                            fontWeight: 600,
-                            fontSize: '13px',
-                            flexShrink: 0,
-                        }}
-                    >
-                        U
-                    </div>
-                    {sidebarOpen && (
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                                User
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                                Single-user mode
-                            </div>
-                        </div>
-                    )}
-                </div>
+                {/* Footer - User Account */}
+                <UserAccountSection collapsed={!sidebarOpen} />
             </aside>
         </>
     );
