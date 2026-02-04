@@ -8,7 +8,8 @@ import {
     updateApplicationColumn,
     deleteApplication,
     getJobById,
-    getApplicationByJobId
+    getApplicationByJobId,
+    logInteraction
 } from '@/lib/db';
 import type { ApplicationColumn } from '@/types';
 import { auth } from '@clerk/nextjs/server';
@@ -65,6 +66,9 @@ export async function POST(request: NextRequest) {
 
         // Create application
         const application = await createApplication(userId, job_id, job.source_url);
+
+        // Log interaction
+        await logInteraction(userId, job_id, 'applied', { source: 'job_board' });
 
         return NextResponse.json({
             success: true,

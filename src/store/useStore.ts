@@ -2,14 +2,17 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import type { Job, Resume, LinkedInProfile, Application, FilterState } from '@/types';
 
 interface AppState {
     // Theme
     theme: 'light' | 'dark';
+    themeId: string; // ID from predefined themes
 
     // Jobs
     jobs: Job[];
+    jobStatus: import('@/types').JobStatus;
     selectedJob: Job | null;
     isLoadingJobs: boolean;
     lastUpdated: string | null;
@@ -29,14 +32,35 @@ interface AppState {
     freshLimit: number;
     excludedKeywords?: string[];
 
+    // Search State
+    searchMode: boolean;
+    searchQuery: string;
+    searchResults: Job[];
+    searchSuggestions: string[];
+
+    // Pagination & Sorting
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
+    sorting: {
+        by: 'time' | 'imported' | 'score' | 'relevance';
+        dir: 'asc' | 'desc';
+    };
+
     // UI State
     sidebarOpen: boolean;
+    viewMode: 'list' | 'map';
     activeModal: 'cover-letter' | 'resume-selector' | 'linkedin-selector' | 'import-job' | null;
 
     // Actions
     setTheme: (theme: 'light' | 'dark') => void;
     toggleTheme: () => void;
+    setThemeId: (id: string) => void;
     setJobs: (jobs: Job[]) => void;
+    setJobStatus: (status: import('@/types').JobStatus) => void;
     setSelectedJob: (job: Job | null) => void;
     setIsLoadingJobs: (loading: boolean) => void;
     setLastUpdated: (time: string | null) => void;
@@ -51,11 +75,26 @@ interface AppState {
     setFilters: (filters: Partial<FilterState>) => void;
     setFreshLimit: (limit: number) => void;
     toggleSidebar: () => void;
+    setViewMode: (mode: 'list' | 'map') => void;
     setActiveModal: (modal: AppState['activeModal']) => void;
+    toggleJobStatus: (jobId: string, status: import('@/types').JobStatus) => Promise<void>;
 
     // Settings
     loadSettings: () => Promise<void>;
     updateExcludedKeywords: (keywords: string[]) => Promise<void>;
+    updateThemeId: (id: string) => Promise<void>; // Deprecated: Use saveThemeSettings
+    saveThemeSettings: (mode: 'light' | 'dark', themeId: string) => Promise<void>;
+    resetTheme: () => void;
+
+    // Pagination & Sorting Actions
+    setPagination: (pagination: Partial<AppState['pagination']>) => void;
+
+    setSorting: (sorting: Partial<AppState['sorting']>) => void;
+
+    // Search Actions
+    enterSearchMode: (query: string) => void;
+    exitSearchMode: () => void;
+    setSearchQuery: (query: string) => void;
 
     // Cookie Persistence
     initializeFilters: () => void;
@@ -91,7 +130,9 @@ export const useStore = create<AppState>()(
         (set, get) => ({
             // Initial state
             theme: 'light',
+            themeId: 'aladdin',
             jobs: [],
+            jobStatus: 'fresh',
             selectedJob: null,
             isLoadingJobs: false,
             lastUpdated: null,
@@ -105,18 +146,35 @@ export const useStore = create<AppState>()(
                 techTags: [],
             },
             freshLimit: 300,
+
             excludedKeywords: [],
+
+            // Initial Search State
+            searchMode: false,
+            searchQuery: '',
+            searchResults: [],
+            searchSuggestions: [],
+
+            // Initial Pagination & Sorting
+            pagination: { page: 1, limit: 50, total: 0, totalPages: 0 },
+            sorting: { by: 'relevance', dir: 'desc' },
+
             sidebarOpen: true,
+            viewMode: 'list',
             activeModal: null,
 
             // Actions
             setTheme: (theme) => set({ theme }),
+            setThemeId: (id) => set({ themeId: id }),
 
             toggleTheme: () => set((state) => ({
                 theme: state.theme === 'light' ? 'dark' : 'light'
             })),
 
+
             setJobs: (jobs) => set({ jobs }),
+
+            setJobStatus: (status) => set({ jobStatus: status }),
 
             setSelectedJob: (job) => set({ selectedJob: job }),
 
@@ -166,18 +224,65 @@ export const useStore = create<AppState>()(
 
             toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
+            setViewMode: (mode) => set({ viewMode: mode }),
+
             setActiveModal: (modal) => set({ activeModal: modal }),
 
-            loadSettings: async () => {
+            toggleJobStatus: async (jobId, status) => {
+                // Optimistic update
+                set((state) => ({
+                    jobs: state.jobs.map(j => j.id === jobId ? { ...j, status } : j),
+                    selectedJob: state.selectedJob?.id === jobId ? { ...state.selectedJob, status } : state.selectedJob
+                }));
+
+                // Call server action
                 try {
+                    const { toggleJobStatusAction } = await import('@/lib/actions');
+                    await toggleJobStatusAction(jobId, status);
+                } catch (e) {
+                    // Revert? For now assume success or reload.
+                }
+            },
+
+            loadSettings: async () => {
+                console.log('[DEBUG-THEME] loadSettings called');
+                try {
+                    console.log('[DEBUG-THEME] Fetching settings from API...');
                     const res = await fetch('/api/settings');
+
+                    if (!res.ok) {
+                        throw new Error(`API Error: ${res.status}`);
+                    }
+
                     const settings = await res.json();
+                    console.log('[DEBUG-THEME] loadSettings response received:', settings);
+
+                    // Apply theme preferences if they exist
+                    if (settings.themePreferences) {
+                        const currentTheme = get().theme;
+                        const currentThemeId = get().themeId;
+
+                        // Only update if different to avoid unnecessary re-renders
+                        if (settings.themePreferences.themeId && settings.themePreferences.themeId !== currentThemeId) {
+                            console.log(`[DEBUG-THEME] Applying new themeId: ${settings.themePreferences.themeId} (was ${currentThemeId})`);
+                            set({ themeId: settings.themePreferences.themeId });
+                        }
+
+                        if (settings.themePreferences.mode && settings.themePreferences.mode !== currentTheme) {
+                            console.log(`[DEBUG-THEME] Applying new theme mode: ${settings.themePreferences.mode} (was ${currentTheme})`);
+                            set({ theme: settings.themePreferences.mode });
+                        }
+                    } else {
+                        console.log('[DEBUG-THEME] No themePreferences found in settings, keeping local state');
+                    }
+
                     set({
                         freshLimit: settings.freshLimit || 300,
-                        excludedKeywords: settings.excludedKeywords || []
+                        excludedKeywords: settings.excludedKeywords || [],
                     });
                 } catch (e) {
-                    console.error('Failed to load settings', e);
+                    console.error('[DEBUG-THEME] Failed to load settings, using local fallback', e);
+                    // On failure, we implicitly trust the persisted local state
                 }
             },
 
@@ -197,6 +302,60 @@ export const useStore = create<AppState>()(
                 }
             },
 
+            updateThemeId: async (id) => {
+                set({ themeId: id });
+                try {
+                    await fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            themePreferences: { themeId: id } // backwards compat structure
+                        })
+                    });
+                } catch (e) {
+                    console.error('Failed to save theme', e);
+                }
+            },
+
+            saveThemeSettings: async (mode, themeId) => {
+                console.log('[DEBUG-THEME] saveThemeSettings calling API:', { mode, themeId });
+
+                // Optimistic update
+                set({ theme: mode, themeId: themeId });
+                console.log('[DEBUG-THEME] Optimistically updated local state');
+
+                try {
+                    await fetch('/api/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            themePreferences: { mode, themeId }
+                        })
+                    });
+                    console.log('[DEBUG-THEME] saveThemeSettings API success');
+                } catch (e) {
+                    console.error('[DEBUG-THEME] Failed to save theme settings', e);
+                    // We knowingly leave the optimistic update in place + console error
+                    // A "Toast.error" here would be ideal in a full implementation
+                    throw e;
+                }
+            },
+
+            resetTheme: () => {
+                console.log('[DEBUG-THEME] resetTheme called - reverting to default');
+                set({ theme: 'light', themeId: 'aladdin' });
+            },
+
+            setPagination: (pagination) =>
+                set((state) => ({
+                    pagination: { ...state.pagination, ...pagination }
+                })),
+
+            setSorting: (sorting) =>
+                set((state) => ({
+                    sorting: { ...state.sorting, ...sorting }
+                })),
+
             initializeFilters: () => {
                 const tags = getTagsCookie();
                 if (tags.length > 0) {
@@ -204,15 +363,132 @@ export const useStore = create<AppState>()(
                         filters: { ...state.filters, techTags: tags }
                     }));
                 }
-            }
+            },
+
+            // Search Implementation - Weighted Scoring System
+            enterSearchMode: (query) => {
+                const trimmedQuery = query.trim().toLowerCase();
+                if (!trimmedQuery) {
+                    set({ searchMode: false, searchQuery: '', searchResults: [] });
+                    return;
+                }
+
+                const allJobs = get().jobs;
+                const searchTerms = trimmedQuery.split(/\s+/).filter(t => t.length > 1);
+
+                // Helper to score a job
+                const calculateScore = (job: any): number => {
+                    let score = 0;
+                    const title = (job.title || '').toLowerCase();
+                    const company = (job.company || '').toLowerCase();
+                    const location = (job.location || '').toLowerCase();
+                    const description = (job.description || '').toLowerCase();
+                    const summary = (job.raw_text_summary || '').toLowerCase();
+
+                    // 1. Exact Phrase Matches
+                    // Title
+                    if (title === trimmedQuery) score += 10000;
+                    else if (title.includes(trimmedQuery)) score += 5000;
+
+                    // Company
+                    if (company === trimmedQuery) score += 4000;
+                    else if (company.includes(trimmedQuery)) score += 2000;
+
+                    // Location
+                    if (location === trimmedQuery) score += 3000;
+                    else if (location.includes(trimmedQuery)) score += 1500;
+
+                    // Description/Summary (phrase)
+                    if (description.includes(trimmedQuery) || summary.includes(trimmedQuery)) {
+                        score += 500;
+                    }
+
+                    // 2. Individual Keyword Matches
+                    let termMatches = 0;
+                    for (const term of searchTerms) {
+                        let termMatched = false;
+                        if (title.includes(term)) {
+                            score += 100;
+                            termMatched = true;
+                        }
+                        if (company.includes(term)) {
+                            score += 50;
+                            termMatched = true;
+                        }
+                        if (location.includes(term)) {
+                            score += 50;
+                            termMatched = true;
+                        }
+                        if (description.includes(term) || summary.includes(term)) {
+                            score += 10;
+                            termMatched = true;
+                        }
+                        if (termMatched) termMatches++;
+                    }
+
+                    // Bonus for matching all terms
+                    if (termMatches === searchTerms.length) score += 200;
+
+                    return score;
+                };
+
+                const scoredJobs = allJobs
+                    .map(job => ({ job, score: calculateScore(job) }))
+                    .filter(item => item.score > 0)
+                    .sort((a, b) => {
+                        // Primary Sort: Score DESC
+                        if (b.score !== a.score) return b.score - a.score;
+
+                        // Secondary Sort: Date Posted DESC (Newest first)
+                        const dateA = new Date(a.job.posted_at || 0).getTime();
+                        const dateB = new Date(b.job.posted_at || 0).getTime();
+                        return dateB - dateA;
+                    })
+                    .map(item => item.job);
+
+                set({
+                    searchMode: true,
+                    searchQuery: query,
+                    searchResults: scoredJobs,
+                    pagination: {
+                        ...get().pagination,
+                        page: 1,
+                        total: scoredJobs.length,
+                        totalPages: Math.ceil(scoredJobs.length / get().pagination.limit)
+                    }
+                });
+            },
+
+            exitSearchMode: () => {
+                // Return to full listing with default pagination (limit 50, page 1)
+                const allJobs = get().jobs;
+                const defaultLimit = 50;
+
+                set({
+                    searchMode: false,
+                    searchQuery: '',
+                    searchResults: [],
+                    pagination: {
+                        ...get().pagination,
+                        page: 1,
+                        limit: defaultLimit,
+                        total: allJobs.length,
+                        totalPages: Math.ceil(allJobs.length / defaultLimit)
+                    }
+                });
+            },
+
+            setSearchQuery: (query) => set({ searchQuery: query }),
 
         }),
         {
             name: 'job-hunt-vibe-storage',
             partialize: (state) => ({
                 theme: state.theme,
+                themeId: state.themeId,
                 freshLimit: state.freshLimit,
                 sidebarOpen: state.sidebarOpen,
+                viewMode: state.viewMode,
             }),
         }
     )
@@ -224,10 +500,24 @@ export const useSelectedJob = () => useStore((state) => state.selectedJob);
 export const useApplications = () => useStore((state) => state.applications);
 export const useFilters = () => useStore((state) => state.filters);
 export const useTheme = () => useStore((state) => state.theme);
-// Export new hook
-export const useStoreActions = () => useStore((state) => ({
-    loadSettings: state.loadSettings,
-    updateExcludedKeywords: state.updateExcludedKeywords,
-    setFilters: state.setFilters,
-    initializeFilters: state.initializeFilters
-}));
+// Export new hook with shallow comparison to prevent SSR snapshot errors
+export const useStoreActions = () => useStore(
+    useShallow((state) => ({
+        loadSettings: state.loadSettings,
+        updateExcludedKeywords: state.updateExcludedKeywords,
+        updateThemeId: state.updateThemeId,
+        saveThemeSettings: state.saveThemeSettings,
+        resetTheme: state.resetTheme,
+        setThemeId: state.setThemeId,
+        setFilters: state.setFilters,
+        setJobStatus: state.setJobStatus,
+        setPagination: state.setPagination,
+        setSorting: state.setSorting,
+        initializeFilters: state.initializeFilters,
+        // Search Actions
+        enterSearchMode: state.enterSearchMode,
+        exitSearchMode: state.exitSearchMode,
+        setSearchQuery: state.setSearchQuery,
+        toggleJobStatus: state.toggleJobStatus
+    }))
+);

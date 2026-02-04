@@ -1,28 +1,44 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-// Define public routes that don't require authentication
-const isPublicRoute = createRouteMatcher([
-    '/sign-in(.*)',
-    '/sign-up(.*)',
-    '/api/webhooks(.*)',
+// Define protected routes that require authentication
+// We now allow public access by default to everything (public-first)
+const isProtectedRoute = createRouteMatcher([
+    '/api/application(.*)', // Tracker API
+    '/api/resume(.*)',      // Resume API
+    '/api/cover-letter(.*)', // Cover Letter API
+    '/api/upload(.*)',      // Upload API
+    '/api/settings(.*)',    // User settings
+    '/api/run-scoring',     // Job scoring
+    '/api/run-import',      // Job import
+    '/api/add-bookmark',    // Bookmarks
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-    // Allow public routes
-    if (isPublicRoute(req)) {
-        return NextResponse.next();
-    }
-
-    // Protect all other routes - redirect to sign-in if not authenticated
     const { userId } = await auth();
 
-    if (!userId) {
-        const signInUrl = new URL('/sign-in', req.url);
-        signInUrl.searchParams.set('redirect_url', req.url);
-        return NextResponse.redirect(signInUrl);
+    // Redirect authenticated users away from sign-in/sign-up pages
+    const isAuthRoute = req.nextUrl.pathname.startsWith('/sign-in') || req.nextUrl.pathname.startsWith('/sign-up');
+    if (isAuthRoute && userId) {
+        return NextResponse.redirect(new URL('/', req.url));
     }
 
+    // If it's a protected route, check auth
+    if (isProtectedRoute(req)) {
+        if (!userId) {
+            // Depending on if it's an API call or page visit, handle differently
+            // But since these are mostly APIs, 401 is appropriate or redirect for pages
+            // For now, let's just protect the API routes securely
+            if (req.nextUrl.pathname.startsWith('/api')) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            }
+            const signInUrl = new URL('/sign-in', req.url);
+            signInUrl.searchParams.set('redirect_url', req.url);
+            return NextResponse.redirect(signInUrl);
+        }
+    }
+
+    // Allow everything else (Public-first)
     return NextResponse.next();
 });
 

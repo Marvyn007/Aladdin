@@ -28,13 +28,19 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { freshLimit } = await request.json();
+        const body = await request.json();
 
-        if (typeof freshLimit !== 'number') {
-            return NextResponse.json({ error: 'Invalid limited' }, { status: 400 });
+        // Validate inputs (basic)
+        if (body.freshLimit !== undefined && typeof body.freshLimit !== 'number') {
+            return NextResponse.json({ error: 'Invalid freshLimit' }, { status: 400 });
         }
 
-        await updateSettings(userId, freshLimit);
+        await updateSettings(userId, {
+            freshLimit: body.freshLimit,
+            excludedKeywords: body.excludedKeywords,
+            themePreferences: body.themePreferences
+        });
+
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error updating settings:', error);

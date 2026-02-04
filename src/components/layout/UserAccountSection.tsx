@@ -5,27 +5,55 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useUser, useClerk } from '@clerk/nextjs';
+import { useState, useEffect, useCallback } from 'react';
+import { useUser } from '@clerk/nextjs';
 import { AccountSettingsModal } from './AccountSettingsModal';
 
 export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
     const { user, isLoaded, isSignedIn } = useUser();
-    const { signOut } = useClerk();
-    const [dropdownOpen, setDropdownOpen] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [customUsername, setCustomUsername] = useState<string | null>(null);
+    const [usernameLoaded, setUsernameLoaded] = useState(false);
 
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setDropdownOpen(false);
+    // Fetch or initialize custom username
+    const fetchUsername = useCallback(async () => {
+        if (!isSignedIn || !user) return;
+
+        try {
+            // First try to get existing profile
+            const profileRes = await fetch('/api/user/profile');
+            const profile = await profileRes.json();
+
+            // If user exists in DB (even with null username), use it
+            if (profile.exists) {
+                setCustomUsername(profile.username);
+            } else {
+                // Only initialize/auto-generate for NEW users who don't exist in DB yet
+                const initRes = await fetch('/api/user/init', { method: 'POST' });
+                const initData = await initRes.json();
+                if (initData.username) {
+                    setCustomUsername(initData.username);
+                }
             }
+        } catch (error) {
+            console.error('Failed to fetch username:', error);
+        } finally {
+            setUsernameLoaded(true);
         }
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [isSignedIn, user]);
+
+    useEffect(() => {
+        if (isSignedIn && user && !usernameLoaded) {
+            fetchUsername();
+        }
+    }, [isSignedIn, user, usernameLoaded, fetchUsername]);
+
+    // Refresh username when modal closes (in case it was updated)
+    const handleModalClose = () => {
+        setModalOpen(false);
+        // Refetch username in case it was changed
+        setUsernameLoaded(false);
+    };
 
     // Loading state
     if (!isLoaded) {
@@ -65,204 +93,160 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
         );
     }
 
-    // Not signed in - this shouldn't happen with middleware, but handle gracefully
+    // Not signed in - Show sign in prompt
     if (!isSignedIn || !user) {
-        return null;
-    }
-
-    const displayName = user.firstName || user.username || 'User';
-    const displayEmail = user.primaryEmailAddress?.emailAddress || '';
-    const avatarUrl = user.imageUrl;
-    const initials = (user.firstName?.[0] || user.username?.[0] || 'U').toUpperCase();
-
-    return (
-        <>
-            <div ref={dropdownRef} style={{ position: 'relative' }}>
-                {/* User Info Button */}
-                <button
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        borderTop: '1px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        background: dropdownOpen ? 'var(--background-secondary)' : 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'background 0.15s ease',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background-secondary)'}
-                    onMouseLeave={(e) => {
-                        if (!dropdownOpen) e.currentTarget.style.background = 'transparent';
-                    }}
-                >
-                    {/* Avatar */}
-                    {avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                            src={avatarUrl}
-                            alt={displayName}
+        return (
+            <div style={{ padding: '12px', borderTop: '1px solid var(--border)' }}>
+                {!collapsed ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                            Personalize your experience
+                        </p>
+                        <a
+                            href="/sign-in"
                             style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                objectFit: 'cover',
-                                flexShrink: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '100%',
+                                padding: '8px',
+                                background: 'var(--accent)',
+                                color: 'white',
+                                borderRadius: '6px',
+                                textDecoration: 'none',
+                                fontSize: '13px',
+                                fontWeight: 500,
                             }}
-                        />
-                    ) : (
-                        <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            background: 'var(--accent-muted)',
+                        >
+                            Sign In
+                        </a>
+                    </div>
+                ) : (
+                    <a
+                        href="/sign-in"
+                        style={{
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: 'var(--accent)',
-                            fontWeight: 600,
-                            fontSize: '13px',
-                            flexShrink: 0,
-                        }}>
-                            {initials}
-                        </div>
-                    )}
-
-                    {/* Name & Email */}
-                    {!collapsed && (
-                        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                            <div style={{
-                                fontSize: '13px',
-                                fontWeight: 500,
-                                color: 'var(--text-primary)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}>
-                                {displayName}
-                            </div>
-                            <div style={{
-                                fontSize: '11px',
-                                color: 'var(--text-tertiary)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}>
-                                {displayEmail}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Dropdown Arrow */}
-                    {!collapsed && (
-                        <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 12 12"
-                            fill="none"
-                            style={{
-                                transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.15s ease',
-                                color: 'var(--text-tertiary)',
-                            }}
-                        >
-                            <path
-                                d="M2.5 4.5L6 8L9.5 4.5"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
+                            width: '36px',
+                            height: '36px',
+                            background: 'var(--accent)',
+                            color: 'white',
+                            borderRadius: '50%',
+                            textDecoration: 'none',
+                        }}
+                        title="Sign In"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                            <polyline points="10 17 15 12 10 7" />
+                            <line x1="15" y1="12" x2="3" y2="12" />
                         </svg>
-                    )}
-                </button>
-
-                {/* Dropdown Menu - Now Opaque */}
-                {dropdownOpen && (
-                    <div style={{
-                        position: 'absolute',
-                        bottom: '100%',
-                        left: '8px',
-                        right: '8px',
-                        marginBottom: '4px',
-                        background: 'var(--background)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                        overflow: 'hidden',
-                        zIndex: 100,
-                    }}>
-                        {/* Settings Option */}
-                        <button
-                            onClick={() => {
-                                setDropdownOpen(false);
-                                setModalOpen(true);
-                            }}
-                            style={{
-                                width: '100%',
-                                padding: '10px 12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                background: 'var(--background)',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-primary)',
-                                fontSize: '13px',
-                                transition: 'background 0.15s ease',
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background-secondary)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--background)'}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <circle cx="12" cy="12" r="3" />
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                            </svg>
-                            Settings
-                        </button>
-
-                        {/* Divider */}
-                        <div style={{ height: '1px', background: 'var(--border)' }} />
-
-                        {/* Sign Out Option */}
-                        <button
-                            onClick={() => {
-                                setDropdownOpen(false);
-                                signOut();
-                            }}
-                            style={{
-                                width: '100%',
-                                padding: '10px 12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                background: 'var(--background)',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--text-danger, #ef4444)',
-                                fontSize: '13px',
-                                transition: 'background 0.15s ease',
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background-secondary)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'var(--background)'}
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                                <polyline points="16 17 21 12 16 7" />
-                                <line x1="21" y1="12" x2="9" y2="12" />
-                            </svg>
-                            Sign out
-                        </button>
-                    </div>
+                    </a>
                 )}
             </div>
+        );
+    }
+
+    // Display priority: customUsername > firstName + lastName > firstName > email prefix
+    // NEVER show 'User' as a placeholder
+    const displayEmail = user.primaryEmailAddress?.emailAddress || '';
+    const clerkName = user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user.firstName || null;
+    const emailPrefix = displayEmail ? displayEmail.split('@')[0] : null;
+
+    const displayName = customUsername
+        || clerkName
+        || emailPrefix
+        || 'Anonymous'; // Last resort, but should never hit due to auto-generation
+    const avatarUrl = user.imageUrl;
+    const initials = (customUsername?.[0] || user.firstName?.[0] || emailPrefix?.[0] || 'A').toUpperCase();
+
+    return (
+        <>
+            {/* User Info Button */}
+            <button
+                onClick={() => setModalOpen(true)}
+                style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderTop: '1px solid var(--border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background-secondary)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                title="Account Settings"
+            >
+                {/* Avatar */}
+                {avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={avatarUrl}
+                        alt={displayName}
+                        style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            flexShrink: 0,
+                        }}
+                    />
+                ) : (
+                    <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'var(--accent-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--accent)',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        flexShrink: 0,
+                    }}>
+                        {initials}
+                    </div>
+                )}
+
+                {/* Name & Email */}
+                {!collapsed && (
+                    <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                        <div style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            color: 'var(--text-primary)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}>
+                            {displayName}
+                        </div>
+                        <div style={{
+                            fontSize: '11px',
+                            color: 'var(--text-tertiary)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}>
+                            {displayEmail}
+                        </div>
+                    </div>
+                )}
+            </button>
+
 
             {/* Account Settings Modal */}
             <AccountSettingsModal
                 isOpen={modalOpen}
-                onClose={() => setModalOpen(false)}
+                onClose={handleModalClose}
             />
         </>
     );

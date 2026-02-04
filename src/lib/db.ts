@@ -3,7 +3,7 @@
 
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { getSQLiteDB, isSQLiteConfigured, archiveOldJobs as sqliteArchive, purgeOldArchives as sqlitePurge } from './sqlite';
-import { getPostgresPool, isPostgresConfigured } from './postgres';
+import { getPostgresPool, isPostgresConfigured, executeWithUser } from './postgres';
 import { checkRequiredEnv } from './check-env';
 import type {
     Job,
@@ -19,6 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
 import { getS3Client, uploadFileToS3, getSignedDownloadUrl, deleteFileFromS3, generateS3Key } from '@/lib/s3';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { encodeThemeMode, decodeThemeMode, encodeColorPalette, decodeColorPalette } from '@/lib/themes';
 
 // Fail-fast check on module load (will run when server starts)
 checkRequiredEnv();
@@ -45,6 +46,66 @@ export function generateContentHash(title: string, company: string | null, locat
     return CryptoJS.SHA256(normalized).toString();
 }
 
+import { weightedAverage } from '@/lib/vector-math';
+
+// ============================================================================
+// USER PREFERENCE LEARNING
+// ============================================================================
+
+/**
+ * Update user's preference embedding based on interaction
+ * Uses a moving average to drift the user's profile towards the job's embedding
+ */
+export async function updateUserEmbedding(userId: string, jobId: string, type: string) {
+    const dbType = getDbType();
+    if (dbType !== 'postgres') return; // Vector ops only on Postgres for now
+
+    // Weights for different interactions
+    const WEIGHTS: Record<string, number> = {
+        'view': 0.02,   // Slow drift
+        'save': 0.10,   // Moderate drift
+        'apply': 0.20,  // Strong drift
+    };
+
+    const weight = WEIGHTS[type] || 0.01;
+
+    try {
+        await executeWithUser(userId, async (client) => {
+            // 1. Get Job Embedding and Current User Embedding
+            const res = await client.query(`
+                SELECT 
+                    je.embedding as job_vec,
+                    u.preference_embedding as user_vec
+                FROM job_embeddings je
+                LEFT JOIN users u ON u.id = $1
+                WHERE je.job_id = $2
+            `, [userId, jobId]);
+
+            if (res.rows.length === 0 || !res.rows[0].job_vec) return;
+
+            const jobVec = JSON.parse(res.rows[0].job_vec);
+            // Default to job vec if user has no profile yet
+            const currentVec = res.rows[0].user_vec ? JSON.parse(res.rows[0].user_vec) : jobVec;
+
+            // 2. Calculate New Weighted Average
+            // If it's the first interaction (no user vec), the new vec is just the job vec
+            const newVec = res.rows[0].user_vec
+                ? weightedAverage(currentVec, jobVec, weight)
+                : jobVec;
+
+            // 3. Update User
+            await client.query(`
+                UPDATE users 
+                SET preference_embedding = $2::vector, updated_at = NOW()
+                WHERE id = $1
+            `, [userId, JSON.stringify(newVec)]);
+        });
+    } catch (e) {
+        console.error('Failed to update user embedding:', e);
+        // Fail silently to not block UI
+    }
+}
+
 // ============================================================================
 // JOBS OPERATIONS
 // ============================================================================
@@ -53,15 +114,36 @@ export function generateContentHash(title: string, company: string | null, locat
  * Get ALL public jobs with pagination (no user filtering)
  * Stable ordering: fetched_at DESC, id for consistent pagination
  */
-export async function getAllPublicJobs(page: number = 1, limit: number = 50): Promise<Job[]> {
+/**
+ * Get ALL public jobs with pagination (no user filtering)
+ * Stable ordering: Primary Sort -> ID (tie-breaker)
+ */
+export async function getAllPublicJobs(
+    page: number = 1,
+    limit: number = 50,
+    sortBy: 'time' | 'imported' | 'score' = 'time',
+    sortDir: 'asc' | 'desc' = 'desc'
+): Promise<Job[]> {
     const dbType = getDbType();
     const offset = (page - 1) * limit;
+
+    // Determine sort column and direction
+    let orderByClause = '';
+    const dir = sortDir === 'asc' ? 'ASC' : 'DESC'; // Safe direction
+
+    // Sort logic mapping
+    if (sortBy === 'imported') {
+        orderByClause = `is_imported ${dir}, posted_at DESC NULLS LAST`;
+    } else {
+        // default time
+        orderByClause = `posted_at ${dir} NULLS LAST`;
+    }
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
         const res = await pool.query(
             `SELECT * FROM jobs 
-             ORDER BY fetched_at DESC NULLS LAST, id 
+             ORDER BY ${orderByClause}, id ASC
              LIMIT $1 OFFSET $2`,
             [limit, offset]
         );
@@ -75,12 +157,21 @@ export async function getAllPublicJobs(page: number = 1, limit: number = 50): Pr
         })) as Job[];
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
-        const { data, error } = await client
-            .from('jobs')
-            .select('*')
-            .order('fetched_at', { ascending: false, nullsFirst: false })
-            .order('id', { ascending: true })
+        let query = client.from('jobs').select('*');
+
+        // Supabase ordering
+        if (sortBy === 'imported') {
+            query = query.order('is_imported', { ascending: sortDir === 'asc', nullsFirst: false })
+                .order('posted_at', { ascending: false, nullsFirst: false });
+        } else {
+            query = query.order('posted_at', { ascending: sortDir === 'asc', nullsFirst: false });
+        }
+
+        // Always tie-break with ID
+        query = query.order('id', { ascending: true })
             .range(offset, offset + limit - 1);
+
+        const { data, error } = await query;
 
         if (error) throw error;
         return (data || []).map((row: any) => ({
@@ -92,7 +183,7 @@ export async function getAllPublicJobs(page: number = 1, limit: number = 50): Pr
         const db = getSQLiteDB();
         const rows = db.prepare(`
             SELECT * FROM jobs 
-            ORDER BY fetched_at DESC, id 
+            ORDER BY ${orderByClause}, id ASC
             LIMIT ? OFFSET ?
         `).all(limit, offset) as Record<string, unknown>[];
 
@@ -132,39 +223,280 @@ export async function getTotalPublicJobsCount(): Promise<number> {
     }
 }
 
-export async function getJobs(userId: string, status: 'fresh' | 'archived' = 'fresh', limit: number = 300): Promise<Job[]> {
+/**
+ * Get the timestamp of the last job ingestion (max scraped_at)
+ * Used for "Updated at" display
+ */
+export async function getLastJobIngestionTime(): Promise<string | null> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
-        const res = await pool.query(
-            `SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at
-             FROM user_jobs uj
-             JOIN jobs j ON uj.job_id = j.id
-             WHERE uj.user_id = $1 AND uj.status = $2
-             ORDER BY uj.match_score DESC LIMIT $3`,
-            [userId, status, limit]
-        );
-        return res.rows.map(row => ({
-            ...row,
-            matched_skills: typeof row.matched_skills === 'string' ? JSON.parse(row.matched_skills) : row.matched_skills,
-            missing_skills: typeof row.missing_skills === 'string' ? JSON.parse(row.missing_skills) : row.missing_skills,
-            isImported: Boolean(row.is_imported),
-            date_posted_relative: Boolean(row.date_posted_relative),
-            extraction_confidence: typeof row.extraction_confidence === 'string' ? JSON.parse(row.extraction_confidence) : row.extraction_confidence,
-        })) as Job[];
+        // scraped_at is the reliable ingestion timestamp
+        const res = await pool.query('SELECT MAX(scraped_at) as last_updated FROM jobs');
+        return res.rows[0]?.last_updated ? new Date(res.rows[0].last_updated).toISOString() : null;
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
+            .from('jobs')
+            .select('scraped_at')
+            .order('scraped_at', { ascending: false })
+            .limit(1);
+
+        if (error) throw error;
+        return data && data.length > 0 ? data[0].scraped_at : null;
+    } else {
+        const db = getSQLiteDB();
+        const result = db.prepare('SELECT MAX(scraped_at) as last_updated FROM jobs').get() as { last_updated: string };
+        return result?.last_updated || null;
+    }
+}
+
+/**
+ * Get total count of user-specific jobs for pagination
+ */
+export async function getUserJobsCount(userId: string, status: JobStatus = 'fresh'): Promise<number> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        const params: any[] = [userId];
+        let statusClause = '';
+
+        if (status === 'fresh') {
+            statusClause = `(uj.status IS DISTINCT FROM 'archived')`;
+        } else if (status === 'saved') {
+            statusClause = `(uj.status = 'saved')`;
+        } else {
+            statusClause = `(uj.status = 'archived')`;
+        }
+
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query(
+                `SELECT COUNT(*) as count 
+                 FROM jobs j
+                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
+                 WHERE ${statusClause}`,
+                params
+            );
+            return parseInt(res.rows[0].count, 10);
+        });
+
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+
+        // Supabase logic depends on join which is tricky with simple client.
+        // We might need an RPC or assume user_jobs filter.
+        // For 'saved'/'archived', we can query user_jobs directly.
+        // For 'fresh', it's harder (NOT in user_jobs OR status != archived).
+
+        if (status === 'saved' || status === 'archived') {
+            const { count, error } = await client
+                .from('user_jobs')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .eq('status', status);
+            if (error) throw error;
+            return count || 0;
+        } else {
+            // 'fresh' count is complex in Supabase JS client without join.
+            // Simplest approximation: Total Jobs - Archived Jobs count
+            // This assumes specific archival logic.
+            // Or keep it simple: return Total Public Jobs Count? No, that includes archived.
+            // Let's rely on RPC if possible or accept potentially slightly inaccurate count?
+            // Or just do a raw query if enabled?
+            // Since we prioritized Postgres, I'll fallback to a simpler count or 0 for now if complex.
+            // Actually, we can fetch all jobs? No.
+            // Let's just return 0 or implement properly if RPC exists.
+            // Assuming User is on Postgres (based on user request), making Supabase 'best effort'.
+
+            // Count of non-archived jobs:
+            // We can fetch total jobs and subtract archived count?
+            const total = await getTotalPublicJobsCount();
+
+            const { count: archivedCount } = await client
+                .from('user_jobs')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .eq('status', 'archived');
+
+            return total - (archivedCount || 0);
+        }
+
+    } else {
+        const db = getSQLiteDB();
+        let statusClause = '';
+        if (status === 'fresh') {
+            statusClause = `(uj.status IS NOT 'archived' OR uj.status IS NULL)`;
+        } else if (status === 'saved') {
+            statusClause = `(uj.status = 'saved')`;
+        } else {
+            statusClause = `(uj.status = 'archived')`;
+        }
+
+        const result = db.prepare(`
+            SELECT COUNT(*) as count 
+            FROM jobs j 
+            LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
+            WHERE ${statusClause}
+        `).get(userId) as { count: number };
+        return result.count;
+    }
+}
+
+export async function getJobs(
+    userId: string,
+    status: JobStatus = 'fresh',
+    page: number = 1,
+    limit: number = 50,
+    sortBy: 'time' | 'imported' | 'score' | 'relevance' = 'score',
+    sortDir: 'asc' | 'desc' = 'desc'
+): Promise<Job[]> {
+    const dbType = getDbType();
+    const offset = (page - 1) * limit;
+
+    // Determine sort
+    const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+    let orderByClause = '';
+
+    if (sortBy === 'time') {
+        orderByClause = `j.posted_at ${dir} NULLS LAST`;
+    } else if (sortBy === 'imported') {
+        orderByClause = `j.is_imported ${dir}, j.posted_at DESC NULLS LAST`;
+    } else if (sortBy === 'relevance') {
+        // Fallback for non-vector DBs: Score + Recency
+        orderByClause = `uj.match_score ${dir}, j.posted_at DESC NULLS LAST`;
+    } else {
+        // Default score
+        orderByClause = `uj.match_score ${dir}`;
+    }
+
+    if (dbType === 'postgres') {
+
+        // Handle sorting safely
+        let effectiveOrderBy = orderByClause;
+        let vectorJoin = '';
+        let vectorSelect = '';
+        const params: any[] = [userId, limit, offset]; // $1, $2, $3
+        let statusClause = '';
+
+        if (status === 'fresh') {
+            statusClause = `(uj.status IS DISTINCT FROM 'archived')`;
+        } else if (status === 'saved') {
+            statusClause = `(uj.status = 'saved')`;
+        } else {
+            statusClause = `(uj.status = 'archived')`;
+        }
+
+        return executeWithUser(userId, async (client) => {
+            // Check relevance sorting requirements (User Preference > Resume Embedding)
+            if (sortBy === 'relevance') {
+                // 1. Try to get User Preference Embedding
+                const userRes = await client.query(`
+                    SELECT preference_embedding FROM users WHERE id = $1
+                `, [userId]);
+
+                let embedding = null;
+
+                if (userRes.rows.length > 0 && userRes.rows[0].preference_embedding) {
+                    embedding = userRes.rows[0].preference_embedding;
+                } else {
+                    // 2. Fallback to Resume Embedding
+                    const resumeRes = await client.query(`
+                        SELECT embedding FROM resume_embeddings 
+                        JOIN resumes ON resumes.id = resume_embeddings.resume_id 
+                        WHERE resumes.user_id = $1 AND resumes.is_default = true
+                        ORDER BY resumes.created_at DESC LIMIT 1
+                    `, [userId]);
+
+                    if (resumeRes.rows.length > 0 && resumeRes.rows[0].embedding) {
+                        embedding = resumeRes.rows[0].embedding;
+                    }
+                }
+
+                if (embedding) {
+                    params.push(embedding); // Becomes $4
+
+                    vectorJoin = `LEFT JOIN job_embeddings je ON j.id = je.job_id`;
+                    // Order by distance ASC (closest first)
+                    effectiveOrderBy = `(je.embedding <=> $4) ASC, j.posted_at DESC`;
+                    vectorSelect = `, (je.embedding <=> $4) as relevance_score`;
+                } else {
+                    // Fallback if no embedding
+                    effectiveOrderBy = `j.posted_at DESC NULLS LAST`;
+                }
+            } else if (sortBy === 'score') {
+                effectiveOrderBy = `match_score ${dir}`;
+            } else if (sortBy === 'time') {
+                effectiveOrderBy = `j.posted_at ${dir} NULLS LAST`;
+            } else if (sortBy === 'imported') {
+                effectiveOrderBy = `j.is_imported ${dir}, j.posted_at DESC NULLS LAST`;
+            }
+
+            const res = await client.query(
+                `SELECT j.*, 
+                        COALESCE(uj.status, 'fresh') as status, 
+                        COALESCE(uj.match_score, 0) as match_score, 
+                        uj.matched_skills, 
+                        uj.missing_skills, 
+                        uj.why, 
+                        uj.archived_at
+                        ${vectorSelect}
+                 FROM jobs j
+                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
+                 ${vectorJoin}
+                 WHERE ${statusClause}
+                 ORDER BY ${effectiveOrderBy}, j.id ASC LIMIT $2 OFFSET $3`,
+                params
+            );
+            return res.rows.map(row => ({
+                ...row,
+                matched_skills: typeof row.matched_skills === 'string' ? JSON.parse(row.matched_skills) : row.matched_skills,
+                missing_skills: typeof row.missing_skills === 'string' ? JSON.parse(row.missing_skills) : row.missing_skills,
+                isImported: Boolean(row.is_imported),
+                date_posted_relative: Boolean(row.date_posted_relative),
+                extraction_confidence: typeof row.extraction_confidence === 'string' ? JSON.parse(row.extraction_confidence) : row.extraction_confidence,
+            })) as Job[];
+        });
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+        let query = client
             .from('user_jobs')
             .select(`
                 status, match_score, matched_skills, missing_skills, why, archived_at,
                 jobs:job_id (*)
             `)
-            .eq('user_id', userId)
-            .eq('status', status)
-            .order('match_score', { ascending: false })
-            .limit(limit);
+            .eq('user_id', userId);
+
+        if (status === 'fresh') {
+            query = query.neq('status', 'archived');
+        } else {
+            query = query.eq('status', status);
+        }
+
+        // Sorting for Supabase (joined table sorting is tricky)
+        // Ideally define order on the relationship, but Supabase JS client sorts on the result?
+        // Actually, we can order by foreign table columns sometimes: .order('fetched_at', { foreignTable: 'jobs' })
+        // But let's try direct first.
+
+        if (sortBy === 'time') {
+            // Order by jobs.fetched_at
+            // Note: Supabase might require explicit foreign table syntax or not support it easily in one query without RPC.
+            // Workaround: We might need to sort in-memory if datasets are small, but pagination makes this hard.
+            // Correct way: use `!inner` join maybe?
+            // Since we know the table structure, `order` on foreign table:
+            query = query.order('posted_at', { foreignTable: 'jobs', ascending: sortDir === 'asc', nullsFirst: false });
+        } else if (sortBy === 'imported') {
+            query = query.order('is_imported', { foreignTable: 'jobs', ascending: sortDir === 'asc', nullsFirst: false });
+        } else {
+            // Score (on user_jobs)
+            query = query.order('match_score', { ascending: sortDir === 'asc' });
+        }
+
+        // Secondary sort
+        query = query.order('job_id', { ascending: true }) // Using job_id from user_jobs as stable sort
+            .range(offset, offset + limit - 1);
+
+        const { data, error } = await query;
 
         if (error) throw error;
         // Flatten the result
@@ -178,13 +510,20 @@ export async function getJobs(userId: string, status: 'fresh' | 'archived' = 'fr
         })) as Job[];
     } else {
         const db = getSQLiteDB();
+        let whereClause = '';
+        if (status === 'fresh') {
+            whereClause = "uj.status IS NOT 'archived'";
+        } else {
+            whereClause = `uj.status = '${status}'`;
+        }
+
         const rows = db.prepare(`
             SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at
             FROM user_jobs uj
             JOIN jobs j ON uj.job_id = j.id
-            WHERE uj.user_id = ? AND uj.status = ?
-            ORDER BY uj.match_score DESC LIMIT ?
-        `).all(userId, status, limit) as Record<string, unknown>[];
+            WHERE uj.user_id = ? AND ${whereClause}
+            ORDER BY ${orderByClause}, j.id ASC LIMIT ? OFFSET ?
+        `).all(userId, limit, offset) as Record<string, unknown>[];
 
         return rows.map((row) => ({
             ...row,
@@ -194,6 +533,39 @@ export async function getJobs(userId: string, status: 'fresh' | 'archived' = 'fr
             date_posted_relative: Boolean(row.date_posted_relative),
             extraction_confidence: row.extraction_confidence ? JSON.parse(row.extraction_confidence as string) : null,
         })) as Job[];
+    }
+}
+
+/**
+ * Get total count of user jobs for pagination
+ */
+export async function getTotalUserJobsCount(userId: string, status: JobStatus = 'fresh'): Promise<number> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query(`
+                SELECT COUNT(*) as count 
+                FROM jobs j
+                LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
+                WHERE (uj.status = $2 OR (uj.status IS NULL AND $2 = 'fresh'))
+            `, [userId, status]);
+            return parseInt(res.rows[0].count, 10);
+        });
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+        const { count, error } = await client
+            .from('user_jobs')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('status', status);
+
+        if (error) throw error;
+        return count || 0;
+    } else {
+        const db = getSQLiteDB();
+        const result = db.prepare('SELECT COUNT(*) as count FROM user_jobs WHERE user_id = ? AND status = ?').get(userId, status) as { count: number };
+        return result.count;
     }
 }
 
@@ -207,12 +579,33 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
 
         if (userId) {
             query = `
-                SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at
+                SELECT j.*, 
+                       COALESCE(uj.status, 'fresh') as status, 
+                       COALESCE(uj.match_score, 0) as match_score, 
+                       uj.matched_skills, 
+                       uj.missing_skills, 
+                       uj.why, 
+                       uj.archived_at
                 FROM jobs j
                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $2
                 WHERE j.id = $1
             `;
             params = [id, userId];
+
+            return executeWithUser(userId, async (client) => {
+                const res = await client.query(query, params);
+                if (res.rows.length === 0) return null;
+
+                const row = res.rows[0];
+                return {
+                    ...row,
+                    matched_skills: typeof row.matched_skills === 'string' ? JSON.parse(row.matched_skills) : row.matched_skills,
+                    missing_skills: typeof row.missing_skills === 'string' ? JSON.parse(row.missing_skills) : row.missing_skills,
+                    isImported: Boolean(row.is_imported),
+                    date_posted_relative: Boolean(row.date_posted_relative),
+                    extraction_confidence: typeof row.extraction_confidence === 'string' ? JSON.parse(row.extraction_confidence) : row.extraction_confidence,
+                } as Job;
+            });
         }
 
         const res = await pool.query(query, params);
@@ -320,12 +713,13 @@ export async function insertJob(userId: string, job: Omit<Job, 'id' | 'fetched_a
         }
 
         // 2. Insert User Job linkage
-        await pool.query(`
-            INSERT INTO user_jobs (user_id, job_id, status, match_score)
-            VALUES ($1, $2, 'fresh', 0)
-            ON CONFLICT (user_id, job_id) DO NOTHING
-        `, [userId, jobId]);
-
+        await executeWithUser(userId, async (client) => {
+            await client.query(`
+                INSERT INTO user_jobs (user_id, job_id, status, match_score)
+                VALUES ($1, $2, 'fresh', 0)
+                ON CONFLICT (user_id, job_id) DO NOTHING
+            `, [userId, jobId]);
+        });
         // Return full job (simplification: returning input + id)
         // Ideally fetch full joined row, but for import this is enough context.
         return { ...job, id: jobId!, status: 'fresh', match_score: 0, matched_skills: null, missing_skills: null, why: null, content_hash: contentHash, fetched_at: new Date().toISOString() };
@@ -427,12 +821,13 @@ export async function updateJobScore(
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query(`
-            UPDATE user_jobs
-            SET match_score = $1, matched_skills = $2, missing_skills = $3, why = $4, updated_at = NOW()
-            WHERE job_id = $5 AND user_id = $6
-        `, [matchScore, JSON.stringify(matchedSkills), JSON.stringify(missingSkills), why, jobId, userId]);
+        await executeWithUser(userId, async (client) => {
+            await client.query(`
+                UPDATE user_jobs
+                SET match_score = $1, matched_skills = $2, missing_skills = $3, why = $4, updated_at = NOW()
+                WHERE job_id = $5 AND user_id = $6
+            `, [matchScore, JSON.stringify(matchedSkills), JSON.stringify(missingSkills), why, jobId, userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -461,12 +856,23 @@ export async function updateJobStatus(userId: string, jobId: string, status: Job
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        if (status === 'archived') {
-            await pool.query('UPDATE user_jobs SET status = $1, archived_at = NOW(), updated_at = NOW() WHERE job_id = $2 AND user_id = $3', [status, jobId, userId]);
-        } else {
-            await pool.query('UPDATE user_jobs SET status = $1, archived_at = NULL, updated_at = NOW() WHERE job_id = $2 AND user_id = $3', [status, jobId, userId]);
-        }
+        await executeWithUser(userId, async (client) => {
+            if (status === 'archived') {
+                await client.query(`
+                    INSERT INTO user_jobs (user_id, job_id, status, archived_at, updated_at)
+                    VALUES ($3, $2, $1, NOW(), NOW())
+                    ON CONFLICT (user_id, job_id) 
+                    DO UPDATE SET status = EXCLUDED.status, archived_at = NOW(), updated_at = NOW()
+                `, [status, jobId, userId]);
+            } else {
+                await client.query(`
+                    INSERT INTO user_jobs (user_id, job_id, status, archived_at, updated_at)
+                    VALUES ($3, $2, $1, NULL, NOW())
+                    ON CONFLICT (user_id, job_id) 
+                    DO UPDATE SET status = EXCLUDED.status, archived_at = NULL, updated_at = NOW()
+                `, [status, jobId, userId]);
+            }
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const updateData: { status: JobStatus; archived_at?: string | null } = { status };
@@ -498,10 +904,11 @@ export async function deleteJob(userId: string, jobId: string): Promise<void> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
         // Only delete the user's reference (un-import/delete from feed)
         // Global job remains
-        await pool.query('DELETE FROM user_jobs WHERE job_id = $1 AND user_id = $2', [jobId, userId]);
+        await executeWithUser(userId, async (client) => {
+            await client.query('DELETE FROM user_jobs WHERE job_id = $1 AND user_id = $2', [jobId, userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -553,13 +960,14 @@ export async function getResumes(userId: string): Promise<Resume[]> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT id, filename, upload_at, parsed_json, is_default, s3_key FROM resumes WHERE user_id = $1 ORDER BY upload_at DESC', [userId]);
-        return res.rows.map(row => ({
-            ...row,
-            parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
-            is_default: Boolean(row.is_default),
-        })) as Resume[];
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT id, filename, upload_at, parsed_json, is_default, s3_key FROM resumes WHERE user_id = $1 AND archived_at IS NULL ORDER BY upload_at DESC', [userId]);
+            return res.rows.map(row => ({
+                ...row,
+                parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
+                is_default: Boolean(row.is_default),
+            })) as Resume[];
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -572,7 +980,7 @@ export async function getResumes(userId: string): Promise<Resume[]> {
         return data as Resume[];
     } else {
         const db = getSQLiteDB();
-        const rows = db.prepare('SELECT id, filename, upload_at, parsed_json, is_default, file_data FROM resumes WHERE user_id = ? ORDER BY upload_at DESC').all(userId) as Record<string, unknown>[];
+        const rows = db.prepare('SELECT id, filename, upload_at, parsed_json, is_default, file_data FROM resumes WHERE user_id = ? AND archived_at IS NULL ORDER BY upload_at DESC').all(userId) as Record<string, unknown>[];
         return rows.map((row) => ({
             ...row,
             parsed_json: row.parsed_json ? JSON.parse(row.parsed_json as string) : null,
@@ -585,15 +993,16 @@ export async function getDefaultResume(userId: string): Promise<Resume | null> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM resumes WHERE is_default = TRUE AND user_id = $1', [userId]);
-        if (res.rows.length === 0) return null;
-        const row = res.rows[0];
-        return {
-            ...row,
-            parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
-            is_default: Boolean(row.is_default),
-        } as Resume;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM resumes WHERE is_default = TRUE AND user_id = $1', [userId]);
+            if (res.rows.length === 0) return null;
+            const row = res.rows[0];
+            return {
+                ...row,
+                parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
+                is_default: Boolean(row.is_default),
+            } as Resume;
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -634,19 +1043,20 @@ export async function insertResume(userId: string, filename: string, parsedJson:
             await uploadFileToS3(fileData, s3Key, 'application/pdf');
         }
 
-        const pool = getPostgresPool();
-        const res = await pool.query(`
-            INSERT INTO resumes (id, user_id, filename, parsed_json, is_default, s3_key)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING *
-        `, [id, userId, filename, JSON.stringify(parsedJson), isDefault ? true : false, s3Key]);
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query(`
+                INSERT INTO resumes (id, user_id, filename, parsed_json, is_default, s3_key)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING *
+            `, [id, userId, filename, JSON.stringify(parsedJson), isDefault ? true : false, s3Key]);
 
-        const row = res.rows[0];
-        return {
-            ...row,
-            parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
-            is_default: Boolean(row.is_default),
-        } as Resume;
+            const row = res.rows[0];
+            return {
+                ...row,
+                parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
+                is_default: Boolean(row.is_default),
+            } as Resume;
+        });
     } else if (dbType === 'supabase') {
         let s3Key = null;
         if (fileData) {
@@ -690,29 +1100,30 @@ export async function updateResume(userId: string, id: string, updates: Partial<
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const sets: string[] = [];
-        const values: any[] = [];
-        let idx = 1;
+        await executeWithUser(userId, async (client) => {
+            const sets: string[] = [];
+            const values: any[] = [];
+            let idx = 1;
 
-        if (updates.parsed_json !== undefined) {
-            sets.push(`parsed_json = $${idx++}`);
-            values.push(JSON.stringify(updates.parsed_json));
-        }
-        if (updates.filename !== undefined) {
-            sets.push(`filename = $${idx++}`);
-            values.push(updates.filename);
-        }
-        if (updates.is_default !== undefined) {
-            sets.push(`is_default = $${idx++}`);
-            values.push(updates.is_default);
-        }
+            if (updates.parsed_json !== undefined) {
+                sets.push(`parsed_json = $${idx++}`);
+                values.push(JSON.stringify(updates.parsed_json));
+            }
+            if (updates.filename !== undefined) {
+                sets.push(`filename = $${idx++}`);
+                values.push(updates.filename);
+            }
+            if (updates.is_default !== undefined) {
+                sets.push(`is_default = $${idx++}`);
+                values.push(updates.is_default);
+            }
 
-        if (sets.length > 0) {
-            values.push(id);
-            values.push(userId);
-            await pool.query(`UPDATE resumes SET ${sets.join(', ')} WHERE id = $${idx} AND user_id = $${idx + 1}`, values);
-        }
+            if (sets.length > 0) {
+                values.push(id);
+                values.push(userId);
+                await client.query(`UPDATE resumes SET ${sets.join(', ')} WHERE id = $${idx} AND user_id = $${idx + 1}`, values);
+            }
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const dbUpdates: any = {};
@@ -757,42 +1168,43 @@ export async function getResumeById(userId: string, id: string): Promise<{ resum
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM resumes WHERE id = $1 AND user_id = $2', [id, userId]);
-        if (res.rows.length === 0) return null;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM resumes WHERE id = $1 AND user_id = $2', [id, userId]);
+            if (res.rows.length === 0) return null;
 
-        const data = res.rows[0];
-        let fileUrl = undefined;
-        let fileBuffer = null;
+            const data = res.rows[0];
+            let fileUrl = undefined;
+            let fileBuffer = null;
 
-        if (data.s3_key) {
-            fileUrl = await getSignedDownloadUrl(data.s3_key);
-            const s3Client = getS3Client();
-            if (s3Client && data.s3_key) {
-                try {
-                    const { Body } = await s3Client.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: data.s3_key }));
-                    if (Body) {
-                        const byteArray = await Body.transformToByteArray();
-                        fileBuffer = Buffer.from(byteArray);
+            if (data.s3_key) {
+                fileUrl = await getSignedDownloadUrl(data.s3_key);
+                const s3Client = getS3Client();
+                if (s3Client && data.s3_key) {
+                    try {
+                        const { Body } = await s3Client.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: data.s3_key }));
+                        if (Body) {
+                            const byteArray = await Body.transformToByteArray();
+                            fileBuffer = Buffer.from(byteArray);
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch S3 object", e);
                     }
-                } catch (e) {
-                    console.error("Failed to fetch S3 object", e);
                 }
             }
-        }
 
-        return {
-            resume: {
-                id: data.id,
-                filename: data.filename,
-                upload_at: data.upload_at,
-                parsed_json: typeof data.parsed_json === 'string' ? JSON.parse(data.parsed_json) : data.parsed_json,
-                is_default: Boolean(data.is_default),
-                s3_key: data.s3_key
-            } as Resume,
-            file_data: fileBuffer,
-            file_url: fileUrl
-        };
+            return {
+                resume: {
+                    id: data.id,
+                    filename: data.filename,
+                    upload_at: data.upload_at,
+                    parsed_json: typeof data.parsed_json === 'string' ? JSON.parse(data.parsed_json) : data.parsed_json,
+                    is_default: Boolean(data.is_default),
+                    s3_key: data.s3_key
+                } as Resume,
+                file_data: fileBuffer,
+                file_url: fileUrl
+            };
+        });
 
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
@@ -871,36 +1283,64 @@ export async function getResumeById(userId: string, id: string): Promise<{ resum
     }
 }
 
+// Helper to get resume metadata (no file content)
+export async function getResumeMetadata(userId: string, id: string): Promise<Resume | null> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM resumes WHERE id = $1 AND user_id = $2 AND archived_at IS NULL', [id, userId]);
+            if (res.rows.length === 0) return null;
+            return {
+                ...res.rows[0],
+                parsed_json: typeof res.rows[0].parsed_json === 'string' ? JSON.parse(res.rows[0].parsed_json) : res.rows[0].parsed_json,
+                is_default: Boolean(res.rows[0].is_default),
+            } as Resume;
+        });
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+        const { data, error } = await client
+            .from('resumes')
+            .select('*')
+            .eq('id', id)
+            .eq('user_id', userId)
+            .is('archived_at', null)
+            .single();
+
+        if (error || !data) return null;
+        return data as Resume;
+    } else {
+        const db = getSQLiteDB();
+        const row = db.prepare('SELECT * FROM resumes WHERE id = ? AND user_id = ? AND archived_at IS NULL').get(id, userId) as Record<string, unknown>;
+        if (!row) return null;
+        return {
+            ...row,
+            parsed_json: row.parsed_json ? JSON.parse(row.parsed_json as string) : null,
+            is_default: Boolean(row.is_default),
+        } as Resume;
+    }
+}
+
 export async function deleteResume(userId: string, id: string): Promise<void> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        // Get key
-        const res = await pool.query('SELECT s3_key FROM resumes WHERE id = $1 AND user_id = $2', [id, userId]);
-        if (res.rows.length > 0 && res.rows[0].s3_key) {
-            await deleteFileFromS3(res.rows[0].s3_key);
-        }
-        await pool.query('DELETE FROM resumes WHERE id = $1 AND user_id = $2', [id, userId]);
+        return executeWithUser(userId, async (client) => {
+            // Soft delete: Update archived_at
+            await client.query('UPDATE resumes SET archived_at = NOW() WHERE id = $1 AND user_id = $2', [id, userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
-
-        // First get the key to delete from S3
-        const { data } = await client.from('resumes').select('s3_key').eq('id', id).eq('user_id', userId).single();
-        if (data?.s3_key) {
-            await deleteFileFromS3(data.s3_key);
-        }
-
         const { error } = await client
             .from('resumes')
-            .delete()
+            .update({ archived_at: new Date().toISOString() })
             .eq('id', id)
             .eq('user_id', userId);
 
         if (error) throw error;
     } else {
         const db = getSQLiteDB();
-        db.prepare('DELETE FROM resumes WHERE id = ? AND user_id = ?').run(id, userId);
+        db.prepare('UPDATE resumes SET archived_at = datetime(\'now\') WHERE id = ? AND user_id = ?').run(id, userId);
     }
 }
 
@@ -910,8 +1350,9 @@ export async function setDefaultResume(userId: string, resumeId: string): Promis
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query('UPDATE resumes SET is_default = TRUE WHERE id = $1 AND user_id = $2', [resumeId, userId]);
+        await executeWithUser(userId, async (client) => {
+            await client.query('UPDATE resumes SET is_default = TRUE WHERE id = $1 AND user_id = $2', [resumeId, userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -931,8 +1372,9 @@ async function clearDefaultResume(userId: string): Promise<void> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query('UPDATE resumes SET is_default = FALSE WHERE is_default = TRUE AND user_id = $1', [userId]);
+        await executeWithUser(userId, async (client) => {
+            await client.query('UPDATE resumes SET is_default = FALSE WHERE is_default = TRUE AND user_id = $1', [userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         await client.from('resumes').update({ is_default: false }).eq('is_default', true).eq('user_id', userId);
@@ -950,14 +1392,15 @@ export async function getLinkedInProfile(userId: string): Promise<LinkedInProfil
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM linkedin_profiles WHERE user_id = $1 ORDER BY upload_at DESC LIMIT 1', [userId]);
-        if (res.rows.length === 0) return null;
-        const row = res.rows[0];
-        return {
-            ...row,
-            parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
-        } as LinkedInProfile;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM linkedin_profiles WHERE user_id = $1 ORDER BY upload_at DESC LIMIT 1', [userId]);
+            if (res.rows.length === 0) return null;
+            const row = res.rows[0];
+            return {
+                ...row,
+                parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
+            } as LinkedInProfile;
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -993,17 +1436,18 @@ export async function insertLinkedInProfile(userId: string, filename: string, pa
             await uploadFileToS3(fileData, s3Key, 'application/pdf');
         }
 
-        const pool = getPostgresPool();
-        const res = await pool.query(`
-            INSERT INTO linkedin_profiles (id, user_id, filename, parsed_json, s3_key)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *
-        `, [id, userId, filename, JSON.stringify(parsedJson), s3Key]);
-        const row = res.rows[0];
-        return {
-            ...row,
-            parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
-        } as LinkedInProfile;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query(`
+                INSERT INTO linkedin_profiles (id, user_id, filename, parsed_json, s3_key)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING *
+            `, [id, userId, filename, JSON.stringify(parsedJson), s3Key]);
+            const row = res.rows[0];
+            return {
+                ...row,
+                parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
+            } as LinkedInProfile;
+        });
     } else if (dbType === 'supabase') {
         let s3Key = null;
         if (fileData) {
@@ -1041,12 +1485,13 @@ export async function getAllLinkedInProfiles(userId: string): Promise<LinkedInPr
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM linkedin_profiles WHERE user_id = $1 ORDER BY upload_at DESC', [userId]);
-        return res.rows.map(row => ({
-            ...row,
-            parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
-        })) as LinkedInProfile[];
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM linkedin_profiles WHERE user_id = $1 ORDER BY upload_at DESC', [userId]);
+            return res.rows.map(row => ({
+                ...row,
+                parsed_json: typeof row.parsed_json === 'string' ? JSON.parse(row.parsed_json) : row.parsed_json,
+            })) as LinkedInProfile[];
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1075,13 +1520,14 @@ export async function deleteLinkedInProfile(userId: string, id: string): Promise
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        // Remove from S3 first
-        const res = await pool.query('SELECT s3_key FROM linkedin_profiles WHERE id = $1 AND user_id = $2', [id, userId]);
-        if (res.rows.length > 0 && res.rows[0].s3_key) {
-            await deleteFileFromS3(res.rows[0].s3_key);
-        }
-        await pool.query('DELETE FROM linkedin_profiles WHERE id = $1 AND user_id = $2', [id, userId]);
+        await executeWithUser(userId, async (client) => {
+            // Remove from S3 first
+            const res = await client.query('SELECT s3_key FROM linkedin_profiles WHERE id = $1 AND user_id = $2', [id, userId]);
+            if (res.rows.length > 0 && res.rows[0].s3_key) {
+                await deleteFileFromS3(res.rows[0].s3_key);
+            }
+            await client.query('DELETE FROM linkedin_profiles WHERE id = $1 AND user_id = $2', [id, userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
 
@@ -1103,36 +1549,37 @@ export async function getLinkedInProfileById(userId: string, id: string): Promis
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM linkedin_profiles WHERE id = $1 AND user_id = $2', [id, userId]);
-        if (res.rows.length === 0) return null;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM linkedin_profiles WHERE id = $1 AND user_id = $2', [id, userId]);
+            if (res.rows.length === 0) return null;
 
-        const data = res.rows[0];
-        let fileBuffer = null;
-        if (data.s3_key) {
-            const s3Client = getS3Client();
-            if (s3Client) {
-                try {
-                    const { Body } = await s3Client.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: data.s3_key }));
-                    if (Body) {
-                        const byteArray = await Body.transformToByteArray();
-                        fileBuffer = Buffer.from(byteArray);
+            const data = res.rows[0];
+            let fileBuffer = null;
+            if (data.s3_key) {
+                const s3Client = getS3Client();
+                if (s3Client) {
+                    try {
+                        const { Body } = await s3Client.send(new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: data.s3_key }));
+                        if (Body) {
+                            const byteArray = await Body.transformToByteArray();
+                            fileBuffer = Buffer.from(byteArray);
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch S3 object", e);
                     }
-                } catch (e) {
-                    console.error("Failed to fetch S3 object", e);
                 }
             }
-        }
-        return {
-            profile: {
-                id: data.id,
-                filename: data.filename,
-                upload_at: data.upload_at,
-                parsed_json: typeof data.parsed_json === 'string' ? JSON.parse(data.parsed_json) : data.parsed_json,
-                s3_key: data.s3_key
-            } as LinkedInProfile,
-            file_data: fileBuffer,
-        };
+            return {
+                profile: {
+                    id: data.id,
+                    filename: data.filename,
+                    upload_at: data.upload_at,
+                    parsed_json: typeof data.parsed_json === 'string' ? JSON.parse(data.parsed_json) : data.parsed_json,
+                    s3_key: data.s3_key
+                } as LinkedInProfile,
+                file_data: fileBuffer,
+            };
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1193,12 +1640,13 @@ export async function getApplications(userId: string): Promise<Application[]> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM applications WHERE user_id = $1 AND deleted = FALSE ORDER BY applied_at DESC', [userId]);
-        return res.rows.map(row => ({
-            ...row,
-            deleted: Boolean(row.deleted),
-        })) as Application[];
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM applications WHERE user_id = $1 AND deleted = FALSE ORDER BY applied_at DESC', [userId]);
+            return res.rows.map(row => ({
+                ...row,
+                deleted: Boolean(row.deleted),
+            })) as Application[];
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1224,13 +1672,14 @@ export async function getApplicationByJobId(userId: string, jobId: string): Prom
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM applications WHERE job_id = $1 AND user_id = $2 AND deleted = FALSE', [jobId, userId]);
-        if (res.rows.length === 0) return null;
-        return {
-            ...res.rows[0],
-            deleted: Boolean(res.rows[0].deleted),
-        } as Application;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM applications WHERE job_id = $1 AND user_id = $2 AND deleted = FALSE', [jobId, userId]);
+            if (res.rows.length === 0) return null;
+            return {
+                ...res.rows[0],
+                deleted: Boolean(res.rows[0].deleted),
+            } as Application;
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1260,13 +1709,14 @@ export async function createApplication(userId: string, jobId: string, externalL
     const id = uuidv4();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query(`
-            INSERT INTO applications (id, user_id, job_id, column_name, external_link)
-            VALUES ($1, $2, $3, 'Applied', $4)
-            RETURNING *
-        `, [id, userId, jobId, externalLink]);
-        return res.rows[0] as Application;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query(`
+                INSERT INTO applications (id, user_id, job_id, column_name, external_link)
+                VALUES ($1, $2, $3, 'Applied', $4)
+                RETURNING *
+            `, [id, userId, jobId, externalLink]);
+            return res.rows[0] as Application;
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1302,8 +1752,9 @@ export async function updateApplicationColumn(userId: string, applicationId: str
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query('UPDATE applications SET column_name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3', [column, applicationId, userId]);
+        await executeWithUser(userId, async (client) => {
+            await client.query('UPDATE applications SET column_name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3', [column, applicationId, userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -1323,8 +1774,9 @@ export async function deleteApplication(userId: string, applicationId: string): 
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query('UPDATE applications SET deleted = TRUE, updated_at = NOW() WHERE id = $1 AND user_id = $2', [applicationId, userId]);
+        await executeWithUser(userId, async (client) => {
+            await client.query('UPDATE applications SET deleted = TRUE, updated_at = NOW() WHERE id = $1 AND user_id = $2', [applicationId, userId]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -1356,13 +1808,14 @@ export async function insertCoverLetter(
     const id = uuidv4();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query(`
-            INSERT INTO cover_letters (id, user_id, job_id, resume_id, content_html, content_text, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING *
-        `, [id, userId, jobId, resumeId, contentHtml, contentText, status]);
-        return res.rows[0] as unknown as CoverLetter;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query(`
+                INSERT INTO cover_letters (id, user_id, job_id, resume_id, content_html, content_text, status)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING *
+            `, [id, userId, jobId, resumeId, contentHtml, contentText, status]);
+            return res.rows[0] as unknown as CoverLetter;
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1397,37 +1850,38 @@ export async function updateCoverLetter(userId: string, id: string, updates: Par
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const sets: string[] = [];
-        const values: any[] = [];
-        let idx = 1;
+        await executeWithUser(userId, async (client) => {
+            const sets: string[] = [];
+            const values: any[] = [];
+            let idx = 1;
 
-        if (updates.content_html !== undefined) {
-            sets.push(`content_html = $${idx++}`);
-            values.push(updates.content_html);
-        }
-        if (updates.content_text !== undefined) {
-            sets.push(`content_text = $${idx++}`);
-            values.push(updates.content_text);
-        }
-        if (updates.pdf_blob_url !== undefined) {
-            sets.push(`pdf_blob_url = $${idx++}`);
-            values.push(updates.pdf_blob_url);
-        }
-        if (updates.status !== undefined) {
-            sets.push(`status = $${idx++}`);
-            values.push(updates.status);
-        }
-        if (updates.s3_key !== undefined) {
-            sets.push(`s3_key = $${idx++}`);
-            values.push(updates.s3_key);
-        }
+            if (updates.content_html !== undefined) {
+                sets.push(`content_html = $${idx++}`);
+                values.push(updates.content_html);
+            }
+            if (updates.content_text !== undefined) {
+                sets.push(`content_text = $${idx++}`);
+                values.push(updates.content_text);
+            }
+            if (updates.pdf_blob_url !== undefined) {
+                sets.push(`pdf_blob_url = $${idx++}`);
+                values.push(updates.pdf_blob_url);
+            }
+            if (updates.status !== undefined) {
+                sets.push(`status = $${idx++}`);
+                values.push(updates.status);
+            }
+            if (updates.s3_key !== undefined) {
+                sets.push(`s3_key = $${idx++}`);
+                values.push(updates.s3_key);
+            }
 
-        if (sets.length > 0) {
-            values.push(id);
-            values.push(userId);
-            await pool.query(`UPDATE cover_letters SET ${sets.join(', ')}, generated_at = NOW() WHERE id = $${idx} AND user_id = $${idx + 1}`, values);
-        }
+            if (sets.length > 0) {
+                values.push(id);
+                values.push(userId);
+                await client.query(`UPDATE cover_letters SET ${sets.join(', ')}, generated_at = NOW() WHERE id = $${idx} AND user_id = $${idx + 1}`, values);
+            }
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -1479,16 +1933,10 @@ export async function updateCoverLetter(userId: string, id: string, updates: Par
 export async function getPendingCoverLetters(userId: string, limit: number = 5): Promise<Array<{ id: string, job_id: string, resume_id: string | null }>> {
     const dbType = getDbType();
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query(`
-            SELECT id, job_id, resume_id 
-            FROM cover_letters 
-            WHERE status = 'pending' AND user_id = $1
-            ORDER BY created_at ASC 
-            LIMIT $2
-        `, [userId, limit]);
-        return res.rows as Array<{ id: string, job_id: string, resume_id: string | null }>;
-
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT id, job_id, resume_id FROM cover_letters WHERE user_id = $1 AND status = \'pending\' ORDER BY created_at ASC LIMIT $2', [userId, limit]);
+            return res.rows;
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1521,16 +1969,17 @@ export async function getCoverLetterById(userId: string, id: string): Promise<Co
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM cover_letters WHERE id = $1 AND user_id = $2', [id, userId]);
-        if (res.rows.length === 0) return null;
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM cover_letters WHERE id = $1 AND user_id = $2', [id, userId]);
+            if (res.rows.length === 0) return null;
 
-        const data = res.rows[0];
-        if (data.s3_key) {
-            const signedUrl = await getSignedDownloadUrl(data.s3_key);
-            data.pdf_blob_url = signedUrl;
-        }
-        return data as CoverLetter;
+            const data = res.rows[0];
+            if (data.s3_key) {
+                const signedUrl = await getSignedDownloadUrl(data.s3_key);
+                data.pdf_blob_url = signedUrl;
+            }
+            return data as CoverLetter;
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1561,68 +2010,188 @@ export async function getCoverLetterById(userId: string, id: string): Promise<Co
 // SETTINGS OPERATIONS
 // ============================================================================
 
-export async function getSettings(userId: string): Promise<{ freshLimit: number; lastUpdated: string | null }> {
+export async function getSettings(userId: string): Promise<{
+    freshLimit: number;
+    lastUpdated: string | null;
+    excludedKeywords: string[];
+    themePreferences: { mode: string; themeId: string } | null;
+}> {
     const dbType = getDbType();
+    const defaults = { freshLimit: 300, lastUpdated: null, excludedKeywords: [], themePreferences: { mode: 'light', themeId: 'aladdin' } };
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT fresh_limit, last_updated FROM app_settings WHERE user_id = $1', [userId]);
-        if (res.rows.length === 0) return { freshLimit: 300, lastUpdated: null };
-        const row = res.rows[0];
-        return {
-            freshLimit: row.fresh_limit,
-            lastUpdated: row.last_updated
-        };
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query(`
+                SELECT 
+                    a.fresh_limit, 
+                    a.last_updated, 
+                    a.excluded_keywords
+                FROM app_settings a
+                WHERE a.user_id = $1
+            `, [userId]);
+
+            if (res.rows.length === 0) return defaults;
+            const row = res.rows[0];
+
+            return {
+                freshLimit: row.fresh_limit || 300,
+                lastUpdated: row.last_updated || null,
+                excludedKeywords: typeof row.excluded_keywords === 'string' ? JSON.parse(row.excluded_keywords) : row.excluded_keywords || [],
+                themePreferences: { mode: 'light', themeId: 'aladdin' }
+            };
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
-        const { data, error } = await client
-            .from('app_settings')
-            .select('fresh_limit, last_updated')
-            .eq('user_id', userId)
-            .single();
 
-        if (error) return { freshLimit: 300, lastUpdated: null };
+        // Parallel fetch for now as Supabase join syntax via JS client can be verbose
+        // Assuming app_settings exists for user, if not we handle nulls
+        // Parallel fetch for now as Supabase join syntax via JS client can be verbose
+        // Assuming app_settings exists for user, if not we handle nulls
+        const [settingsRes] = await Promise.all([
+            client.from('app_settings').select('fresh_limit, last_updated, excluded_keywords').eq('user_id', userId).single()
+        ]);
+
+        const settingsData = (settingsRes.data || {}) as { fresh_limit?: number; last_updated?: string; excluded_keywords?: string[] };
+
         return {
-            freshLimit: data.fresh_limit,
-            lastUpdated: data.last_updated
+            freshLimit: settingsData.fresh_limit || 300,
+            lastUpdated: settingsData.last_updated || null,
+            excludedKeywords: settingsData.excluded_keywords || [],
+            themePreferences: { mode: 'light', themeId: 'aladdin' },
         };
     } else {
         const db = getSQLiteDB();
-        const row = db.prepare('SELECT fresh_limit, last_updated FROM app_settings WHERE user_id = ?').get(userId) as Record<string, unknown> | undefined;
+        const row = db.prepare(`
+            SELECT 
+                a.fresh_limit, 
+                a.last_updated, 
+                a.excluded_keywords
+            FROM app_settings a
+            WHERE a.user_id = ?
+        `).get(userId) as Record<string, unknown> | undefined;
 
-        if (!row) return { freshLimit: 300, lastUpdated: null };
+        if (!row) {
+            // Backup check if user exists in app_settings but not users (shouldn't happen)
+            const appSet = db.prepare('SELECT fresh_limit, last_updated, excluded_keywords FROM app_settings WHERE user_id = ?').get(userId) as Record<string, unknown> | undefined;
+            if (appSet) {
+                return {
+                    freshLimit: appSet.fresh_limit as number,
+                    lastUpdated: appSet.last_updated as string | null,
+                    excludedKeywords: appSet.excluded_keywords ? JSON.parse(appSet.excluded_keywords as string) : [],
+                    themePreferences: { mode: 'light', themeId: 'aladdin' }
+                };
+            }
+            return defaults;
+        }
+
         return {
-            freshLimit: row.fresh_limit as number,
-            lastUpdated: row.last_updated as string | null
+            freshLimit: (row.fresh_limit as number) || 300,
+            lastUpdated: row.last_updated as string | null,
+            excludedKeywords: row.excluded_keywords ? JSON.parse(row.excluded_keywords as string) : [],
+            themePreferences: { mode: 'light', themeId: 'aladdin' },
         };
     }
 }
 
-export async function updateSettings(userId: string, freshLimit: number): Promise<void> {
+export async function updateSettings(userId: string, settings: {
+    freshLimit?: number;
+    excludedKeywords?: string[];
+    themePreferences?: any;
+}): Promise<void> {
     const dbType = getDbType();
 
-    // Ensure settings exist (upsert semantics)
-    // We should probably do an UPSERT here.
+    // Split updates into two parts: User Profile (Theme) and App Settings
+    // ... inside updateSettings
+    const hasThemeUpdates = !!settings.themePreferences;
+    const hasAppUpdates = settings.freshLimit !== undefined || settings.excludedKeywords !== undefined;
 
-    if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query(`
-            INSERT INTO app_settings (user_id, fresh_limit) VALUES ($1, $2)
-            ON CONFLICT (user_id) DO UPDATE SET fresh_limit = $2
-        `, [userId, freshLimit]);
-    } else if (dbType === 'supabase') {
-        const client = getSupabaseClient();
-        const { error } = await client
-            .from('app_settings')
-            .upsert({ user_id: userId, fresh_limit: freshLimit }, { onConflict: 'user_id' });
+    if (hasThemeUpdates) {
+        console.log('[DEBUG-DB] Theme updates received but DB storage is disabled (schema change)');
+    }
 
-        if (error) throw error;
-    } else {
-        const db = getSQLiteDB();
-        db.prepare(`
-            INSERT INTO app_settings (user_id, fresh_limit) VALUES (?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET fresh_limit = ?
-        `).run(userId, freshLimit, freshLimit);
+    if (hasAppUpdates) {
+        // Fetch current for merge or upsert
+        // We can just UPSERT with provided values, relying on previous logic or simplifying
+        // Since excludedKeywords is array, we need to handle it carefully.
+
+        // Simplified Upsert Logic for App Settings
+
+        if (dbType === 'postgres') {
+            await executeWithUser(userId, async (client) => {
+                // If simple upsert doesn't work for partials without fetching, we might need dynamic query
+                // But typically for settings, we want to set what we have.
+                // If undefined, we shouldn't overwrite with null.
+
+                // Construct dynamic set clause
+                const updates: string[] = [];
+                const values: any[] = [userId];
+                let idx = 2; // $1 is userId
+
+                if (settings.freshLimit !== undefined) {
+                    updates.push(`fresh_limit = $${idx++}`);
+                    values.push(settings.freshLimit);
+                }
+                if (settings.excludedKeywords !== undefined) {
+                    updates.push(`excluded_keywords = $${idx++} `);
+                    values.push(JSON.stringify(settings.excludedKeywords));
+                }
+
+                if (updates.length > 0) {
+                    await client.query(`
+                        INSERT INTO app_settings(user_id, fresh_limit, excluded_keywords)
+        VALUES($1, ${settings.freshLimit !== undefined ? '$2' : 'DEFAULT'}, ${settings.excludedKeywords !== undefined ? (settings.freshLimit !== undefined ? '$3' : '$2') : 'DEFAULT'})
+                        ON CONFLICT(user_id) DO UPDATE SET ${updates.join(', ')}
+        `, values); // Note: The INSERT VALUES part is tricky for dynamic.
+
+                    // Safer Fallback: Just UPDATE if exists, INSERT if not?
+                    // Or just standard UPSERT with COALESCE on input?
+
+                    // Let's use the explicit UPSERT query that handles nulls by using COALESCE with EXCLUDED? No, input is what matters.
+
+                    // Simply run the upsert for each field if present? No inefficient.
+
+                    // Let's stick to the previous implementation style but remove theme_preferences
+
+                    const current = await getSettings(userId);
+                    const freshLimit = settings.freshLimit ?? current.freshLimit;
+                    const excludedKeywords = settings.excludedKeywords ?? current.excludedKeywords;
+
+                    await client.query(`
+                        INSERT INTO app_settings(user_id, fresh_limit, excluded_keywords)
+        VALUES($1, $2, $3)
+                        ON CONFLICT(user_id) DO UPDATE SET
+        fresh_limit = $2,
+            excluded_keywords = $3
+                `, [userId, freshLimit, JSON.stringify(excludedKeywords)]);
+                }
+            });
+        } else if (dbType === 'supabase') {
+            const client = getSupabaseClient();
+            const updates: any = { user_id: userId };
+            if (settings.freshLimit !== undefined) updates.fresh_limit = settings.freshLimit;
+            if (settings.excludedKeywords !== undefined) updates.excluded_keywords = settings.excludedKeywords;
+
+            await client.from('app_settings').upsert(updates, { onConflict: 'user_id' });
+        } else {
+            const db = getSQLiteDB();
+            const current = await getSettings(userId); // Re-use getSettings to merge
+            const freshLimit = settings.freshLimit ?? current.freshLimit;
+            const excludedKeywords = settings.excludedKeywords ?? current.excludedKeywords;
+
+            db.prepare(`
+                INSERT INTO app_settings(user_id, fresh_limit, excluded_keywords)
+        VALUES(?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+        fresh_limit = ?,
+            excluded_keywords = ?
+                `).run(
+                userId,
+                freshLimit,
+                JSON.stringify(excludedKeywords),
+                freshLimit,
+                JSON.stringify(excludedKeywords)
+            );
+        }
     }
 }
 
@@ -1631,11 +2200,12 @@ export async function updateLastUpdated(userId: string): Promise<void> {
     const now = new Date().toISOString();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query(`
-            INSERT INTO app_settings (user_id, last_updated) VALUES ($1, $2)
-            ON CONFLICT (user_id) DO UPDATE SET last_updated = $2
-        `, [userId, now]);
+        await executeWithUser(userId, async (client) => {
+            await client.query(`
+                INSERT INTO app_settings(user_id, last_updated) VALUES($1, $2)
+                ON CONFLICT(user_id) DO UPDATE SET last_updated = $2
+            `, [userId, now]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -1646,9 +2216,9 @@ export async function updateLastUpdated(userId: string): Promise<void> {
     } else {
         const db = getSQLiteDB();
         db.prepare(`
-            INSERT INTO app_settings (user_id, last_updated) VALUES (?, ?)
+            INSERT INTO app_settings(user_id, last_updated) VALUES(?, ?)
             ON CONFLICT(user_id) DO UPDATE SET last_updated = ?
-        `).run(userId, now, now);
+            `).run(userId, now, now);
     }
 }
 
@@ -1663,65 +2233,103 @@ export interface AIProviderStats {
     last_reset: string | null;
 }
 
+
 export async function getProviderStats(providerName: string): Promise<AIProviderStats | null> {
     const dbType = getDbType();
-    if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT * FROM ai_provider_stats WHERE provider_name = $1', [providerName]);
-        if (res.rows.length === 0) {
-            await pool.query('INSERT INTO ai_provider_stats (provider_name) VALUES ($1) ON CONFLICT DO NOTHING', [providerName]);
-            const res2 = await pool.query('SELECT * FROM ai_provider_stats WHERE provider_name = $1', [providerName]);
-            return res2.rows[0] as AIProviderStats;
-        }
-        return res.rows[0] as AIProviderStats;
-    } else if (dbType === 'supabase') {
-        // Supabase migration not applied yet, assume in-memory fallback in router
-        return null;
-    } else {
-        const db = getSQLiteDB();
-        let row = db.prepare('SELECT * FROM ai_provider_stats WHERE provider_name = ?').get(providerName) as AIProviderStats | undefined;
 
-        if (!row) {
-            // Initialize if missing
-            db.prepare('INSERT OR IGNORE INTO ai_provider_stats (provider_name) VALUES (?)').run(providerName);
-            row = db.prepare('SELECT * FROM ai_provider_stats WHERE provider_name = ?').get(providerName) as AIProviderStats;
+    try {
+        if (dbType === 'postgres') {
+            const pool = getPostgresPool();
+            try {
+                const res = await pool.query('SELECT * FROM ai_provider_stats WHERE provider_name = $1', [providerName]);
+                if (res.rows.length === 0) {
+                    // Try to initialize, but don't fail if table missing or permissions denied
+                    try {
+                        await pool.query('INSERT INTO ai_provider_stats (provider_name) VALUES ($1) ON CONFLICT DO NOTHING', [providerName]);
+                        const res2 = await pool.query('SELECT * FROM ai_provider_stats WHERE provider_name = $1', [providerName]);
+                        return res2.rows[0] as AIProviderStats;
+                    } catch (e) {
+                        // Failed to insert/fetch after insert - return null but don't crash
+                        return null;
+                    }
+                }
+                return res.rows[0] as AIProviderStats;
+            } catch (error: any) {
+                // Return null if table missing or other DB error
+                // This ensures the main app flow continues even if stats are broken
+                console.warn(`[DB] Failed to get stats for ${providerName}(non - fatal): `, error.message);
+                return null;
+            }
+        } else if (dbType === 'supabase') {
+            // Supabase migration not applied yet, assume in-memory fallback in router
+            return null;
+        } else {
+            const db = getSQLiteDB();
+            try {
+                let row = db.prepare('SELECT * FROM ai_provider_stats WHERE provider_name = ?').get(providerName) as AIProviderStats | undefined;
+
+                if (!row) {
+                    // Initialize if missing
+                    db.prepare('INSERT OR IGNORE INTO ai_provider_stats (provider_name) VALUES (?)').run(providerName);
+                    row = db.prepare('SELECT * FROM ai_provider_stats WHERE provider_name = ?').get(providerName) as AIProviderStats;
+                }
+                return row || null;
+            } catch (error) {
+                console.warn(`[DB] SQLite stats error(non - fatal): `, error);
+                return null;
+            }
         }
-        return row || null;
+    } catch (error) {
+        // Ultimate safety net
+        return null;
     }
 }
 
 export async function updateProviderStats(providerName: string, updates: Partial<AIProviderStats>): Promise<void> {
     const dbType = getDbType();
-    if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const fields = Object.keys(updates).filter(k => k !== 'provider_name');
-        if (fields.length === 0) return;
 
-        const setClause = fields.map((k, i) => `${k} = $${i + 2}`).join(', ');
-        const values = [providerName, ...fields.map(k => (updates as any)[k])];
+    try {
+        if (dbType === 'postgres') {
+            const pool = getPostgresPool();
+            const fields = Object.keys(updates).filter(k => k !== 'provider_name');
+            if (fields.length === 0) return;
 
-        await pool.query(`UPDATE ai_provider_stats SET ${setClause}, updated_at = NOW() WHERE provider_name = $1`, values);
-    } else if (dbType === 'supabase') {
-        // No-op for now
-        return;
-    } else {
-        const db = getSQLiteDB();
-        const fields = Object.keys(updates).filter(k => k !== 'provider_name');
-        if (fields.length === 0) return;
+            const setClause = fields.map((k, i) => `${k} = $${i + 2} `).join(', ');
+            const values = [providerName, ...fields.map(k => (updates as any)[k])];
 
-        const setClause = fields.map(k => `${k} = @${k}`).join(', ');
+            try {
+                await pool.query(`UPDATE ai_provider_stats SET ${setClause}, updated_at = NOW() WHERE provider_name = $1`, values);
+            } catch (e: any) {
+                // Start silently if table missing, otherwise warn
+                if (!e.message?.includes('does not exist')) {
+                    console.warn(`[DB] Failed to update stats for ${providerName}: `, e.message);
+                }
+            }
+        } else if (dbType === 'supabase') {
+            // No-op for now
+            return;
+        } else {
+            const db = getSQLiteDB();
+            const fields = Object.keys(updates).filter(k => k !== 'provider_name');
+            if (fields.length === 0) return;
 
-        try {
-            db.prepare(`
-                UPDATE ai_provider_stats 
-                SET ${setClause}, updated_at = datetime('now') 
-                WHERE provider_name = @provider_name
+            const setClause = fields.map(k => `${k} = @${k} `).join(', ');
+
+            try {
+                db.prepare(`
+                    UPDATE ai_provider_stats 
+                    SET ${setClause}, updated_at = datetime('now') 
+                    WHERE provider_name = @provider_name
             `).run({ ...updates, provider_name: providerName });
-        } catch (error) {
-            console.error('[DB] Failed to update provider stats:', error);
+            } catch (error) {
+                // Ignore errors
+            }
         }
+    } catch (error) {
+        // Ignore top-level errors for stats updates
     }
 }
+
 
 
 // ============================================================================
@@ -1737,15 +2345,16 @@ export async function createDraft(
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        await pool.query(`
-            INSERT INTO resume_drafts (id, user_id, resume_data, job_id, updated_at)
-            VALUES ($1, $2, $3, $4, NOW())
-            ON CONFLICT(id) DO UPDATE SET
-            resume_data = EXCLUDED.resume_data,
+        await executeWithUser(userId, async (client) => {
+            await client.query(`
+                INSERT INTO resume_drafts(id, user_id, resume_data, job_id, updated_at)
+        VALUES($1, $2, $3, $4, NOW())
+                ON CONFLICT(id) DO UPDATE SET
+        resume_data = EXCLUDED.resume_data,
             job_id = EXCLUDED.job_id,
             updated_at = EXCLUDED.updated_at
-         `, [id, userId, JSON.stringify(resumeData), jobId || null]);
+                `, [id, userId, JSON.stringify(resumeData), jobId || null]);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { error } = await client
@@ -1762,13 +2371,13 @@ export async function createDraft(
     } else {
         const db = getSQLiteDB();
         db.prepare(`
-            INSERT INTO resume_drafts (id, user_id, resume_data, job_id, updated_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
+            INSERT INTO resume_drafts(id, user_id, resume_data, job_id, updated_at)
+        VALUES(?, ?, ?, ?, datetime('now'))
             ON CONFLICT(id) DO UPDATE SET
-            resume_data = excluded.resume_data,
+        resume_data = excluded.resume_data,
             job_id = excluded.job_id,
             updated_at = excluded.updated_at
-        `).run(id, userId, JSON.stringify(resumeData), jobId || null);
+                `).run(id, userId, JSON.stringify(resumeData), jobId || null);
     }
 }
 
@@ -1804,9 +2413,10 @@ export async function listDrafts(userId: string): Promise<any[]> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
-        const pool = getPostgresPool();
-        const res = await pool.query('SELECT resume_data FROM resume_drafts WHERE user_id = $1 ORDER BY updated_at DESC', [userId]);
-        return res.rows.map(row => typeof row.resume_data === 'string' ? JSON.parse(row.resume_data) : row.resume_data);
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT resume_data FROM resume_drafts WHERE user_id = $1 ORDER BY updated_at DESC', [userId]);
+            return res.rows.map(row => typeof row.resume_data === 'string' ? JSON.parse(row.resume_data) : row.resume_data);
+        });
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -1849,7 +2459,7 @@ export async function getAllFreshJobsSystem(limit: number = 100): Promise<Job[]>
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
         const res = await pool.query(
-            `SELECT * FROM jobs ORDER BY fetched_at DESC LIMIT $1`,
+            `SELECT * FROM jobs ORDER BY posted_at DESC NULLS LAST LIMIT $1`,
             [limit]
         );
         return res.rows.map(row => ({
@@ -1865,7 +2475,7 @@ export async function getAllFreshJobsSystem(limit: number = 100): Promise<Job[]>
         const { data, error } = await client
             .from('jobs')
             .select('*')
-            .order('fetched_at', { ascending: false })
+            .order('posted_at', { ascending: false, nullsFirst: false })
             .limit(limit);
 
         if (error) throw error;
@@ -1878,9 +2488,9 @@ export async function getAllFreshJobsSystem(limit: number = 100): Promise<Job[]>
         const db = getSQLiteDB();
         const rows = db.prepare(`
         SELECT * FROM jobs 
-        ORDER BY fetched_at DESC 
+        ORDER BY CASE WHEN posted_at IS NULL THEN 1 ELSE 0 END, posted_at DESC
         LIMIT ?
-        `).all(limit) as Record<string, unknown>[];
+            `).all(limit) as Record<string, unknown>[];
 
         return rows.map((row) => ({
             ...row,
@@ -1923,7 +2533,7 @@ export async function getPendingCoverLettersSystem(limit: number = 5): Promise<A
             WHERE status = 'pending'
             ORDER BY created_at ASC 
             LIMIT $1
-        `, [limit]);
+            `, [limit]);
         return res.rows as Array<{ id: string, job_id: string, resume_id: string | null, user_id: string }>;
 
     } else if (dbType === 'supabase') {
@@ -1946,9 +2556,217 @@ export async function getPendingCoverLettersSystem(limit: number = 5): Promise<A
         SELECT id, job_id, resume_id, user_id
         FROM cover_letters 
         WHERE status = 'pending'
-        ORDER BY created_at ASC 
+        ORDER BY created_at ASC
         LIMIT ?
-    `).all(limit) as Array<{ id: string, job_id: string, resume_id: string | null, user_id: string }>;
+            `).all(limit) as Array<{ id: string, job_id: string, resume_id: string | null, user_id: string }>;
         return rows;
     }
+}
+
+// ============================================================================
+// USER PROFILE OPERATIONS (Custom Usernames)
+// ============================================================================
+
+export interface UserProfile {
+    id: string;
+    name: string | null;
+    username?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * Get user profile by user ID
+ */
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        return executeWithUser(userId, async (client) => {
+            const res = await client.query('SELECT * FROM users WHERE id = $1', [userId]);
+            if (res.rows.length === 0) return null;
+            return res.rows[0] as UserProfile;
+        });
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+        const { data, error } = await client
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+        if (error) return null;
+        return data as UserProfile;
+    } else {
+        const db = getSQLiteDB();
+        const row = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserProfile | undefined;
+        return row || null;
+    }
+}
+
+/**
+ * Check if a username already exists (for another user)
+ */
+export async function checkUsernameExists(username: string, excludeUserId?: string): Promise<boolean> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        const pool = getPostgresPool();
+        // Since we unified to 'name' which isn't necessarily unique, this check might be irrelevant 
+        // OR we should assume 'name' is the username. Let's assume name for now.
+        let query = 'SELECT 1 FROM users WHERE LOWER(name) = LOWER($1)';
+        const params: string[] = [username];
+
+        if (excludeUserId) {
+            query += ' AND id != $2';
+            params.push(excludeUserId);
+        }
+
+        const res = await pool.query(query, params);
+        return res.rows.length > 0;
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+        let query = client
+            .from('users')
+            .select('id')
+            .ilike('name', username);
+
+        if (excludeUserId) {
+            query = query.neq('id', excludeUserId);
+        }
+
+        const { data } = await query;
+        return (data?.length || 0) > 0;
+    } else {
+        const db = getSQLiteDB();
+        let query = 'SELECT 1 FROM users WHERE LOWER(name) = LOWER(?)';
+        const params: string[] = [username];
+
+        if (excludeUserId) {
+            query += ' AND id != ?';
+            params.push(excludeUserId);
+        }
+
+        const row = db.prepare(query).get(...params);
+        return !!row;
+    }
+}
+
+/**
+ * Set or update username for a user
+ */
+export async function setUsername(userId: string, username: string | null): Promise<{ success: boolean; error?: string }> {
+    const dbType = getDbType();
+    const normalizedUsername = username?.trim() || null;
+
+    // Check if username is taken (if not clearing)
+    if (normalizedUsername) {
+        const exists = await checkUsernameExists(normalizedUsername, userId);
+        if (exists) {
+            return { success: false, error: 'This username is already taken' };
+        }
+    }
+
+    if (dbType === 'postgres') {
+        try {
+            return await executeWithUser(userId, async (client) => {
+                await client.query(`
+                    INSERT INTO users(id, name, updated_at)
+        VALUES($1, $2, NOW())
+                    ON CONFLICT(id) DO UPDATE SET name = $2, updated_at = NOW()
+            `, [userId, normalizedUsername]);
+                return { success: true };
+            });
+        } catch (error: any) {
+            if (error?.code === '23505') { // Unique violation
+                return { success: false, error: 'This username is already taken' };
+            }
+            throw error;
+        }
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+        const { error } = await client
+            .from('users')
+            .upsert({
+                id: userId,
+                user_id: userId,
+                username: normalizedUsername,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'id' });
+
+        if (error) {
+            if (error.code === '23505') {
+                return { success: false, error: 'This username is already taken' };
+            }
+            throw error;
+        }
+        return { success: true };
+    } else {
+        const db = getSQLiteDB();
+        try {
+            db.prepare(`
+                INSERT INTO users(id, name, updated_at)
+        VALUES(?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = datetime('now')
+            `).run(userId, normalizedUsername);
+            return { success: true };
+        } catch (error: any) {
+            if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+                return { success: false, error: 'This username is already taken' };
+            }
+            throw error;
+        }
+    }
+}
+
+/**
+ * Ensure user exists with a username (auto-generate if needed)
+ * Used on first sign-in
+ */
+export async function ensureUserWithUsername(userId: string, generateFn: () => string): Promise<string | null> {
+    // Check if user already has a username
+    const existingProfile = await getUserProfile(userId);
+    if (existingProfile?.name) {
+        return existingProfile.name;
+    }
+
+    // Generate unique username with retry logic
+    const maxRetries = 10;
+    for (let i = 0; i < maxRetries; i++) {
+        const newUsername = generateFn();
+        const result = await setUsername(userId, newUsername);
+        if (result.success) {
+            return newUsername;
+        }
+        // Username was taken, retry with a new one
+    }
+
+    // Failed to generate unique username after max retries
+    console.error(`Failed to generate unique username for user ${userId} after ${maxRetries} attempts`);
+    return null;
+}
+
+// ... existing imports
+
+export async function logInteraction(
+    userId: string,
+    jobId: string,
+    interactionType: string,
+    metadata: any = {}
+): Promise<void> {
+    // Fire and forget: Update User Preference Profile
+    updateUserEmbedding(userId, jobId, interactionType).catch(err => console.error('Background embedding update failed', err));
+
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        const pool = getPostgresPool();
+        // Fire and forget - don't await strictly if we want speed, but for correctness let's await
+        // Using direct query since prisma might be overkill for just this log, but we want to stick to pattern
+        await pool.query(`
+            INSERT INTO user_interactions(user_id, job_id, interaction_type, metadata)
+        VALUES($1, $2, $3, $4)
+            `, [userId, jobId, interactionType, JSON.stringify(metadata)]);
+    }
+    // ... we can support other DBs if needed, but requirements focus on Postgres
 }

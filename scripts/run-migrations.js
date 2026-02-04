@@ -22,6 +22,9 @@ const migrations = [
     '002_add_nullable_user_id.sql',
     '003_backfill_legacy_user.sql',
     '004_make_user_id_non_nullable.sql',
+    '005_recommendation_system.sql',
+    '006_add_updated_at_to_user_jobs.sql',
+    '007_add_user_preference_embedding.sql',
 ];
 
 async function runMigration(filename) {

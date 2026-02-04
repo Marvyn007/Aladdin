@@ -6,10 +6,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useUser, useClerk } from '@clerk/nextjs';
-import { useStore } from '@/store/useStore';
+import { useStore, useStoreActions } from '@/store/useStore';
+import { THEMES } from '@/lib/themes';
+import { ActivityGraph } from '@/components/profile/ActivityGraph';
 
-type TabType = 'profile' | 'documents' | 'appearance' | 'security';
+type TabType = 'profile' | 'documents' | 'appearance' | 'security' | 'touch-grass';
 
 interface AccountSettingsModalProps {
     isOpen: boolean;
@@ -19,24 +22,63 @@ interface AccountSettingsModalProps {
 export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalProps) {
     const { user, isLoaded } = useUser();
     const { signOut } = useClerk();
-    const { theme, toggleTheme } = useStore();
+    const { theme, toggleTheme, themeId } = useStore();
+    const { saveThemeSettings, setThemeId } = useStoreActions();
     const [activeTab, setActiveTab] = useState<TabType>('profile');
     const [isUpdating, setIsUpdating] = useState(false);
     const modalRef = useRef<HTMLDivElement>(null);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    // Mobile responsive state
+    const [isMobile, setIsMobile] = useState(false);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+    // Check for mobile/tablet viewport
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 700);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     // Profile form state
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
-    const [username, setUsername] = useState('');
+    const [customUsername, setCustomUsername] = useState('');
+    const [usernameError, setUsernameError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     // Initialize form with user data
     useEffect(() => {
         if (user) {
             setFirstName(user.firstName || '');
             setLastName(user.lastName || '');
-            setUsername(user.username || '');
         }
     }, [user]);
+
+    // Fetch custom username from our API
+    useEffect(() => {
+        if (isOpen && user) {
+            fetch('/api/user/profile')
+                .then(res => res.json())
+                .then(data => {
+                    setCustomUsername(data.username || '');
+                })
+                .catch(err => console.error('Failed to fetch username:', err));
+        }
+    }, [isOpen, user]);
+
+    // Clear messages on input change
+    useEffect(() => {
+        setUsernameError(null);
+        setSuccessMessage(null);
+    }, [customUsername]);
 
     // Close on escape key
     useEffect(() => {
@@ -58,19 +100,57 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
         if (e.target === e.currentTarget) onClose();
     };
 
-    if (!isOpen || !isLoaded || !user) return null;
+    if (!isOpen || !isLoaded || !user || !mounted) return null;
 
     const handleUpdateProfile = async () => {
         if (!user) return;
         setIsUpdating(true);
+        setUsernameError(null);
+        setSuccessMessage(null);
+
         try {
+            // Update Clerk profile (firstName, lastName)
             await user.update({
                 firstName,
                 lastName,
-                username: username || undefined,
             });
+
+            // Update custom username via our API
+            if (customUsername !== undefined) {
+                const res = await fetch('/api/user/profile', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: customUsername })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    setUsernameError(data.error || 'Failed to update username');
+                    return;
+                }
+
+                setSuccessMessage('Profile updated successfully!');
+                setTimeout(() => setSuccessMessage(null), 3000);
+            }
         } catch (error) {
             console.error('Failed to update profile:', error);
+            setUsernameError('Failed to update profile. Please try again.');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleGenerateUsername = async () => {
+        setIsUpdating(true);
+        try {
+            const res = await fetch('/api/user/init', { method: 'POST' });
+            const data = await res.json();
+            if (data.username) {
+                setCustomUsername(data.username);
+            }
+        } catch (error) {
+            console.error('Failed to generate username:', error);
         } finally {
             setIsUpdating(false);
         }
@@ -92,12 +172,13 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
 
     const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
         { id: 'profile', label: 'Profile', icon: <ProfileIcon /> },
+        { id: 'touch-grass', label: 'Touch the grass', icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.5-3.3.3-1.09.88-2.16 1.7-3.2.3 2.5.8 4 1.3 5.2z"></path></svg> },
         { id: 'documents', label: 'My Documents', icon: <DocumentsIcon /> },
         { id: 'appearance', label: 'Appearance', icon: <AppearanceIcon /> },
         { id: 'security', label: 'Security', icon: <SecurityIcon /> },
     ];
 
-    return (
+    return createPortal(
         <div
             onClick={handleBackdropClick}
             style={{
@@ -115,33 +196,62 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                 ref={modalRef}
                 style={{
                     background: 'var(--background)',
-                    borderRadius: '16px',
-                    width: '100%',
-                    maxWidth: '700px',
-                    height: '600px',
+                    borderRadius: isMobile ? '0' : '16px',
+                    width: isMobile ? '100%' : '100%',
+                    maxWidth: isMobile ? '100%' : '700px',
+                    height: isMobile ? '100%' : 'min(600px, 90vh)',
+                    maxHeight: isMobile ? '100%' : '90vh',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
                     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                    border: '1px solid var(--border)',
+                    border: isMobile ? 'none' : '1px solid var(--border)',
                 }}
             >
                 {/* Header */}
                 <div style={{
-                    padding: '20px 24px',
+                    padding: isMobile ? '16px' : '20px 24px',
                     borderBottom: '1px solid var(--border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    gap: '12px',
                 }}>
-                    <h2 style={{
-                        fontSize: '18px',
-                        fontWeight: 600,
-                        color: 'var(--text-primary)',
-                        margin: 0,
-                    }}>
-                        Account Settings
-                    </h2>
+                    {/* Left side: Hamburger (mobile) + Title */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {isMobile && (
+                            <button
+                                onClick={() => setIsDrawerOpen(true)}
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: 'var(--background-secondary)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'var(--text-secondary)',
+                                }}
+                                aria-label="Open navigation"
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <line x1="3" y1="6" x2="21" y2="6" />
+                                    <line x1="3" y1="12" x2="21" y2="12" />
+                                    <line x1="3" y1="18" x2="21" y2="18" />
+                                </svg>
+                            </button>
+                        )}
+                        <h2 style={{
+                            fontSize: isMobile ? '16px' : '18px',
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            margin: 0,
+                        }}>
+                            Account Settings
+                        </h2>
+                    </div>
                     <button
                         onClick={onClose}
                         style={{
@@ -156,6 +266,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                             justifyContent: 'center',
                             color: 'var(--text-secondary)',
                             transition: 'all 0.15s ease',
+                            flexShrink: 0,
                         }}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -165,62 +276,119 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                     </button>
                 </div>
 
-                {/* Tabs & Content */}
-                <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                    {/* Tab Navigation */}
-                    <div style={{
-                        width: '200px',
-                        borderRight: '1px solid var(--border)',
-                        padding: '16px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px',
-                        background: 'var(--background-secondary)',
-                    }}>
-                        {tabs.map((tab) => (
+                {/* Mobile Drawer Overlay */}
+                {isMobile && isDrawerOpen && (
+                    <div
+                        onClick={() => setIsDrawerOpen(false)}
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(0, 0, 0, 0.4)',
+                            zIndex: 50,
+                        }}
+                    />
+                )}
+
+                {/* Mobile Drawer */}
+                {isMobile && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            bottom: 0,
+                            width: '260px',
+                            background: 'var(--background)',
+                            borderRight: '1px solid var(--border)',
+                            transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)',
+                            transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                            zIndex: 60,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: isDrawerOpen ? '4px 0 20px rgba(0,0,0,0.15)' : 'none',
+                        }}
+                    >
+                        {/* Drawer Header */}
+                        <div style={{
+                            padding: '16px',
+                            borderBottom: '1px solid var(--border)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                        }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Navigation</span>
                             <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => setIsDrawerOpen(false)}
                                 style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '10px 12px',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    background: activeTab === tab.id ? 'var(--accent-muted)' : 'transparent',
-                                    color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    fontSize: '13px',
-                                    fontWeight: 500,
-                                    transition: 'all 0.15s ease',
-                                    textAlign: 'left',
+                                    justifyContent: 'center',
+                                    color: 'var(--text-secondary)',
                                 }}
                             >
-                                {tab.icon}
-                                {tab.label}
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
                             </button>
-                        ))}
+                        </div>
 
-                        {/* Sign Out at bottom */}
-                        <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                        {/* Drawer Nav Items */}
+                        <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {tabs.map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => {
+                                        setActiveTab(tab.id);
+                                        setIsDrawerOpen(false);
+                                    }}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        padding: '12px 14px',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: activeTab === tab.id ? 'var(--accent-muted)' : 'transparent',
+                                        color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 500,
+                                        transition: 'all 0.15s ease',
+                                        textAlign: 'left',
+                                        width: '100%',
+                                    }}
+                                >
+                                    {tab.icon}
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Drawer Sign Out */}
+                        <div style={{ padding: '12px', borderTop: '1px solid var(--border)' }}>
                             <button
                                 onClick={() => signOut()}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: '10px',
-                                    padding: '10px 12px',
+                                    padding: '12px 14px',
                                     border: 'none',
                                     borderRadius: '8px',
                                     background: 'transparent',
                                     color: 'var(--text-danger, #ef4444)',
                                     cursor: 'pointer',
-                                    fontSize: '13px',
+                                    fontSize: '14px',
                                     fontWeight: 500,
                                     width: '100%',
                                     textAlign: 'left',
-                                    transition: 'all 0.15s ease',
                                 }}
                             >
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -232,37 +400,123 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                             </button>
                         </div>
                     </div>
+                )
+                }
+
+                {/* Tabs & Content */}
+                <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+                    {/* Tab Navigation - Desktop Only */}
+                    {!isMobile && (
+                        <div style={{
+                            width: '200px',
+                            borderRight: '1px solid var(--border)',
+                            padding: '16px 12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            background: 'var(--background-secondary)',
+                            flexShrink: 0,
+                        }}>
+                            {tabs.map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        padding: '10px 12px',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: activeTab === tab.id ? 'var(--accent-muted)' : 'transparent',
+                                        color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        fontSize: '13px',
+                                        fontWeight: 500,
+                                        transition: 'all 0.15s ease',
+                                        textAlign: 'left',
+                                    }}
+                                >
+                                    {tab.icon}
+                                    {tab.label}
+                                </button>
+                            ))}
+
+                            {/* Sign Out at bottom */}
+                            <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                                <button
+                                    onClick={() => signOut()}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        padding: '10px 12px',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        background: 'transparent',
+                                        color: 'var(--text-danger, #ef4444)',
+                                        cursor: 'pointer',
+                                        fontSize: '13px',
+                                        fontWeight: 500,
+                                        width: '100%',
+                                        textAlign: 'left',
+                                        transition: 'all 0.15s ease',
+                                    }}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                        <polyline points="16 17 21 12 16 7" />
+                                        <line x1="21" y1="12" x2="9" y2="12" />
+                                    </svg>
+                                    Sign out
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Tab Content */}
                     <div style={{
                         flex: 1,
-                        padding: '24px',
+                        padding: isMobile ? '16px' : '24px',
                         overflowY: 'auto',
+                        overflowX: 'hidden',
                     }}>
                         {activeTab === 'profile' && (
                             <ProfileTab
                                 user={user}
                                 firstName={firstName}
                                 lastName={lastName}
-                                username={username}
+                                username={customUsername}
                                 setFirstName={setFirstName}
                                 setLastName={setLastName}
-                                setUsername={setUsername}
+                                setUsername={setCustomUsername}
                                 handlePhotoUpload={handlePhotoUpload}
                                 handleUpdateProfile={handleUpdateProfile}
+                                handleGenerateUsername={handleGenerateUsername}
                                 isUpdating={isUpdating}
+                                usernameError={usernameError}
+                                successMessage={successMessage}
+                                isMobile={isMobile}
                             />
                         )}
-                        {activeTab === 'documents' && <DocumentsTab />}
+                        {activeTab === 'touch-grass' && <TouchGrassTab />}
+                        {activeTab === 'documents' && <DocumentsTab isMobile={isMobile} />}
                         {activeTab === 'appearance' && (
-                            <AppearanceTab theme={theme} toggleTheme={toggleTheme} />
+                            <AppearanceTab
+                                theme={theme}
+                                toggleTheme={toggleTheme}
+                                currentThemeId={themeId}
+                                onSetTheme={setThemeId}
+                                onSave={saveThemeSettings}
+                                isMobile={isMobile}
+                            />
                         )}
-                        {activeTab === 'security' && <SecurityTab user={user} />}
+                        {activeTab === 'security' && <SecurityTab user={user} isMobile={isMobile} />}
                     </div>
-                </div>
-            </div>
-        </div>
-    );
+                </div >
+            </div >
+        </div >
+        , document.body);
 }
 
 // Profile Tab Component
@@ -276,7 +530,11 @@ function ProfileTab({
     setUsername,
     handlePhotoUpload,
     handleUpdateProfile,
+    handleGenerateUsername,
     isUpdating,
+    usernameError,
+    successMessage,
+    isMobile,
 }: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     user: any;
@@ -288,15 +546,139 @@ function ProfileTab({
     setUsername: (v: string) => void;
     handlePhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleUpdateProfile: () => void;
+    handleGenerateUsername: () => void;
     isUpdating: boolean;
+    usernameError: string | null;
+    successMessage: string | null;
+    isMobile?: boolean;
 }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [savedUsername, setSavedUsername] = useState(username);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isSavingUsername, setIsSavingUsername] = useState(false);
+    const [localUsernameError, setLocalUsernameError] = useState<string | null>(null);
+    const [usernameSaved, setUsernameSaved] = useState(true);
+
+    // Track if username has unsaved changes
+    const hasUnsavedUsername = username !== savedUsername;
+
+    // Update savedUsername when it changes externally
+    useEffect(() => {
+        setSavedUsername(username);
+        setUsernameSaved(true);
+    }, []); // Only on mount
+
+    // Client-side validation
+    const validateLocally = (value: string): string | null => {
+        if (!value || value.trim().length === 0) return null; // Empty is valid
+        const trimmed = value.trim();
+        if (trimmed.length < 10) return 'Username must be at least 10 characters.';
+        if (trimmed.length > 30) return 'Username must be 30 characters or less.';
+        if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+            return 'Username can only contain letters, numbers, hyphens, and underscores (no spaces).';
+        }
+        if (/^[-_]/.test(trimmed) || /[-_]$/.test(trimmed)) {
+            return 'Username cannot start or end with a hyphen or underscore.';
+        }
+        // Check reserved words
+        const lower = trimmed.toLowerCase();
+        const reserved = ['user', 'admin', 'root', 'system', 'guest', 'anonymous', 'null', 'undefined', 'test', 'demo', 'default', 'unknown', 'moderator', 'staff', 'support', 'official', 'verified', 'legacy', 'deleted', 'banned'];
+        if (reserved.some(word => lower === word || lower.includes(word))) {
+            return 'This username contains a reserved word.';
+        }
+        return null;
+    };
+
+    const handleUsernameChange = (value: string) => {
+        setUsername(value);
+        setUsernameSaved(false);
+        const error = validateLocally(value);
+        setLocalUsernameError(error);
+    };
+
+    const handleGenerate = async () => {
+        setIsGenerating(true);
+        setLocalUsernameError(null);
+        try {
+            const res = await fetch('/api/user/username/generate', { method: 'POST' });
+            const data = await res.json();
+            if (data.success && data.username) {
+                setUsername(data.username);
+                setUsernameSaved(false);
+                setLocalUsernameError(null);
+            }
+        } catch (error) {
+            console.error('Failed to generate username:', error);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleSaveUsername = async () => {
+        if (localUsernameError) return;
+
+        setIsSavingUsername(true);
+        setLocalUsernameError(null);
+
+        try {
+            const res = await fetch('/api/user/username', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username.trim() || null })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setLocalUsernameError(data.error || 'Failed to save username');
+                return;
+            }
+
+            setSavedUsername(data.username || '');
+            setUsernameSaved(true);
+            // Optionally show success toast (using successMessage state would require lifting this)
+        } catch (error) {
+            console.error('Failed to save username:', error);
+            setLocalUsernameError('Failed to save username. Please try again.');
+        } finally {
+            setIsSavingUsername(false);
+        }
+    };
+
+
+
+    const displayError = localUsernameError || usernameError;
+    const canSaveUsername = !localUsernameError && hasUnsavedUsername && !isSavingUsername;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+
+
+
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
                 Profile Information
             </h3>
+
+            {/* Success Message */}
+            {successMessage && (
+                <div style={{
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    background: 'rgba(34, 197, 94, 0.1)',
+                    border: '1px solid rgba(34, 197, 94, 0.3)',
+                    color: '#22c55e',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {successMessage}
+                </div>
+            )}
 
             {/* Photo Upload */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -396,25 +778,79 @@ function ProfileTab({
                 </div>
             </div>
 
+            {/* Username Field with Generate and Save Buttons */}
             <div>
-                <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                    Username
-                </label>
-                <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--background-secondary)',
-                        color: 'var(--text-primary)',
-                        fontSize: '14px',
-                        outline: 'none',
-                    }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                        Username
+                    </label>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => handleUsernameChange(e.target.value)}
+                        placeholder="Leave empty to use your name"
+                        style={{
+                            flex: 1,
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            border: `1px solid ${displayError ? '#ef4444' : 'var(--border)'}`,
+                            background: 'var(--background-secondary)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px',
+                            outline: 'none',
+                        }}
+                    />
+                    <button
+                        onClick={handleGenerate}
+                        disabled={isGenerating}
+                        aria-label="Generate a new quirky username"
+                        style={{
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: 'var(--accent)',
+                            color: 'white',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            cursor: isGenerating ? 'not-allowed' : 'pointer',
+                            opacity: isGenerating ? 0.7 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.15s ease',
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M23 4v6h-6" />
+                            <path d="M1 20v-6h6" />
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                        </svg>
+                        {isGenerating ? 'Generating...' : 'Generate'}
+                    </button>
+                </div>
+
+
+
+                {/* Error Message */}
+                {displayError && (
+                    <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        {displayError}
+                    </p>
+                )}
+
+
+
+                <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '6px' }}>
+                    Must be at least 10 characters. Letters, numbers, hyphens, and underscores only.
+                </p>
             </div>
 
             <div>
@@ -465,27 +901,54 @@ function ProfileTab({
 }
 
 // Documents Tab Component
-function DocumentsTab() {
+function DocumentsTab({ isMobile }: { isMobile?: boolean }) {
     const [resumes, setResumes] = useState<{ id: string; filename: string; createdAt: string }[]>([]);
     const [linkedins, setLinkedins] = useState<{ id: string; filename: string; createdAt: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Fetch documents
-        async function fetchDocs() {
-            try {
-                // TODO: Implement API calls to fetch user's documents
-                // For now, using empty arrays
-                setResumes([]);
-                setLinkedins([]);
-            } catch (error) {
-                console.error('Failed to fetch documents:', error);
-            } finally {
-                setLoading(false);
-            }
-        }
         fetchDocs();
     }, []);
+
+    async function fetchDocs() {
+        setLoading(true);
+        try {
+            const [resumesRes, linkedinRes] = await Promise.all([
+                fetch('/api/upload-resume'),
+                fetch('/api/upload-linkedin')
+            ]);
+
+            const resumesData = await resumesRes.json();
+            const linkedinData = await linkedinRes.json();
+
+            setResumes(resumesData.resumes || []);
+            setLinkedins(linkedinData.profiles || []);
+        } catch (error) {
+            console.error('Failed to fetch documents:', error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const handleDeleteResume = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this resume?')) return;
+        try {
+            const res = await fetch(`/api/upload-resume?id=${id}`, { method: 'DELETE' });
+            if (res.ok) fetchDocs();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    // For now assuming LinkedIn delete endpoint follows pattern or is missing.
+    // If missing, we skip delete for LinkedIn or try standard pattern.
+    // Actually upload-linkedin doesn't seem to have DELETE implemented in the file I read.
+    // I will check if I need to implement it.
+    // Current requirement focuses on Resumes.
+
+    const handlePreviewResume = (id: string) => {
+        window.open(`/api/resumes/${id}/preview`, '_blank');
+    };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -529,8 +992,24 @@ function DocumentsTab() {
                                         background: 'var(--background)',
                                     }}
                                 >
-                                    <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{resume.filename}</span>
-                                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{resume.createdAt}</span>
+                                    <div>
+                                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'block' }}>{resume.filename}</span>
+                                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{new Date(resume.createdAt || (resume as any).upload_at).toLocaleDateString()}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button
+                                            onClick={() => handlePreviewResume(resume.id)}
+                                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '12px' }}
+                                        >
+                                            Preview
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteResume(resume.id)}
+                                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '12px' }}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -587,8 +1066,60 @@ function DocumentsTab() {
 }
 
 // Appearance Tab Component
-function AppearanceTab({ theme, toggleTheme }: { theme: string; toggleTheme: () => void }) {
+// Appearance Tab Component
+interface AppearanceTabProps {
+    theme: 'light' | 'dark'; // Corrected type
+    toggleTheme: () => void;
+    currentThemeId: string;
+    onSetTheme: (id: string) => void;
+    onSave: (mode: 'light' | 'dark', themeId: string) => Promise<void>;
+    isMobile?: boolean;
+}
+
+function AppearanceTab({ theme, toggleTheme, currentThemeId, onSetTheme, onSave, isMobile }: AppearanceTabProps) {
     const isDark = theme === 'dark';
+    const [isSaving, setIsSaving] = useState(false);
+    const [message, setMessage] = useState<string | null>(null);
+
+    // Auto-save when theme mode is toggled
+    const handleToggleTheme = async () => {
+        console.log('[DEBUG] handleToggleTheme clicked. Current:', theme);
+        const newMode = theme === 'light' ? 'dark' : 'light';
+        toggleTheme(); // Update local state immediately
+        setIsSaving(true);
+        setMessage(null);
+        try {
+            console.log('[DEBUG] Calling onSave with:', { newMode, currentThemeId });
+            await onSave(newMode, currentThemeId);
+            setMessage('Saved!');
+            setTimeout(() => setMessage(null), 2000);
+        } catch (error) {
+            console.error('[DEBUG] handleToggleTheme save failed', error);
+            setMessage('Failed to save');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Auto-save when color palette is changed
+    const handleSetTheme = async (id: string) => {
+        console.log('[DEBUG] handleSetTheme clicked:', id);
+        if (id === currentThemeId) return; // No change
+        onSetTheme(id); // Update local state immediately
+        setIsSaving(true);
+        setMessage(null);
+        try {
+            console.log('[DEBUG] Calling onSave with:', { theme, id });
+            await onSave(theme, id);
+            setMessage('Saved!');
+            setTimeout(() => setMessage(null), 2000);
+        } catch (error) {
+            console.error('[DEBUG] handleSetTheme save failed', error);
+            setMessage('Failed to save');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -613,9 +1144,9 @@ function AppearanceTab({ theme, toggleTheme }: { theme: string; toggleTheme: () 
                         </p>
                     </div>
 
-                    {/* Creative Toggle Switch */}
                     <button
-                        onClick={toggleTheme}
+                        onClick={handleToggleTheme}
+                        disabled={isSaving}
                         style={{
                             position: 'relative',
                             width: '72px',
@@ -634,47 +1165,7 @@ function AppearanceTab({ theme, toggleTheme }: { theme: string; toggleTheme: () 
                                 : 'inset 0 2px 4px rgba(0,0,0,0.1)',
                         }}
                     >
-                        {/* Stars (visible in dark mode) */}
-                        <div style={{
-                            position: 'absolute',
-                            inset: 0,
-                            opacity: isDark ? 1 : 0,
-                            transition: 'opacity 0.4s ease',
-                        }}>
-                            <div style={{ position: 'absolute', top: '8px', left: '10px', width: '2px', height: '2px', background: 'white', borderRadius: '50%' }} />
-                            <div style={{ position: 'absolute', top: '14px', left: '18px', width: '1px', height: '1px', background: 'white', borderRadius: '50%' }} />
-                            <div style={{ position: 'absolute', top: '22px', left: '8px', width: '1px', height: '1px', background: 'white', borderRadius: '50%' }} />
-                            <div style={{ position: 'absolute', top: '10px', left: '28px', width: '1px', height: '1px', background: 'white', borderRadius: '50%' }} />
-                        </div>
-
-                        {/* Clouds (visible in light mode) */}
-                        <div style={{
-                            position: 'absolute',
-                            inset: 0,
-                            opacity: isDark ? 0 : 1,
-                            transition: 'opacity 0.4s ease',
-                        }}>
-                            <div style={{
-                                position: 'absolute',
-                                top: '20px',
-                                left: '6px',
-                                width: '12px',
-                                height: '6px',
-                                background: 'rgba(255,255,255,0.8)',
-                                borderRadius: '6px',
-                            }} />
-                            <div style={{
-                                position: 'absolute',
-                                top: '14px',
-                                left: '16px',
-                                width: '10px',
-                                height: '5px',
-                                background: 'rgba(255,255,255,0.6)',
-                                borderRadius: '5px',
-                            }} />
-                        </div>
-
-                        {/* Sun/Moon Circle */}
+                        {/* Sun/Moon Circle Logic remains same */}
                         <div style={{
                             position: 'absolute',
                             top: '4px',
@@ -689,66 +1180,147 @@ function AppearanceTab({ theme, toggleTheme }: { theme: string; toggleTheme: () 
                                 ? '0 0 10px rgba(255, 250, 205, 0.5)'
                                 : '0 0 15px rgba(255, 215, 0, 0.6)',
                             transition: 'all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}>
-                            {/* Moon craters (visible in dark mode) */}
-                            {isDark && (
-                                <>
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '6px',
-                                        right: '8px',
-                                        width: '6px',
-                                        height: '6px',
-                                        borderRadius: '50%',
-                                        background: 'rgba(0,0,0,0.1)',
-                                    }} />
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '8px',
-                                        left: '6px',
-                                        width: '4px',
-                                        height: '4px',
-                                        borderRadius: '50%',
-                                        background: 'rgba(0,0,0,0.1)',
-                                    }} />
-                                </>
-                            )}
-                        </div>
+                        }} />
                     </button>
                 </div>
             </div>
 
-            {/* Theme Preview */}
-            <div style={{
-                background: 'var(--background-secondary)',
-                borderRadius: '12px',
-                border: '1px solid var(--border)',
-                padding: '20px',
-            }}>
-                <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 12px' }}>
-                    Theme Preview
+            {/* Theme Presets */}
+            <div>
+                <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 16px' }}>
+                    Theme
                 </p>
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: '8px',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                    gap: '12px',
                 }}>
-                    <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--background)', textAlign: 'center', fontSize: '11px', color: 'var(--text-tertiary)' }}>Primary</div>
-                    <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--background-secondary)', textAlign: 'center', fontSize: '11px', color: 'var(--text-tertiary)' }}>Secondary</div>
-                    <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--accent)', textAlign: 'center', fontSize: '11px', color: 'white' }}>Accent</div>
-                    <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--border)', textAlign: 'center', fontSize: '11px', color: 'var(--text-secondary)' }}>Border</div>
+                    {THEMES.map((t) => {
+                        const palette = isDark ? t.colors.dark : t.colors.light;
+                        const isSelected = currentThemeId === t.id;
+
+                        return (
+                            <button
+                                key={t.id}
+                                onClick={() => handleSetTheme(t.id)}
+                                disabled={isSaving}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'flex-start',
+                                    gap: '8px',
+                                    padding: '12px',
+                                    borderRadius: '12px',
+                                    background: isSelected ? 'var(--accent-muted)' : 'var(--background-secondary)',
+                                    border: `2px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    textAlign: 'left',
+                                    position: 'relative',
+                                }}
+                            >
+                                {/* Color Swatches */}
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <div style={{
+                                        width: '24px',
+                                        height: '24px',
+                                        borderRadius: '50%',
+                                        background: palette.background,
+                                        border: '1px solid rgba(0,0,0,0.1)',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                    }} />
+                                    <div style={{
+                                        width: '24px',
+                                        height: '24px',
+                                        borderRadius: '50%',
+                                        background: palette.accent,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }} />
+                                </div>
+
+                                <div>
+                                    <span style={{
+                                        display: 'block',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        color: isSelected ? 'var(--accent)' : 'var(--text-primary)'
+                                    }}>
+                                        {t.name}
+                                    </span>
+                                    <span style={{
+                                        display: 'block',
+                                        fontSize: '11px',
+                                        color: 'var(--text-tertiary)',
+                                        opacity: 0.8
+                                    }}>
+                                        {t.description.split(' ')[0]} {/* Simple short desc */}
+                                    </span>
+                                </div>
+
+                                {isSelected && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '10px',
+                                        right: '10px',
+                                        color: 'var(--accent)',
+                                    }}>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="20 6 9 17 4 12" />
+                                        </svg>
+                                    </div>
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
+                {currentThemeId !== 'aladdin' && (
+                    <button
+                        onClick={() => handleSetTheme('aladdin')}
+                        disabled={isSaving}
+                        style={{
+                            marginTop: '16px',
+                            fontSize: '12px',
+                            color: 'var(--text-tertiary)',
+                            background: 'transparent',
+                            border: 'none',
+                            textDecoration: 'underline',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Reset to Default
+                    </button>
+                )}
             </div>
-        </div>
+
+            {/* Auto-Save Status Indicator */}
+            <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
+                {isSaving && (
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                            <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                            <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                        </svg>
+                        Saving...
+                    </span>
+                )}
+                {message && !isSaving && (
+                    <span style={{ fontSize: '13px', color: message.includes('Saved') ? 'var(--accent)' : 'var(--error)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {message.includes('Saved') && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                        )}
+                        {message}
+                    </span>
+                )}
+            </div>
+        </div >
     );
 }
 
 // Security Tab Component
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function SecurityTab({ user }: { user: any }) {
+function SecurityTab({ user, isMobile }: { user: any; isMobile?: boolean }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
@@ -905,5 +1477,36 @@ function GithubIcon() {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
         </svg>
+    );
+}
+
+function TouchGrassTab() {
+    const [activityData, setActivityData] = useState<{ activity: Record<string, number>, streak: number } | null>(null);
+
+    useEffect(() => {
+        const fetchActivity = async () => {
+            try {
+                const res = await fetch('/api/user/activity');
+                if (res.ok) {
+                    const data = await res.json();
+                    setActivityData(data);
+                }
+            } catch (e) {
+                console.error("Failed to fetch activity", e);
+            }
+        };
+        fetchActivity();
+    }, []);
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {activityData ? (
+                <ActivityGraph activity={activityData.activity} streak={activityData.streak} />
+            ) : (
+                <div style={{ height: '300px', background: 'var(--surface)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontSize: '13px' }}>
+                    Loading your grass...
+                </div>
+            )}
+        </div>
     );
 }

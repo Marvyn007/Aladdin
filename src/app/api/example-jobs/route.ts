@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { insertJob } from '@/lib/db';
 
 export async function GET(request: Request) {
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
             ...uj.job,
             status: uj.status,
             matchScore: uj.matchScore,
-            matchedSkills: uj.matching_skills, // DB field name
+            matchedSkills: uj.matched_skills, // DB field name
         }));
 
         return NextResponse.json({

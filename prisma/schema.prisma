@@ -14,13 +14,15 @@ model User {
   imageUrl         String?           @map("image_url")
   createdAt        DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime?         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  preferenceEmbedding Unsupported("vector(384)")? @map("preference_embedding")
   appSettings      AppSettings?
   applications     Application[]
   coverLetters     CoverLetter[]
-  jobs             Job[]
   linkedInProfiles LinkedInProfile[]
   resumes          Resume[]
   userJobs         UserJob[]
+  userInteractions UserInteraction[]
+  searchHistory    SearchHistory[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -36,10 +38,6 @@ model Job {
   fetchedAt            DateTime?     @default(now()) @map("fetched_at") @db.Timestamptz(6)
   status               String?       @default("fresh")
   archived_at          DateTime?     @db.Timestamptz(6)
-  match_score          Int?          @default(0)
-  matched_skills       Json?
-  missing_skills       Json?
-  why                  String?
   normalizedText       String?       @map("normalized_text")
   rawTextSummary       String?       @map("raw_text_summary")
   contentHash          String?       @unique @map("content_hash")
@@ -59,19 +57,22 @@ model Job {
   sourceHost           String?       @map("source_host")
   scrapedAt            DateTime?     @map("scraped_at") @db.Timestamptz(6)
   extractionConfidence Json?         @map("extraction_confidence")
-  user_id              String
   applications         Application[]
   coverLetters         CoverLetter[]
-  users                User          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_jobs_user")
   userJobs             UserJob[]
+  jobEmbedding         JobEmbedding?
+  userInteractions     UserInteraction[]
+  latitude             Float?
+  longitude            Float?
+  geoResolved          Boolean       @default(false) @map("geo_resolved")
+  geoConfidence        Float?        @map("geo_confidence")
+  geoSource            String?       @map("geo_source")
+  geoPoints            JobGeoPoint[]
 
   @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
   @@index([contentHash], map: "idx_jobs_content_hash")
   @@index([importTag], map: "idx_jobs_import_tag")
-  @@index([match_score(sort: Desc)], map: "idx_jobs_match_score")
   @@index([status], map: "idx_jobs_status")
-  @@index([user_id], map: "idx_jobs_user_id")
-  @@index([user_id, status, match_score(sort: Desc)], map: "idx_jobs_user_status_score")
   @@map("jobs")
 }
 
@@ -80,9 +81,13 @@ model UserJob {
   userId          String    @map("user_id")
   jobId           String    @map("job_id") @db.Uuid
   status          String?   @default("fresh")
-  matchScore      Int?      @map("match_score")
-  matching_skills Json?
+  matchScore      Float?      @map("match_score")
   createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  matched_skills  Json?
+  missing_skills  Json?
+  why             String?
+  archived_at     DateTime? @db.Timestamptz(6)
   job             Job       @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_jobs_job")
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_jobs_user")
 
@@ -101,7 +106,8 @@ model Resume {
   createdAt    DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
   userId       String        @map("user_id")
   applications Application[]
-  coverLetters CoverLetter[]
+  coverLetters     CoverLetter[]
+  resumeEmbedding  ResumeEmbedding?
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_resumes_user")
 
   @@index([userId], map: "idx_resumes_user_id")
@@ -171,7 +177,7 @@ model Application {
 
 model AppSettings {
   id               Int       @id @default(autoincrement())
-  freshLimit       Int?      @default(300) @map("fresh_limit")
+  freshLimit       Int?      @default(100000) @map("fresh_limit")
   lastUpdated      DateTime? @map("last_updated") @db.Timestamptz(6)
   createdAt        DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   excludedKeywords Json?     @map("excluded_keywords")
@@ -186,4 +192,64 @@ model playing_with_neon {
   id    Int    @id @default(autoincrement())
   name  String
   value Float? @db.Real
+}
+
+model JobEmbedding {
+  jobId     String   @id @map("job_id") @db.Uuid
+  embedding Unsupported("vector(384)")?
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_embeddings")
+}
+
+model ResumeEmbedding {
+  resumeId  String   @id @map("resume_id") @db.Uuid
+  embedding Unsupported("vector(384)")?
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@map("resume_embeddings")
+}
+
+model UserInteraction {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id")
+  jobId           String   @map("job_id") @db.Uuid
+  interactionType String   @map("interaction_type")
+  metadata        Json?    @default("{}")
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId, jobId], map: "idx_user_interactions_user_job")
+  @@index([createdAt], map: "idx_user_interactions_created_at")
+  @@map("user_interactions")
+}
+
+model SearchHistory {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id")
+  queryText String    @map("query_text")
+  embedding Unsupported("vector(384)")?
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_search_history_user_created")
+  @@map("search_history")
+}
+
+model JobGeoPoint {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId         String    @map("job_id") @db.Uuid
+  locationLabel String?   @map("location_label")
+  latitude      Float
+  longitude     Float
+  confidence    Float?
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId], map: "idx_job_geo_points_job_id")
+  @@index([latitude, longitude], map: "idx_job_geo_points_lat_lng")
+  @@map("job_geo_points")
 }

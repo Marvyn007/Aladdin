@@ -3,10 +3,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore, useStoreActions } from '@/store/useStore';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { Pagination } from './Pagination';
+import { useAuth } from '@clerk/nextjs';
+import { SearchBar } from '@/components/common/SearchBar';
+import { SearchEmptyState } from '@/components/common/SearchEmptyState';
+import { JobLoadingState } from '@/components/common/JobLoadingState';
+import { trackJobInteraction } from '@/lib/actions';
 
 interface JobListProps {
     onJobClick: (job: Job) => void;
@@ -46,71 +52,52 @@ function isRecentlyPosted(postedAt: string | null): boolean {
 }
 
 export function JobList({ onJobClick }: JobListProps) {
+    const isSignedIn = useAuth().isSignedIn;
     const jobs = useStore(state => state.jobs);
+    const searchMode = useStore(state => state.searchMode);
+    const searchResults = useStore(state => state.searchResults);
+
+    const sorting = useStore(state => state.sorting);
+    const jobStatus = useStore(state => state.jobStatus);
+    const pagination = useStore(state => state.pagination);
     const selectedJob = useStore(state => state.selectedJob);
     const isLoadingJobs = useStore(state => state.isLoadingJobs);
-    const filters = useStore(state => state.filters);
-    const lastUpdated = useStore(state => state.lastUpdated);
-    const excludedKeywords = useStore(state => state.excludedKeywords);
 
-    // Filter jobs based on filters
-    const filteredJobs = jobs.filter((job) => {
-        // Location filter
-        if (filters.location) {
-            const location = job.location?.toLowerCase() || '';
-            if (!location.includes(filters.location.toLowerCase())) {
-                return false;
+    // Determine which jobs to display
+    let displayedJobs = searchMode ? searchResults : jobs;
+
+    // Apply Client-Side Pagination & Sorting for Search Results
+    if (searchMode) {
+        // Sort
+        displayedJobs = [...displayedJobs].sort((a, b) => {
+            const dir = sorting.dir === 'asc' ? 1 : -1;
+            if (sorting.by === 'score') {
+                return ((a.match_score || 0) - (b.match_score || 0)) * dir;
+            } else if (sorting.by === 'imported') {
+                return (Number(!!a.isImported) - Number(!!b.isImported)) * dir;
+            } else {
+                // Time
+                const dateA = new Date(a.original_posted_date || a.posted_at || 0).getTime();
+                const dateB = new Date(b.original_posted_date || b.posted_at || 0).getTime();
+                return (dateA - dateB) * dir;
             }
-        }
+        });
 
-        // Remote only filter
-        if (filters.remoteOnly) {
-            const location = job.location?.toLowerCase() || '';
-            if (!location.includes('remote')) {
-                return false;
-            }
-        }
+        // Paginate
+        const start = (pagination.page - 1) * pagination.limit;
+        const end = start + pagination.limit;
+        displayedJobs = displayedJobs.slice(start, end);
+    }
 
-        // Check excluded keywords
-        if (excludedKeywords && excludedKeywords.length > 0) {
-            const titleLower = job.title.toLowerCase();
-            if (excludedKeywords.some(keyword => titleLower.includes(keyword))) {
-                return false;
-            }
-        }
-
-        return true;
-    });
-
-    // Sorting Logic
-    type SortMode = 'time' | 'score' | 'imported';
-    const [sortMode, setSortMode] = useState<SortMode>('time');
+    const { setPagination, setSorting, setJobStatus, toggleJobStatus } = useStoreActions();
     const [isSortOpen, setIsSortOpen] = useState(false);
 
-    const getJobTime = (job: Job) => {
-        // Prioritize original_posted_date -> posted_at -> fetched_at
-        const dateStr = job.original_posted_date || job.posted_at || job.fetched_at;
-        return dateStr ? new Date(dateStr).getTime() : 0;
+    const handleSortChange = (by: 'time' | 'imported' | 'score' | 'relevance') => {
+        setSorting({ by, dir: 'desc' }); // Default desc
+        setPagination({ page: 1 }); // Reset to page 1
+        setIsSortOpen(false);
     };
 
-    const sortedJobs = [...filteredJobs].sort((a, b) => {
-        if (sortMode === 'imported') {
-            // Imported jobs first, then by time
-            const aImported = a.isImported ? 1 : 0;
-            const bImported = b.isImported ? 1 : 0;
-            if (aImported !== bImported) return bImported - aImported;
-            return getJobTime(b) - getJobTime(a);
-        }
-
-        if (sortMode === 'score') {
-            const diff = b.match_score - a.match_score;
-            // Break ties with time
-            if (diff !== 0) return diff;
-        }
-
-        // Time sort (default and tie-breaker)
-        return getJobTime(b) - getJobTime(a);
-    });
 
     const getScoreColor = (score: number) => {
         if (score >= 90) return '#10b981'; // Green-500
@@ -130,11 +117,62 @@ export function JobList({ onJobClick }: JobListProps) {
                     zIndex: 10,
                 }}
             >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                {/* Title Row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                            Fresh Jobs
-                        </h2>
+                        {isSignedIn ? (
+                            <div style={{ display: 'flex', gap: '4px', background: 'var(--surface)', padding: '2px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                                <button
+                                    onClick={() => setJobStatus('fresh')}
+                                    style={{
+                                        padding: '4px 8px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        borderRadius: '6px',
+                                        background: jobStatus === 'fresh' ? 'var(--accent)' : 'transparent',
+                                        color: jobStatus === 'fresh' ? '#fff' : 'var(--text-secondary)',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Fresh
+                                </button>
+                                <button
+                                    onClick={() => setJobStatus('saved')}
+                                    style={{
+                                        padding: '4px 8px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        borderRadius: '6px',
+                                        background: jobStatus === 'saved' ? 'var(--accent)' : 'transparent',
+                                        color: jobStatus === 'saved' ? '#fff' : 'var(--text-secondary)',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Saved
+                                </button>
+                                <button
+                                    onClick={() => setJobStatus('archived')}
+                                    style={{
+                                        padding: '4px 8px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        borderRadius: '6px',
+                                        background: jobStatus === 'archived' ? 'var(--accent)' : 'transparent',
+                                        color: jobStatus === 'archived' ? '#fff' : 'var(--text-secondary)',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Archived
+                                </button>
+                            </div>
+                        ) : (
+                            <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                                All Jobs
+                            </h2>
+                        )}
                         <span
                             style={{
                                 fontSize: '12px',
@@ -145,15 +183,23 @@ export function JobList({ onJobClick }: JobListProps) {
                                 border: '1px solid var(--border)',
                             }}
                         >
-                            {filteredJobs.length}
+                            {pagination.total}
                         </span>
                     </div>
+                </div>
 
+                {/* Search Bar Row */}
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px' }}>
+                    <SearchBar />
+                </div>
+
+                {/* Pagination & Sort Row - below search bar, aligned left with flex-start */}
+                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {/* Sort Dropdown */}
                     <div style={{ position: 'relative' }}>
                         <button
                             onClick={() => setIsSortOpen(!isSortOpen)}
-                            onBlur={() => setTimeout(() => setIsSortOpen(false), 200)} // Delay to allow click
+                            onBlur={() => setTimeout(() => setIsSortOpen(false), 200)}
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -168,7 +214,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                 cursor: 'pointer',
                             }}
                         >
-                            <span>Sort by: {sortMode === 'time' ? 'Time' : sortMode === 'score' ? 'Score' : 'Imported'}</span>
+                            <span>Sort by: {sorting.by === 'time' ? 'Time' : sorting.by === 'score' ? 'Score' : sorting.by === 'relevance' ? 'Relevance' : 'Imported'}</span>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: isSortOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
                                 <polyline points="6 9 12 15 18 9" />
                             </svg>
@@ -179,7 +225,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                 style={{
                                     position: 'absolute',
                                     top: '100%',
-                                    right: 0,
+                                    left: 0,
                                     marginTop: '4px',
                                     background: 'var(--surface)',
                                     border: '1px solid var(--border)',
@@ -191,15 +237,15 @@ export function JobList({ onJobClick }: JobListProps) {
                                 }}
                             >
                                 <button
-                                    onClick={() => { setSortMode('time'); setIsSortOpen(false); }}
+                                    onClick={() => handleSortChange('time')}
                                     style={{
                                         display: 'block',
                                         width: '100%',
                                         textAlign: 'left',
                                         padding: '8px 12px',
                                         fontSize: '13px',
-                                        background: sortMode === 'time' ? 'var(--accent-light)' : 'transparent',
-                                        color: sortMode === 'time' ? 'var(--accent)' : 'var(--text-primary)',
+                                        background: sorting.by === 'time' ? 'var(--accent-light)' : 'transparent',
+                                        color: sorting.by === 'time' ? 'var(--accent)' : 'var(--text-primary)',
                                         border: 'none',
                                         cursor: 'pointer',
                                     }}
@@ -207,31 +253,53 @@ export function JobList({ onJobClick }: JobListProps) {
                                     Time (Newest)
                                 </button>
                                 <button
-                                    onClick={() => { setSortMode('score'); setIsSortOpen(false); }}
+                                    onClick={() => handleSortChange('relevance')}
+                                    disabled={!isSignedIn}
+                                    title={!isSignedIn ? "Sign in for personalized ranking" : ""}
                                     style={{
                                         display: 'block',
                                         width: '100%',
                                         textAlign: 'left',
                                         padding: '8px 12px',
                                         fontSize: '13px',
-                                        background: sortMode === 'score' ? 'var(--accent-light)' : 'transparent',
-                                        color: sortMode === 'score' ? 'var(--accent)' : 'var(--text-primary)',
+                                        background: sorting.by === 'relevance' ? 'var(--accent-light)' : 'transparent',
+                                        color: !isSignedIn ? 'var(--text-tertiary)' : (sorting.by === 'relevance' ? 'var(--accent)' : 'var(--text-primary)'),
                                         border: 'none',
-                                        cursor: 'pointer',
+                                        cursor: isSignedIn ? 'pointer' : 'not-allowed',
+                                        opacity: isSignedIn ? 1 : 0.6
+                                    }}
+                                >
+                                    Relevance (Recommended)
+                                </button>
+                                <button
+                                    onClick={() => handleSortChange('score')}
+                                    disabled={!isSignedIn}
+                                    title={!isSignedIn ? "Sign in to sort by match score" : ""}
+                                    style={{
+                                        display: 'block',
+                                        width: '100%',
+                                        textAlign: 'left',
+                                        padding: '8px 12px',
+                                        fontSize: '13px',
+                                        background: sorting.by === 'score' ? 'var(--accent-light)' : 'transparent',
+                                        color: !isSignedIn ? 'var(--text-tertiary)' : (sorting.by === 'score' ? 'var(--accent)' : 'var(--text-primary)'),
+                                        border: 'none',
+                                        cursor: isSignedIn ? 'pointer' : 'not-allowed',
+                                        opacity: isSignedIn ? 1 : 0.6
                                     }}
                                 >
                                     Score (High to Low)
                                 </button>
                                 <button
-                                    onClick={() => { setSortMode('imported'); setIsSortOpen(false); }}
+                                    onClick={() => handleSortChange('imported')}
                                     style={{
                                         display: 'block',
                                         width: '100%',
                                         textAlign: 'left',
                                         padding: '8px 12px',
                                         fontSize: '13px',
-                                        background: sortMode === 'imported' ? 'var(--accent-light)' : 'transparent',
-                                        color: sortMode === 'imported' ? 'var(--accent)' : 'var(--text-primary)',
+                                        background: sorting.by === 'imported' ? 'var(--accent-light)' : 'transparent',
+                                        color: sorting.by === 'imported' ? 'var(--accent)' : 'var(--text-primary)',
                                         border: 'none',
                                         cursor: 'pointer',
                                     }}
@@ -242,63 +310,55 @@ export function JobList({ onJobClick }: JobListProps) {
                         )}
                     </div>
                 </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <p suppressHydrationWarning style={{ fontSize: '11px', color: 'var(--text-tertiary)', margin: 0 }}>
-                        Updated: {lastUpdated ? formatDistanceToNow(new Date(lastUpdated), { addSuffix: true }) : 'Never'}
-                    </p>
-                </div>
             </div>
 
-            {/* Job List */}
             <div
                 style={{
                     flex: 1,
                     overflowY: 'auto',
-                    padding: '12px',
+                    padding: '12px', // Compact padding
                 }}
             >
                 {isLoadingJobs ? (
-                    // Loading skeleton
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {[1, 2, 3, 4, 5].map((i) => (
-                            <div
-                                key={i}
-                                className="card loading-pulse"
-                                style={{ height: '120px', background: 'var(--surface)' }}
-                            />
-                        ))}
-                    </div>
-                ) : sortedJobs.length === 0 ? (
-                    // Empty state
-                    <div
-                        style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '300px',
-                            textAlign: 'center',
-                            color: 'var(--text-tertiary)',
-                        }}
-                    >
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '16px', opacity: 0.5 }}>
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                        <p style={{ fontSize: '14px', marginBottom: '8px' }}>No jobs found</p>
-                        <p style={{ fontSize: '12px' }}>Click &ldquo;Find Now&rdquo; to search for jobs</p>
-                    </div>
+                    <JobLoadingState />
+                ) : displayedJobs.length === 0 ? (
+
+                    searchMode ? (
+                        <SearchEmptyState />
+                    ) : (
+                        // Empty state for regular list
+                        <div
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '300px',
+                                textAlign: 'center',
+                                color: 'var(--text-tertiary)',
+                            }}
+                        >
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '16px', opacity: 0.5 }}>
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <p style={{ fontSize: '14px', marginBottom: '8px' }}>No jobs found</p>
+                            <p style={{ fontSize: '12px' }}>Click &ldquo;Find Now&rdquo; to refresh jobs</p>
+                        </div>
+                    )
                 ) : (
                     // Job cards
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {sortedJobs.map((job) => (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px' }}>
+                        {displayedJobs.map((job) => (
                             <div
                                 key={job.id}
-                                onClick={() => onJobClick(job)}
+                                onClick={() => {
+                                    onJobClick(job);
+                                    trackJobInteraction(job.id, 'view', { source: 'job_list', sort: sorting.by });
+                                }}
                                 className="card card-interactive"
                                 style={{
-                                    padding: '16px',
+                                    padding: '12px',
                                     cursor: 'pointer',
                                     borderColor: selectedJob?.id === job.id ? 'var(--accent)' : undefined,
                                     boxShadow: selectedJob?.id === job.id ? 'var(--shadow-glow)' : undefined,
@@ -306,10 +366,10 @@ export function JobList({ onJobClick }: JobListProps) {
                                 }}
                             >
                                 {/* Header with score */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
                                     <h3
                                         style={{
-                                            fontSize: '14px',
+                                            fontSize: '13px',
                                             fontWeight: 600,
                                             color: 'var(--text-primary)',
                                             lineHeight: 1.4,
@@ -320,55 +380,84 @@ export function JobList({ onJobClick }: JobListProps) {
                                     >
                                         {job.title}
                                     </h3>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        {job.isImported && (
-                                            <div
-                                                style={{
-                                                    background: 'var(--accent)',
-                                                    color: '#fff',
-                                                    fontSize: '10px',
-                                                    fontWeight: 700,
-                                                    padding: '3px 6px',
-                                                    borderRadius: '4px',
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                }}
-                                            >
-                                                Imported
-                                            </div>
-                                        )}
-                                        {job.match_score > 0 && (
-                                            <div
-                                                style={{
-                                                    background: getScoreColor(job.match_score),
-                                                    color: '#fff',
-                                                    fontSize: '12px',
-                                                    fontWeight: 700,
-                                                    padding: '2px 8px',
-                                                    borderRadius: '12px',
-                                                    minWidth: '32px',
-                                                    textAlign: 'center',
-                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                                }}
-                                            >
-                                                {job.match_score}
-                                            </div>
-                                        )}
-                                    </div>
+
+                                    {/* Action Buttons (Save) */}
+                                    {isSignedIn && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved');
+                                            }}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                color: job.status === 'saved' ? 'var(--accent)' : 'var(--text-tertiary)',
+                                                padding: '4px',
+                                                marginLeft: 'auto', // Push to the right
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                            title={job.status === 'saved' ? "Unsave" : "Save Job"}
+                                        >
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill={job.status === 'saved' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+                                            </svg>
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {job.isImported && (
+                                        <div
+                                            style={{
+                                                background: 'var(--accent)',
+                                                color: '#fff',
+                                                fontSize: '9px',
+                                                fontWeight: 700,
+                                                padding: '2px 4px',
+                                                borderRadius: '4px',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px',
+                                            }}
+                                        >
+                                            Imported
+                                        </div>
+                                    )}
+                                    {job.match_score > 0 && (
+                                        <div
+                                            style={{
+                                                background: getScoreColor(job.match_score),
+                                                color: '#fff',
+                                                fontSize: '11px',
+                                                fontWeight: 700,
+                                                padding: '1px 6px',
+                                                borderRadius: '12px',
+                                                minWidth: '28px',
+                                                textAlign: 'center',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                            }}
+                                        >
+                                            {job.match_score}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Company */}
-                                {job.company && (
-                                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                                        {job.company}
-                                    </div>
-                                )}
+                                {
+                                    job.company && (
+                                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                                            {job.company}
+                                        </div>
+                                    )
+                                }
 
                                 {/* Location & Posted */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
                                     {(job.location_display || job.location) && (
                                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
                                                 <circle cx="12" cy="10" r="3" />
                                             </svg>
@@ -392,7 +481,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                 {job.why && (
                                     <p
                                         style={{
-                                            fontSize: '12px',
+                                            fontSize: '11px',
                                             color: 'var(--text-secondary)',
                                             fontStyle: 'italic',
                                             lineHeight: 1.5,
@@ -404,6 +493,14 @@ export function JobList({ onJobClick }: JobListProps) {
                                 )}
                             </div>
                         ))}
+
+                        <Pagination
+                            currentPage={pagination.page}
+                            totalPages={pagination.totalPages}
+                            totalItems={pagination.total}
+                            limit={pagination.limit}
+                            onPageChange={(page) => setPagination({ page })}
+                        />
                     </div>
                 )}
             </div>

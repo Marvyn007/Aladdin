@@ -65,7 +65,7 @@ IMPORTANT:
 - Put club leadership, hackathon organizing, student organizations in "community_involvement"
 - Put paid work experience and internships in "roles"
 - Do not fabricate or assume any information
-Output JSON only, no explanation.\ `;
+Output JSON only, no explanation.`;
 
 
 
@@ -87,7 +87,7 @@ CRITICAL: Scores MUST be PRECISE (e.g., 73, 86, 41) - NEVER output round numbers
 ║ ❌ NEVER assume skills based on job title or company name                     ║
 ║ ✅ ONLY extract exact skill names that appear verbatim in the job text        ║
 ║ ✅ If no specific skills listed in job, return EMPTY ARRAYS [ ]               ║
-╚════════════════════════════════════════════════════════════════════════════════╝
+║ ╚════════════════════════════════════════════════════════════════════════════════╝
 
 DETAILED SCORING BREAKDOWN (Calculate each precisely):
 
@@ -112,13 +112,13 @@ DETAILED SCORING BREAKDOWN (Calculate each precisely):
 
 PRECISION RULES:
 - Final score MUST have a non-zero ones digit (e.g., 73 not 70, 41 not 40).
-- Add 1-4 points variance based on unique factors (culture hints, growth stack).\ `;
+- Add 1-4 points variance based on unique factors (culture hints, growth stack).`;
 
 // ============================================================================
 // EXPORTED PROMPTS
 // ============================================================================
 
-export const SCORER_PROMPT = `\${CORE_SCORING_LOGIC}
+export const SCORER_PROMPT = `${CORE_SCORING_LOGIC}
 
 FINAL SCORE CALCULATION:
 Add all sub-scores. The result MUST be a specific number between 0-100.
@@ -146,9 +146,9 @@ Output Format (strict JSON):
  "level_match":"exact|close|no",
  "why":"Brutally honest one-sentence explanation with specific reasoning (max 30 words)"
 }
-Return only JSON.\ `;
+Return only JSON.`;
 
-export const BATCH_SCORER_PROMPT = `\${CORE_SCORING_LOGIC}
+export const BATCH_SCORER_PROMPT = `${CORE_SCORING_LOGIC}
 
 DISTRIBUTION RULES (Relative Ranking):
 - Best job in this batch should be 85+
@@ -171,7 +171,7 @@ Output Format (strict JSON array):
   },
   ...
 ]
-Return only JSON array.\ `;
+Return only JSON array.`;
 
 export const TAILORED_RESUME_PROMPT = `System: You are a professional resume optimizer for software engineering jobs.
 You MUST NOT fabricate experience.You MAY enhance wording and add missing technologies ONLY when contextually reasonable.
@@ -266,7 +266,7 @@ OUTPUT FORMAT:
   "confidence_score": 0.0-1.0
 }
 
-Return only JSON.\ `;
+Return only JSON.`;
 
 export const COVER_LETTER_PROMPT = `System: You are a professional career coach and resume writer.
 Your goal is to write a highly effective, human-sounding cover letter that connects the candidate's unique background to the specific job requirements.
@@ -290,9 +290,9 @@ IMPORTANT:
 - Do NOT use placeholders like "[Company Name]" - verify the company name from the input.
 - Do NOT make up experience. Only use what is provided in the candidate info.
 - If information is missing, focus on the strengths present in the resume.
-\`;
+`;
 
-export const JOB_CLEANUP_PROMPT = \`System: You are an expert technical recruiter filtering a list of job postings.
+export const JOB_CLEANUP_PROMPT = `System: You are an expert technical recruiter filtering a list of job postings.
 Your specific goal is to identify "low quality", "irrelevant", or "spam" job listings that should be removed from a high-quality job board.
 
 Criteria for Deletion:
@@ -311,4 +311,4 @@ Output strict JSON:
 }
 
 Return an empty list if all jobs look legitimate.
-Output ONLY valid JSON.\ `;
+Output ONLY valid JSON.`;
