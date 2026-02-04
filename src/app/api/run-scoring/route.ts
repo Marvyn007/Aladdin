@@ -20,14 +20,20 @@ import type { ParsedResume } from '@/types';
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes for batch scoring
 
+import { auth } from '@clerk/nextjs/server';
+
 export async function POST(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const { searchParams } = new URL(request.url);
         const limit = parseInt(searchParams.get('limit') || '50');
 
         // 1. GET DEFAULT RESUME & LINKEDIN
-        let defaultResume = await getDefaultResume();
-        const linkedinProfile = await getLinkedInProfile();
+        let defaultResume = await getDefaultResume(userId);
+        const linkedinProfile = await getLinkedInProfile(userId);
 
         if (!defaultResume) {
             return NextResponse.json(
@@ -40,7 +46,7 @@ export async function POST(request: NextRequest) {
         if (!defaultResume.parsed_json || Object.keys(defaultResume.parsed_json).length === 0) {
             console.log(`[Scoring] Resume ${defaultResume.id} not parsed. Parsing now...`);
 
-            const resumeData = await getResumeById(defaultResume.id);
+            const resumeData = await getResumeById(userId, defaultResume.id);
 
             if (!resumeData || !resumeData.file_data) {
                 return NextResponse.json(
@@ -52,7 +58,7 @@ export async function POST(request: NextRequest) {
             try {
                 const parsed = await parseResumeFromPdf(resumeData.file_data);
                 defaultResume.parsed_json = parsed;
-                await updateResume(defaultResume.id, { parsed_json: parsed });
+                await updateResume(userId, defaultResume.id, { parsed_json: parsed });
             } catch (err: any) {
                 console.error('Resume parsing failed:', err);
                 return NextResponse.json(
@@ -86,7 +92,7 @@ export async function POST(request: NextRequest) {
         console.log(`[Scoring] Resume has ${resumeSkillNames.length} skills for matching`);
 
         // 3. FETCH FRESH JOBS
-        const jobs = await getJobs('fresh', limit);
+        const jobs = await getJobs(userId, 'fresh', limit);
         console.log(`[Scoring] Scoring ${jobs.length} fresh jobs...`);
 
         // 4. HYBRID SCORING
@@ -127,6 +133,7 @@ export async function POST(request: NextRequest) {
 
                 // Save to database with DETERMINISTIC skills (100% accurate)
                 await updateJobScore(
+                    userId,
                     job.id,
                     aiScore,
                     skillAnalysis.matched,    // ← DETERMINISTIC: Only skills literally in job text

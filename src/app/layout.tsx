@@ -1,9 +1,10 @@
-// Root layout component
+// Root layout component with Clerk authentication
 
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { ClerkProvider } from '@clerk/nextjs';
+import { ThemeRegistry } from "@/components/theme/ThemeRegistry";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,12 +31,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" className={inter.variable} suppressHydrationWarning>
+        <body className={inter.className} suppressHydrationWarning>
+          <ThemeRegistry>
+            {children}
+          </ThemeRegistry>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

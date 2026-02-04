@@ -14,8 +14,14 @@ import type { ScrapeResult } from '@/lib/job-scraper-fetch';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow longer for scraping
 
+import { auth } from '@clerk/nextjs/server';
+
 export async function POST(req: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const { url } = await req.json();
 
         if (!url) {
@@ -50,7 +56,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Insert job with all new fields
-        const newJob = await insertJob({
+        const newJob = await insertJob(userId, {
             title: scrapeResult.title,
             company: scrapeResult.company,
             location: scrapeResult.location,
@@ -78,8 +84,8 @@ export async function POST(req: NextRequest) {
         console.log('[Import] Job inserted:', newJob.id);
 
         // Scoring with DETERMINISTIC skill matching
-        const defaultResume = await getDefaultResume();
-        const linkedinProfile = await getLinkedInProfile();
+        const defaultResume = await getDefaultResume(userId);
+        const linkedinProfile = await getLinkedInProfile(userId);
         let score = 0;
         let matchedSkills: string[] = [];
         let missingSkills: string[] = [];
@@ -89,11 +95,11 @@ export async function POST(req: NextRequest) {
             // Lazy parse resume if needed
             if (!defaultResume.parsed_json || Object.keys(defaultResume.parsed_json).length === 0) {
                 console.log('[Import] Parsing default resume for first time...');
-                const resumeData = await getResumeById(defaultResume.id);
+                const resumeData = await getResumeById(userId, defaultResume.id);
                 if (resumeData?.file_data) {
                     const parsed = await parseResumeFromPdf(resumeData.file_data);
                     defaultResume.parsed_json = parsed;
-                    await updateResume(defaultResume.id, { parsed_json: parsed });
+                    await updateResume(userId, defaultResume.id, { parsed_json: parsed });
                 }
             }
 
@@ -141,6 +147,7 @@ export async function POST(req: NextRequest) {
             }
 
             await updateJobScore(
+                userId,
                 newJob.id,
                 score,
                 matchedSkills,    // ← DETERMINISTIC: 100% accurate

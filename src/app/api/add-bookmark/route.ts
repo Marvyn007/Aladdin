@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertJob } from '@/lib/db';
 import { normalizeText, validateJobCriteria } from '@/lib/job-utils';
+import { auth } from '@clerk/nextjs/server';
 
 interface BookmarkPayload {
     title: string;
@@ -69,6 +70,11 @@ function extractJobInfo(title: string, text: string, url: string): {
 
 export async function POST(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const payload: BookmarkPayload = await request.json();
 
         if (!payload.title || !payload.url) {
@@ -106,7 +112,7 @@ export async function POST(request: NextRequest) {
 
         // Insert job
         try {
-            const job = await insertJob({
+            const job = await insertJob(userId, {
                 title: jobInfo.title,
                 company: jobInfo.company,
                 location: jobInfo.location,

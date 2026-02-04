@@ -1,71 +1,24 @@
-// API Route: POST /api/upload-resume
-// Upload a PDF resume, parse it with Gemini, and store the result
 
 import { NextRequest, NextResponse } from 'next/server';
-import { insertResume, getResumes, setDefaultResume } from '@/lib/db';
+import {
+    getResumes,
+    insertResume,
+    deleteResume,
+    setDefaultResume
+} from '@/lib/db';
+import { auth } from '@clerk/nextjs/server';
 
-// Force Node.js runtime (not Edge) for file buffer handling
 export const runtime = 'nodejs';
-
-export async function POST(request: NextRequest) {
-    try {
-        const formData = await request.formData();
-        const file = formData.get('file') as File | null;
-        const setAsDefault = formData.get('setAsDefault') === 'true';
-
-        if (!file) {
-            return NextResponse.json(
-                { error: 'No file provided' },
-                { status: 400 }
-            );
-        }
-
-        // Validate file type
-        if (!file.name.toLowerCase().endsWith('.pdf')) {
-            return NextResponse.json(
-                { error: 'Only PDF files are allowed' },
-                { status: 400 }
-            );
-        }
-
-        // Get file buffer
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        // Check if this is the first resume (should be default)
-        const existingResumes = await getResumes();
-        const shouldBeDefault = setAsDefault || existingResumes.length === 0;
-
-        // Store in database WITHOUT parsing (Lazy parsing happens later)
-        const resume = await insertResume(
-            file.name,
-            {} as any, // parsedJson null/empty initially
-            shouldBeDefault,
-            buffer
-        );
-
-        return NextResponse.json({
-            success: true,
-            resume: {
-                id: resume.id,
-                filename: resume.filename,
-                is_default: resume.is_default,
-                parsed_json: null, // Explicitly null
-            },
-        });
-    } catch (error) {
-        console.error('Error uploading resume:', error);
-        return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Failed to upload resume' },
-            { status: 500 }
-        );
-    }
-}
 
 // GET: List all resumes
 export async function GET() {
     try {
-        const resumes = await getResumes();
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const resumes = await getResumes(userId);
         return NextResponse.json({ resumes });
     } catch (error) {
         console.error('Error fetching resumes:', error);
@@ -76,51 +29,66 @@ export async function GET() {
     }
 }
 
-// PUT: Set a resume as default
-export async function PUT(request: NextRequest) {
+// POST: Upload a new resume
+export async function POST(request: NextRequest) {
     try {
-        const { resumeId } = await request.json();
-
-        if (!resumeId) {
-            return NextResponse.json(
-                { error: 'Resume ID is required' },
-                { status: 400 }
-            );
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        await setDefaultResume(resumeId);
+        const formData = await request.formData();
+        const file = formData.get('file') as File | null;
+        const setAsDefault = formData.get('setAsDefault') === 'true';
 
-        return NextResponse.json({ success: true });
+        if (!file) {
+            return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+        }
+
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            return NextResponse.json({ error: 'Only PDF files are allowed' }, { status: 400 });
+        }
+
+        const buffer = Buffer.from(await file.arrayBuffer());
+
+        // Insert resume (lazy parsing assumed or not triggered here, standard insertResume logic)
+        // Note: insertResume signature: (userId, filename, parsedJson, isDefault, fileData)
+        // We pass empty object for parsedJson initially, usually parsed later or if fileData is passed, maybe db parses? 
+        // No, based on upload-linkedin, we pass empty object.
+        const resume = await insertResume(
+            userId,
+            file.name,
+            {} as any,
+            setAsDefault,
+            buffer
+        );
+
+        return NextResponse.json({ success: true, resume });
     } catch (error) {
-        console.error('Error setting default resume:', error);
+        console.error('Error uploading resume:', error);
         return NextResponse.json(
-            { error: 'Failed to set default resume' },
+            { error: 'Failed to upload resume' },
             { status: 500 }
         );
     }
 }
 
-// PATCH: Set default or other actions
+// PATCH: Update resume (e.g. set default)
 export async function PATCH(request: NextRequest) {
     try {
-        const { resumeId, action } = await request.json();
-
-        if (!resumeId) {
-            return NextResponse.json(
-                { error: 'Resume ID is required' },
-                { status: 400 }
-            );
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (action === 'setDefault') {
-            await setDefaultResume(resumeId);
+        const { resumeId, action } = await request.json();
+
+        if (action === 'setDefault' && resumeId) {
+            await setDefaultResume(userId, resumeId);
             return NextResponse.json({ success: true });
         }
 
-        return NextResponse.json(
-            { error: 'Invalid action' },
-            { status: 400 }
-        );
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     } catch (error) {
         console.error('Error updating resume:', error);
         return NextResponse.json(
@@ -133,19 +101,19 @@ export async function PATCH(request: NextRequest) {
 // DELETE: Delete a resume
 export async function DELETE(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
 
         if (!id) {
-            return NextResponse.json(
-                { error: 'Resume ID is required' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: 'Resume ID is required' }, { status: 400 });
         }
 
-        const { deleteResume } = await import('@/lib/db');
-        await deleteResume(id);
-
+        await deleteResume(userId, id);
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error deleting resume:', error);

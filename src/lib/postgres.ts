@@ -70,6 +70,34 @@ function isTransientError(error: any): boolean {
     return code && (code.startsWith('08') || code === '57P01' || code === '57P02' || code === '57P03');
 }
 
+
+export async function executeWithUser<T>(userId: string, callback: (client: PoolClient) => Promise<T>): Promise<T> {
+    const pool = getPostgresPool();
+    const client = await pool.connect();
+    try {
+        // Set the user ID for RLS policies (Supabase/Postgres compatible)
+        // 1. Ensure user exists (Fix FK constraint)
+        // Note: Some DB schemas have both id and user_id columns, so we set both
+        await client.query(`
+            INSERT INTO users (id, created_at) 
+            VALUES ($1, NOW()) 
+            ON CONFLICT (id) DO NOTHING
+        `, [userId]);
+
+        // 2. Set the user ID for RLS policies
+        // is_local=true means it applies ONLY to the current transaction (safer for pooling)
+        await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [userId]);
+
+        // Execute the actual query callback
+        return await callback(client);
+    } finally {
+        // Clean up session variables to be safe
+        // Setting to NULL effectively clears it
+        await client.query("SELECT set_config('request.jwt.claim.sub', NULL, false)");
+        client.release();
+    }
+}
+
 export async function closePostgresPool() {
     if (pool) {
         await pool.end();

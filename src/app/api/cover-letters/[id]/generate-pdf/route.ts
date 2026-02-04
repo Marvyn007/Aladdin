@@ -5,11 +5,17 @@ import { uploadFileToS3, generateS3Key, getSignedDownloadUrl } from '@/lib/s3';
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow up to 60 seconds for PDF generation
 
+import { auth } from '@clerk/nextjs/server';
+
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const { id } = await params;
         const { content_html } = await request.json();
 
@@ -18,7 +24,7 @@ export async function POST(
         }
 
         // Verify cover letter exists
-        const coverLetter = await getCoverLetterById(id);
+        const coverLetter = await getCoverLetterById(userId, id);
         if (!coverLetter) {
             return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 });
         }
@@ -29,7 +35,7 @@ export async function POST(
             .replace(/on\w+="[^"]*"/g, "");
 
         // Update DB with latest content
-        await updateCoverLetter(id, { content_html: sanitizedHtml });
+        await updateCoverLetter(userId, id, { content_html: sanitizedHtml });
 
         // Generate PDF using Puppeteer
         // Use different setup for Vercel (serverless) vs local
@@ -93,7 +99,7 @@ export async function POST(
         // Get signed URL with download disposition
         const signedUrl = await getSignedDownloadUrl(s3Key, 3600, 'cover_letter.pdf');
 
-        await updateCoverLetter(id, {
+        await updateCoverLetter(userId, id, {
             s3_key: s3Key,
             pdf_blob_url: signedUrl,
             status: 'generated'

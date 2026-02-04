@@ -1,7 +1,7 @@
 // TypeScript types for job-hunt-vibe application
 
 // Job-related types
-export type JobStatus = 'fresh' | 'archived';
+export type JobStatus = 'fresh' | 'archived' | 'saved';
 
 export interface Job {
   id: string;
@@ -34,6 +34,14 @@ export interface Job {
   source_host?: string | null;
   scraped_at?: string | null;
   extraction_confidence?: { description: number; date: number; location: number } | null;
+
+  // Geolocation
+  latitude?: number | null;
+  longitude?: number | null;
+  geo_resolved?: boolean;
+  geo_confidence?: number | null;
+  geo_source?: string | null;
+  location_raw?: string | null;
 }
 
 export interface JobWithApplication extends Job {

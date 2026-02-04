@@ -474,10 +474,10 @@ export interface EnhancedGenerationResult {
  */
 export async function generateEnhancedTailoredResume(
     jobId: string,
+    userId: string,
     jobDescription?: string,
     jobUrl?: string,
     resumeId?: string,
-    userId: string = 'default'
 ): Promise<EnhancedGenerationResult> {
     const startTime = Date.now();
 
@@ -507,7 +507,7 @@ export async function generateEnhancedTailoredResume(
             effectiveJobDescription = await fetchJobDescriptionFromUrl(jobUrl);
         }
         if (!effectiveJobDescription && jobId) {
-            const job = await getJobById(jobId);
+            const job = await getJobById(userId, jobId);
             effectiveJobDescription = job?.raw_text_summary || job?.normalized_text || '';
         }
 
@@ -522,11 +522,11 @@ export async function generateEnhancedTailoredResume(
         // Get resume data
         let resumeData = null;
         if (resumeId) {
-            resumeData = await getResumeById(resumeId);
+            resumeData = await getResumeById(userId, resumeId);
         } else {
-            const defaultResume = await getDefaultResume();
+            const defaultResume = await getDefaultResume(userId);
             if (defaultResume) {
-                resumeData = await getResumeById(defaultResume.id);
+                resumeData = await getResumeById(userId, defaultResume.id);
             }
         }
 
@@ -542,7 +542,7 @@ export async function generateEnhancedTailoredResume(
         let parsedResume = resumeData.resume.parsed_json;
         if (!parsedResume && resumeData.file_data) {
             parsedResume = await parseResumeFromPdf(resumeData.file_data);
-            await updateResume(resumeData.resume.id, { parsed_json: parsedResume });
+            await updateResume(userId, resumeData.resume.id, { parsed_json: parsedResume });
         }
 
         if (!parsedResume) {
@@ -554,7 +554,7 @@ export async function generateEnhancedTailoredResume(
         }
 
         // Get LinkedIn data if available
-        const linkedIn = await getLinkedInProfile();
+        const linkedIn = await getLinkedInProfile(userId);
 
         // Build the prompt
         const resumeText = JSON.stringify(parsedResume, null, 2).substring(0, 8000);

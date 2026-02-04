@@ -121,6 +121,7 @@ function initializeSchema(database: DatabaseType): void {
       fresh_limit INTEGER DEFAULT 300,
       last_updated TEXT,
       excluded_keywords TEXT, -- JSON array
+      theme_preferences TEXT, -- JSON: {accent, background, secondary, border}
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -130,6 +131,14 @@ function initializeSchema(database: DatabaseType): void {
       status TEXT DEFAULT 'healthy', -- healthy, rate_limited, disabled_free_tier_exhausted, disabled_billing
       calls_today INTEGER DEFAULT 0,
       last_reset TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Users table (for custom usernames)
+    CREATE TABLE IF NOT EXISTS users (
+      user_id TEXT PRIMARY KEY,
+      username TEXT UNIQUE,
+      created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -144,6 +153,7 @@ function initializeSchema(database: DatabaseType): void {
     CREATE INDEX IF NOT EXISTS idx_applications_job_id ON applications(job_id);
     CREATE INDEX IF NOT EXISTS idx_applications_column ON applications(column_name);
     CREATE INDEX IF NOT EXISTS idx_resumes_default ON resumes(is_default);
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
   `);
 
   // Run migrations for existing databases
@@ -210,6 +220,13 @@ function runMigrations(database: DatabaseType): void {
     database.exec("ALTER TABLE app_settings ADD COLUMN excluded_keywords TEXT");
     console.log('Migration: excluded_keywords added successfully.');
   }
+
+  // Migration: Add theme_preferences to app_settings
+  if (!settingsInfo.some(col => col.name === 'theme_preferences')) {
+    console.log('Migration: Adding theme_preferences to app_settings...');
+    database.exec("ALTER TABLE app_settings ADD COLUMN theme_preferences TEXT");
+    console.log('Migration: theme_preferences added successfully.');
+  }
 }
 
 // Helper functions for SQLite operations
@@ -231,7 +248,7 @@ export function archiveOldJobs(): number {
     UPDATE jobs
     SET status = 'archived', updated_at = datetime('now')
     WHERE status = 'fresh'
-    AND datetime(fetched_at) < datetime('now', '-24 hours')
+    AND datetime(fetched_at) < datetime('now', '-365 days')
   `);
   const result = stmt.run();
   return result.changes;
@@ -247,7 +264,7 @@ export function purgeOldArchives(): number {
     WHERE job_id IN (
       SELECT id FROM jobs
       WHERE status = 'archived'
-      AND datetime(fetched_at) < datetime('now', '-7 days')
+      AND datetime(fetched_at) < datetime('now', '-3650 days')
     )
   `).run();
 
@@ -256,14 +273,14 @@ export function purgeOldArchives(): number {
     WHERE job_id IN (
       SELECT id FROM jobs
       WHERE status = 'archived'
-      AND datetime(fetched_at) < datetime('now', '-7 days')
+      AND datetime(fetched_at) < datetime('now', '-3650 days')
     )
   `).run();
 
   const stmt = database.prepare(`
     DELETE FROM jobs
     WHERE status = 'archived'
-    AND datetime(fetched_at) < datetime('now', '-7 days')
+    AND datetime(fetched_at) < datetime('now', '-3650 days')
   `);
   const result = stmt.run();
   return result.changes;

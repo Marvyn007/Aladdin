@@ -442,11 +442,19 @@ body {
 
 /* ===== RESPONSIVE DESIGN SYSTEM ===== */
 
+/* 
+ * Layout Priority (highest to lowest):
+ * 1. Sidebar - Fixed width, labels always readable
+ * 2. Job List - Fixed width, never shrinks  
+ * 3. Job Details - Flexible, shrinks first
+ * 4. Mobile - Sidebar becomes menu, job list primary
+ */
+
 /* Responsive Variables */
 :root {
-  --sidebar-width-expanded: 100px;
-  --sidebar-width-collapsed: 56px;
-  --job-list-width: 300px;
+  --sidebar-width: 200px;
+  --sidebar-width-collapsed: 68px;
+  --job-list-width: 630px;
   --mobile-header-height: 56px;
   --touch-target-min: 44px;
 }
@@ -456,7 +464,6 @@ body {
   display: flex;
   height: 100vh;
   height: 100dvh;
-  /* Dynamic viewport height for mobile browsers */
   overflow: hidden;
   position: relative;
 }
@@ -525,17 +532,18 @@ body {
   height: 24px;
 }
 
-/* ===== RESPONSIVE SIDEBAR ===== */
+/* ===== SIDEBAR - Fixed width, priority 1 ===== */
 .sidebar {
-  width: var(--sidebar-width-expanded);
-  min-width: var(--sidebar-width-expanded);
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
   height: 100vh;
   height: 100dvh;
   background: var(--background);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: width 0.2s ease, min-width 0.2s ease, transform 0.3s ease;
+  transition: width 0.25s ease, min-width 0.25s ease, transform 0.3s ease;
   overflow: hidden;
   flex-shrink: 0;
   z-index: 100;
@@ -544,6 +552,7 @@ body {
 .sidebar.collapsed {
   width: var(--sidebar-width-collapsed);
   min-width: var(--sidebar-width-collapsed);
+  max-width: var(--sidebar-width-collapsed);
 }
 
 /* Sidebar Overlay for Mobile */
@@ -563,11 +572,11 @@ body {
   pointer-events: auto;
 }
 
-/* ===== RESPONSIVE JOB LIST ===== */
+/* ===== JOB LIST - Fixed width, priority 2, NEVER shrinks ===== */
 .job-list-container {
   width: var(--job-list-width);
-  min-width: 320px;
-  max-width: 450px;
+  min-width: var(--job-list-width);
+  max-width: var(--job-list-width);
   height: 100%;
   background: var(--background);
   border-right: 1px solid var(--border);
@@ -575,10 +584,10 @@ body {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
-  transition: width 0.2s ease;
+  transition: width 0.25s ease;
 }
 
-/* ===== RESPONSIVE JOB DETAIL ===== */
+/* ===== JOB DETAIL - Flexible, priority 3, shrinks first ===== */
 .job-detail-container {
   flex: 1;
   height: 100%;
@@ -586,7 +595,7 @@ body {
   flex-direction: column;
   background: var(--background);
   overflow: hidden;
-  min-width: 0;
+  min-width: var(--job-detail-min-width);
 }
 
 /* Mobile Back Button */
@@ -603,6 +612,13 @@ body {
   cursor: pointer;
   border-radius: var(--radius-md);
   margin-right: auto;
+}
+
+/* Master-Detail view shows back button (Logic handled in Component) */
+@media (max-width: 1200px) {
+  .mobile-back-btn {
+    display: flex;
+  }
 }
 
 .mobile-back-btn:hover {
@@ -657,8 +673,6 @@ body {
   background: var(--background-secondary);
   padding: 0 16px;
   flex-shrink: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .view-tab {
@@ -685,70 +699,91 @@ body {
   color: var(--text-primary);
 }
 
-/* ===== TABLET BREAKPOINT (768px - 1024px) ===== */
-@media (max-width: 1024px) {
+/* ===== COMPACT LOGO BREAKPOINT (900px - 1200px) - Use A icon, sidebar stays open ===== */
+@media (max-width: 1200px) {
   :root {
-    --job-list-width: 320px;
-  }
-
-  .sidebar {
-    width: var(--sidebar-width-collapsed);
-    min-width: var(--sidebar-width-collapsed);
-  }
-
-  .sidebar.expanded {
-    width: var(--sidebar-width-expanded);
-    min-width: var(--sidebar-width-expanded);
+    /* Job list becomes flexible/full width in master-detail mode */
+    --job-list-width: 100%;
+    --job-detail-min-width: 0;
   }
 
   .job-list-container {
-    width: var(--job-list-width);
-    min-width: 280px;
+    width: 100%;
+    max-width: none;
+    border-right: none;
   }
 
-  .kanban-column {
-    min-width: 160px;
-    max-width: 200px;
-  }
-
-  .view-tab {
-    padding: 12px 16px;
-    font-size: 13px;
-  }
-
-  .btn {
-    padding: 8px 14px;
-    font-size: 13px;
+  .job-detail-container {
+    min-width: 0;
   }
 }
 
-/* ===== MOBILE BREAKPOINT (< 768px) ===== */
-@media (max-width: 767px) {
+/* ===== SIDEBAR COLLAPSE BREAKPOINT (768px - 900px) - Sidebar collapses to icons ===== */
+/* ===== TABLET & MOBILE (< 900px) - Drawer Menu & Header ===== */
+@media (max-width: 900px) {
   :root {
-    --job-list-width: 100%;
+    --sidebar-width: 0px;
+    /* Occupies 0 space in flow */
   }
 
-  /* Show mobile header */
+  /* Header */
   .mobile-header {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    padding: 0 16px;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+
+  .mobile-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--text-primary);
+  }
+
+  .mobile-header-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
   }
 
   .hamburger-btn {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-left: -8px;
+    color: var(--text-secondary);
   }
 
-  /* Sidebar becomes off-canvas drawer */
+  /* Sidebar Drawer */
   .sidebar {
     position: fixed;
-    left: 0;
     top: 0;
-    width: 280px;
-    min-width: 280px;
+    left: 0;
+    bottom: 0;
+    width: 280px !important;
+    /* Force drawer width */
+    min-width: 280px !important;
+    max-width: 280px !important;
     transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 100;
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-xl);
+    border-right: none;
+    display: flex !important;
+    /* Ensure flex layout inside */
+    visibility: visible !important;
+    /* Ensure not hidden by other rules */
   }
 
   .sidebar.mobile-open {
@@ -757,28 +792,34 @@ body {
 
   .sidebar-overlay {
     display: block;
+    z-index: 90;
   }
 
-  /* Job list takes full width on mobile */
-  .job-list-container {
+  /* Adjust content to fill width since sidebar is fixed */
+  .main-content {
     width: 100%;
-    min-width: 100%;
-    max-width: 100%;
-    border-right: none;
+    margin-left: 0;
   }
 
-  /* Job detail becomes overlay on mobile */
-  .job-detail-container {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
+  .app-container {
+    flex-direction: column;
   }
 
-  .job-detail-container.mobile-visible {
-    transform: translateX(0);
+  /* Kanban adjustments for tablet */
+  .kanban-column {
+    min-width: 160px;
+    max-width: 200px;
   }
+}
+
+/* ===== MOBILE BREAKPOINT (< 768px) - Sidebar becomes menu ===== */
+/* ===== MOBILE ADJUSTMENTS (< 768px) ===== */
+@media (max-width: 767px) {
+  /* Inherits Drawer logic from <900px */
+
+  /* Just padding/sizing tweaks */
+
+
 
   .mobile-back-btn {
     display: flex;
@@ -844,8 +885,10 @@ body {
 /* ===== SMALL MOBILE (< 375px) ===== */
 @media (max-width: 374px) {
   .sidebar {
-    width: 100%;
-    min-width: 100%;
+    /* Keep it collapsed even on tiny screens, asking uses to scroll horizontally if needed or just fit */
+    width: var(--sidebar-width-collapsed);
+    min-width: var(--sidebar-width-collapsed);
+    max-width: var(--sidebar-width-collapsed);
   }
 
   .kanban-column {
@@ -862,12 +905,14 @@ body {
 /* ===== LARGE DESKTOP (> 1440px) ===== */
 @media (min-width: 1440px) {
   :root {
-    --job-list-width: 420px;
-    --sidebar-width-expanded: 240px;
+    --job-list-width: 380px;
+    --sidebar-width: 220px;
   }
 
   .job-list-container {
-    max-width: 500px;
+    width: var(--job-list-width);
+    min-width: var(--job-list-width);
+    max-width: var(--job-list-width);
   }
 
   .kanban-column {

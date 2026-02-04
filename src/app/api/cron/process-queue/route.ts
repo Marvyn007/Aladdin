@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { getPendingCoverLetters } from '@/lib/db';
+import { getPendingCoverLettersSystem } from '@/lib/db';
 import { performCoverLetterGeneration } from '@/lib/cover-letter-service';
 
 export const dynamic = 'force-dynamic'; // Ensure not cached
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     }
 
     try {
-        const pending = await getPendingCoverLetters(5); // Process 5 at a time
+        const pending = await getPendingCoverLettersSystem(5); // Process 5 at a time
 
         if (pending.length === 0) {
             return NextResponse.json({ message: 'No pending tasks', processed: 0 });
@@ -31,6 +31,7 @@ export async function GET(request: Request) {
         for (const task of pending) {
             console.log(`[Queue] Processing task ${task.id} for job ${task.job_id}`);
             const result = await performCoverLetterGeneration(
+                task.user_id,
                 task.job_id,
                 task.resume_id || undefined,
                 task.id // Update existing record

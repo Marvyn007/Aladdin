@@ -11,8 +11,14 @@ import {
 import { generateCoverLetter, parseResumeFromPdf } from '@/lib/gemini';
 import { performCoverLetterGeneration, queueCoverLetterGeneration } from '@/lib/cover-letter-service';
 
+import { auth } from '@clerk/nextjs/server';
+
 export async function POST(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const { job_id, resume_id, queue, job_description } = await request.json();
 
         if (!job_id) {
@@ -21,7 +27,7 @@ export async function POST(request: NextRequest) {
 
         // Handle Queue Request
         if (queue) {
-            const coverLetter = await queueCoverLetterGeneration(job_id, resume_id);
+            const coverLetter = await queueCoverLetterGeneration(userId, job_id, resume_id);
             return NextResponse.json({
                 success: true,
                 queued: true,
@@ -31,7 +37,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Handle Immediate Generation
-        const result = await performCoverLetterGeneration(job_id, resume_id, undefined, job_description);
+        const result = await performCoverLetterGeneration(userId, job_id, resume_id, undefined, job_description);
 
         if (result.success && result.coverLetter) {
             return NextResponse.json({

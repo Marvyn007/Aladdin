@@ -25,23 +25,24 @@ export interface TailoredResumeGenerationResult {
  * Handles lazy parsing, LinkedIn data, and AI generation.
  */
 export async function performTailoredResumeGeneration(
+    userId: string,
     jobId: string,
     jobDescription: string,
     resumeId?: string
 ): Promise<TailoredResumeGenerationResult> {
     try {
         // 1. Get Job (for context)
-        const job = await getJobById(jobId);
+        const job = await getJobById(userId, jobId);
         if (!job) throw new Error('Job not found');
 
         // 2. Get Resume
         let resumeData = null;
         if (resumeId) {
-            resumeData = await getResumeById(resumeId);
+            resumeData = await getResumeById(userId, resumeId);
         } else {
-            const defaultResume = await getDefaultResume();
+            const defaultResume = await getDefaultResume(userId);
             if (defaultResume) {
-                resumeData = await getResumeById(defaultResume.id);
+                resumeData = await getResumeById(userId, defaultResume.id);
             }
         }
 
@@ -53,7 +54,7 @@ export async function performTailoredResumeGeneration(
             console.log(`[TailoredResume] Lazy parsing resume ${resumeData.resume.id}`);
             try {
                 parsedResume = await parseResumeFromPdf(resumeData.file_data);
-                await updateResume(resumeData.resume.id, { parsed_json: parsedResume });
+                await updateResume(userId, resumeData.resume.id, { parsed_json: parsedResume });
             } catch (err) {
                 console.error("Failed to parse resume:", err);
                 throw new Error("Failed to parse resume PDF");
@@ -63,7 +64,7 @@ export async function performTailoredResumeGeneration(
         if (!parsedResume) throw new Error('Resume could not be parsed');
 
         // 4. Get LinkedIn (Optional)
-        const linkedInProfile = await getLinkedInProfile();
+        const linkedInProfile = await getLinkedInProfile(userId);
 
         // 5. Use provided job description OR fallback to stored text
         const effectiveJobDescription = jobDescription || job.normalized_text || job.raw_text_summary || '';

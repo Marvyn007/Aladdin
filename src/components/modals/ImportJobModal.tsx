@@ -5,9 +5,10 @@ import { useStore } from '@/store/useStore';
 
 interface ImportJobModalProps {
     onClose: () => void;
+    onImportSuccess?: () => void;
 }
 
-export function ImportJobModal({ onClose }: ImportJobModalProps) {
+export function ImportJobModal({ onClose, onImportSuccess }: ImportJobModalProps) {
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -43,6 +44,8 @@ export function ImportJobModal({ onClose }: ImportJobModalProps) {
             if (data.success) {
                 addImportedJob(data.job);
                 setSuccess({ job: data.job });
+                if (onImportSuccess) onImportSuccess();
+
                 // Auto-close after showing success
                 setTimeout(() => {
                     onClose();

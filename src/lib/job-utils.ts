@@ -63,6 +63,12 @@ export function isUSLocation(location: string | null): boolean {
         'los angeles', 'chicago', 'boston', 'austin', 'denver', 'atlanta',
     ];
 
+    // Exclude explicit non-US locations that might partially match
+    const excluded = ['canada', 'toronto', 'vancouver', 'montreal', 'london', 'uk', 'united kingdom', 'germany', 'berlin', 'paris', 'france'];
+    if (excluded.some(ex => normalized.includes(ex))) {
+        return false;
+    }
+
     return usIndicators.some(indicator => normalized.includes(indicator));
 }
 

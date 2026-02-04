@@ -95,7 +95,7 @@ export function ResumeSelector({ onClose }: ResumeSelectorProps) {
     };
 
     const handlePreview = (resume: Resume) => {
-        setPreviewUrl(`/api/resume/${resume.id}`);
+        setPreviewUrl(`/api/resumes/${resume.id}/preview`);
         setPreviewTitle(resume.filename);
     };
 

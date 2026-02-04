@@ -2,13 +2,19 @@
 // Upload a LinkedIn PDF export, parse it with Gemini, and store the result
 
 import { NextRequest, NextResponse } from 'next/server';
-import { insertLinkedInProfile, getLinkedInProfile } from '@/lib/db';
+import { insertLinkedInProfile, getLinkedInProfile, getAllLinkedInProfiles } from '@/lib/db';
+import { auth } from '@clerk/nextjs/server';
 
 // Force Node.js runtime (not Edge) for file buffer handling
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const formData = await request.formData();
         const file = formData.get('file') as File | null;
 
@@ -33,6 +39,7 @@ export async function POST(request: NextRequest) {
 
         // Store in database WITHOUT parsing
         const profile = await insertLinkedInProfile(
+            userId,
             file.name,
             {} as any, // parsedJson null/empty
             buffer
@@ -58,8 +65,12 @@ export async function POST(request: NextRequest) {
 // GET: Get all LinkedIn profiles
 export async function GET() {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const { getAllLinkedInProfiles } = await import('@/lib/db');
-        const profiles = await getAllLinkedInProfiles();
+        const profiles = await getAllLinkedInProfiles(userId);
         return NextResponse.json({ profiles });
     } catch (error) {
         console.error('Error fetching LinkedIn profiles:', error);

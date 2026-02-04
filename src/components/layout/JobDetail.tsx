@@ -3,7 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useStore } from '@/store/useStore';
+import { useStore, useStoreActions } from '@/store/useStore';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -18,11 +18,196 @@ interface JobDetailProps {
     // Mobile responsive props
     isMobileVisible?: boolean;
     onBack?: () => void;
+    isAuthenticated?: boolean;
 }
 
-export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGenerateTailoredResume, applicationStatus, isMobileVisible, onBack }: JobDetailProps) {
+// Notion-like text parser and renderer
+function JobDescriptionRenderer({ text }: { text: string }) {
+    if (!text) return null;
+
+    // Helper to auto-link emails and bold money
+    const enhanceText = (content: string): React.ReactNode => {
+        // First, handle money highlighting
+        const highlightMoney = (text: string): React.ReactNode[] => {
+            // Regex for money: starts with $ followed by digit, continues with specific chars
+            // allowed: digits, commas, dots, hyphens, " - " (space hyphen space), B, M, /hr, /hour, /wk, /week
+            const moneyRegex = /(\$\d(?:[\d,.\-BM]|(?: - )|(?:\/(?:hr|hour|wk|week)))*)/g;
+
+            return text.split(moneyRegex).map((part, i) => {
+                if (part.match(/^\$\d/)) {
+                    return <strong key={`money-${i}`} style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{part}</strong>;
+                }
+                return part;
+            });
+        };
+
+        // Then, handle email linking
+        const parts = content.split(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g);
+
+        return parts.map((part, i) => {
+            // Check if it's an email
+            if (part.match(/^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+$/)) {
+                return (
+                    <a
+                        key={`email-${i}`}
+                        href={`mailto:${part}`}
+                        style={{ color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {part}
+                    </a>
+                );
+            }
+
+            // If not email, apply money highlighting
+            // Since highlightMoney returns an array, we need to handle that
+            return <span key={`text-${i}`}>{highlightMoney(part)}</span>;
+        });
+    };
+
+    // Split into lines
+    const lines = text.split(/\r?\n/);
+    const blocks: React.ReactNode[] = [];
+
+    let currentTextBuffer: string[] = [];
+    let currentListBuffer: string[] = [];
+
+    const flushText = () => {
+        if (currentTextBuffer.length > 0) {
+            blocks.push(
+                <p
+                    key={`text-${blocks.length}`}
+                    style={{
+                        marginBottom: '12px',
+                        lineHeight: '1.6',
+                        fontSize: '14px',
+                        color: 'var(--text-primary)',
+                        whiteSpace: 'pre-wrap'
+                    }}
+                >
+                    {enhanceText(currentTextBuffer.join('\n'))}
+                </p>
+            );
+            currentTextBuffer = [];
+        }
+    };
+
+    const flushList = () => {
+        if (currentListBuffer.length > 0) {
+            blocks.push(
+                <ul
+                    key={`list-${blocks.length}`}
+                    style={{
+                        marginTop: '4px',
+                        marginBottom: '12px',
+                        paddingLeft: '20px',
+                        listStyleType: 'disc',
+                        color: 'var(--text-secondary)'
+                    }}
+                >
+                    {currentListBuffer.map((item, i) => (
+                        <li
+                            key={i}
+                            style={{
+                                marginBottom: '4px',
+                                lineHeight: '1.6',
+                                fontSize: '14px',
+                                paddingLeft: '4px',
+                            }}
+                        >
+                            <span style={{ color: 'var(--text-primary)' }}>{enhanceText(item)}</span>
+                        </li>
+                    ))}
+                </ul>
+            );
+            currentListBuffer = [];
+        }
+    };
+
+    lines.forEach((line) => {
+        const trimmed = line.trim();
+
+        // Empty lines trigger a flush (block separator)
+        if (!trimmed) {
+            flushText();
+            flushList();
+            return;
+        }
+
+        // Check for bullets
+        const bulletMatch = trimmed.match(/^[-*•]\s+(.*)/);
+
+        if (bulletMatch) {
+            flushText();
+            currentListBuffer.push(bulletMatch[1]);
+            return; // Done with this line
+        }
+
+        // Header detection heuristics:
+        // 1. Ends with colon (e.g., "Requirements:")
+        // 2. All caps and short (e.g., "QUALIFICATIONS")
+        // 3. Short line (1-5 words) - usually a section title in this context
+
+        const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
+        const isShortLine = wordCount >= 1 && wordCount <= 5;
+
+        // Length check prevents long sentences from being treated as headers
+        // We also check that it contains at least some letters to avoid bolding "123" or separator lines
+        const isHeader = trimmed.length < 100 && /[a-zA-Z]/.test(trimmed) && (
+            trimmed.endsWith(':') ||
+            (trimmed.toUpperCase() === trimmed && trimmed.length > 3) ||
+            isShortLine
+        );
+
+        if (isHeader) {
+            flushText();
+            flushList();
+            blocks.push(
+                <h4
+                    key={`h-${blocks.length}`}
+                    style={{
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        marginTop: '24px',
+                        marginBottom: '8px',
+                        color: 'var(--text-primary)',
+                        lineHeight: 1.4
+                    }}
+                >
+                    {enhanceText(trimmed)}
+                </h4>
+            );
+            return;
+        }
+
+        // Standard text line
+        flushList();
+        currentTextBuffer.push(line);
+    });
+
+    // Final flush
+    flushText();
+    flushList();
+
+    return <div className="job-description-content">{blocks}</div>;
+}
+
+export function JobDetail({
+    job,
+    onApply,
+    onDelete,
+    onGenerateCoverLetter,
+    onGenerateTailoredResume,
+    applicationStatus,
+    isMobileVisible,
+    onBack,
+    isAuthenticated = false
+}: JobDetailProps) {
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingResume, setIsGeneratingResume] = useState(false);
+    const { toggleJobStatus } = useStoreActions();
+
+    // ... (helper functions stay same)
 
     const formatPostedDate = (postedAt: string | null): string => {
         if (!postedAt) return 'N/A';
@@ -74,6 +259,7 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
     };
 
     if (!job) {
+        // ... (empty state stays same)
         return (
             <div
                 className={`job-detail-container ${isMobileVisible ? 'mobile-visible' : ''}`}
@@ -101,6 +287,14 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
         );
     }
 
+    // Helper for disabled visual style
+    const disabledStyle = !isAuthenticated ? { opacity: 0.6, cursor: 'not-allowed' } : {};
+    // Actually we want cursor to be pointer to allow click for modal, but look disabled
+    const gatedStyle = !isAuthenticated ? { opacity: 0.6, position: 'relative' as const } : {};
+    const gatedIcon = !isAuthenticated && (
+        <span style={{ position: 'absolute', top: -5, right: -5, fontSize: 10 }}>🔒</span>
+    );
+
     return (
         <div
             className={`job-detail-container ${isMobileVisible ? 'mobile-visible' : ''}`}
@@ -118,7 +312,7 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
             {/* Header */}
             <div
                 style={{
-                    padding: '24px',
+                    padding: '20px',
                     borderBottom: '1px solid var(--border)',
                     background: 'var(--background-secondary)',
                 }}
@@ -221,10 +415,27 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
                         View Original
                     </a>
 
+                    {isAuthenticated && (
+                        <button
+                            onClick={() => toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved')}
+                            className="btn btn-secondary"
+                            style={{
+                                color: job.status === 'saved' ? 'var(--accent)' : undefined,
+                                borderColor: job.status === 'saved' ? 'var(--accent)' : undefined,
+                            }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill={job.status === 'saved' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+                            </svg>
+                            {job.status === 'saved' ? 'Saved' : 'Save'}
+                        </button>
+                    )}
+
                     <button
                         onClick={handleGenerateCoverLetter}
-                        disabled={isGenerating}
+                        disabled={isGenerating} // Don't disable for auth check, we want the click
                         className="btn btn-secondary"
+                        style={gatedStyle}
                     >
                         {isGenerating ? (
                             <>
@@ -240,6 +451,7 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
                                     <line x1="16" y1="17" x2="8" y2="17" />
                                 </svg>
                                 Generate Cover Letter
+                                {gatedIcon}
                             </>
                         )}
                     </button>
@@ -248,6 +460,7 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
                         onClick={handleGenerateTailoredResume}
                         disabled={isGeneratingResume}
                         className="btn btn-secondary"
+                        style={gatedStyle}
                     >
                         {isGeneratingResume ? (
                             <>
@@ -262,6 +475,7 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
                                     <path d="M16 13H8M16 17H8M10 9H8" />
                                 </svg>
                                 Tailor Resume
+                                {gatedIcon}
                             </>
                         )}
                     </button>
@@ -274,6 +488,7 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
                             background: applicationStatus === 'applied' ? 'var(--success-muted)' : undefined,
                             color: applicationStatus === 'applied' ? 'var(--success)' : undefined,
                             borderColor: applicationStatus === 'applied' ? 'var(--success)' : undefined,
+                            ...gatedStyle
                         }}
                     >
                         {applicationStatus === 'loading' ? (
@@ -323,11 +538,11 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
 
                 {(job.matched_skills?.length || job.missing_skills?.length) && (
                     <div style={{ marginBottom: '24px' }}>
-                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             Skills Analysis
                         </h3>
 
@@ -368,7 +583,7 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
                 {
                     job.why && (
                         <div style={{ marginBottom: '24px' }}>
-                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                 Match Explanation
                             </h3>
                             <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.6, fontStyle: 'italic' }}>
@@ -382,19 +597,10 @@ export function JobDetail({ job, onApply, onDelete, onGenerateCoverLetter, onGen
                 {
                     (job.job_description_plain || job.raw_text_summary) && (
                         <div>
-                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                 Job Description
                             </h3>
-                            <div
-                                style={{
-                                    fontSize: '14px',
-                                    color: 'var(--text-primary)',
-                                    lineHeight: 1.7,
-                                    whiteSpace: 'pre-wrap',
-                                }}
-                            >
-                                {job.job_description_plain || job.raw_text_summary}
-                            </div>
+                            <JobDescriptionRenderer text={job.job_description_plain || job.raw_text_summary || ''} />
                         </div>
                     )
                 }

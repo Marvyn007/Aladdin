@@ -8,10 +8,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateEnhancedTailoredResume } from '@/lib/enhanced-tailored-resume-service';
 
+import { auth } from '@clerk/nextjs/server';
+
 export async function POST(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const body = await request.json();
-        const { job_id, job_description, job_url, resume_id, user_id = 'default' } = body;
+        const { job_id, job_description, job_url, resume_id } = body;
 
         if (!job_id && !job_description && !job_url) {
             return NextResponse.json(
@@ -23,10 +29,10 @@ export async function POST(request: NextRequest) {
         // Generate tailored resume
         const result = await generateEnhancedTailoredResume(
             job_id,
+            userId,
             job_description,
             job_url,
-            resume_id,
-            user_id
+            resume_id || undefined
         );
 
         if (result.success && result.resume) {

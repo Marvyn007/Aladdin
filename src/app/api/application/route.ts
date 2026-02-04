@@ -8,14 +8,19 @@ import {
     updateApplicationColumn,
     deleteApplication,
     getJobById,
-    getApplicationByJobId
+    getApplicationByJobId,
+    logInteraction
 } from '@/lib/db';
 import type { ApplicationColumn } from '@/types';
+import { auth } from '@clerk/nextjs/server';
 
 // GET: List all applications
 export async function GET() {
     try {
-        const applications = await getApplications();
+        const { userId } = await auth();
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        const applications = await getApplications(userId);
         return NextResponse.json({ applications });
     } catch (error) {
         console.error('Error fetching applications:', error);
@@ -29,6 +34,9 @@ export async function GET() {
 // POST: Create a new application
 export async function POST(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
         const { job_id } = await request.json();
 
         if (!job_id) {
@@ -39,7 +47,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if job exists
-        const job = await getJobById(job_id);
+        const job = await getJobById(userId, job_id);
         if (!job) {
             return NextResponse.json(
                 { error: 'Job not found' },
@@ -48,7 +56,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if application already exists
-        const existingApp = await getApplicationByJobId(job_id);
+        const existingApp = await getApplicationByJobId(userId, job_id);
         if (existingApp) {
             return NextResponse.json(
                 { error: 'Application already exists for this job' },
@@ -57,7 +65,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Create application
-        const application = await createApplication(job_id, job.source_url);
+        const application = await createApplication(userId, job_id, job.source_url);
+
+        // Log interaction
+        await logInteraction(userId, job_id, 'applied', { source: 'job_board' });
 
         return NextResponse.json({
             success: true,
@@ -75,6 +86,9 @@ export async function POST(request: NextRequest) {
 // PUT: Update application (move between columns)
 export async function PUT(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
         const { application_id, column_name } = await request.json();
 
         if (!application_id || !column_name) {
@@ -101,7 +115,7 @@ export async function PUT(request: NextRequest) {
             );
         }
 
-        await updateApplicationColumn(application_id, column_name);
+        await updateApplicationColumn(userId, application_id, column_name);
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -116,6 +130,9 @@ export async function PUT(request: NextRequest) {
 // DELETE: Soft delete an application
 export async function DELETE(request: NextRequest) {
     try {
+        const { userId } = await auth();
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
         const { searchParams } = new URL(request.url);
         const applicationId = searchParams.get('id');
 
@@ -126,7 +143,7 @@ export async function DELETE(request: NextRequest) {
             );
         }
 
-        await deleteApplication(applicationId);
+        await deleteApplication(userId, applicationId);
 
         return NextResponse.json({ success: true });
     } catch (error) {

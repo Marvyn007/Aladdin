@@ -2,8 +2,50 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
-import { useStore } from '@/store/useStore';
+import { useState, useEffect, useCallback } from 'react';
+import { useStore, useStoreActions } from '@/store/useStore';
+import { Map as MapIcon } from 'lucide-react';
+import { UserAccountSection } from './UserAccountSection';
+import { useAuth } from '@clerk/nextjs';
+import { AuthModal } from '@/components/modals/AuthModal';
+
+// Hook to detect compact logo mode (use "A" icon instead of full logo)
+function useCompactMode() {
+    const [isCompact, setIsCompact] = useState(false);
+
+    useEffect(() => {
+        const checkWidth = () => {
+            // Use compact "A" logo when viewport is <= 1200px but > 900px
+            // At <= 900px, sidebar collapses to icons anyway
+            setIsCompact(window.innerWidth <= 1200 && window.innerWidth > 900);
+        };
+
+        checkWidth();
+        window.addEventListener('resize', checkWidth);
+        return () => window.removeEventListener('resize', checkWidth);
+    }, []);
+
+    return isCompact;
+}
+
+// Hook to detect if sidebar should auto-collapse
+function useAutoCollapse() {
+    const [shouldCollapse, setShouldCollapse] = useState(false);
+
+    useEffect(() => {
+        const checkWidth = () => {
+            // Disable auto-collapse. Mobile/Tablet will use Slide-Out Drawer (Expanded Content).
+            // Width/Visibility is handled by CSS.
+            setShouldCollapse(false);
+        };
+
+        checkWidth();
+        window.addEventListener('resize', checkWidth);
+        return () => window.removeEventListener('resize', checkWidth);
+    }, []);
+
+    return shouldCollapse;
+}
 
 interface SidebarProps {
     onFindNow: () => void;
@@ -34,10 +76,24 @@ export function Sidebar({
     isMobileOpen,
     onCloseMobile
 }: SidebarProps) {
-    const { sidebarOpen, toggleSidebar, theme, toggleTheme, setActiveModal } = useStore();
+    const { sidebarOpen, toggleSidebar, setActiveModal, viewMode, setViewMode } = useStore();
+    const { isSignedIn, isLoaded } = useAuth();
+    const [authModalOpen, setAuthModalOpen] = useState(false);
+    const [authMessage, setAuthMessage] = useState<string>('');
+    const isCompactMode = useCompactMode();
+    const shouldAutoCollapse = useAutoCollapse();
+
+    // Effective collapsed state: user choice OR auto-collapse at 900px
+    const isEffectivelyCollapsed = !sidebarOpen || shouldAutoCollapse;
 
     // Handle nav item click - close sidebar on mobile
-    const handleNavClick = (action: () => void) => {
+    const handleNavClick = (action: () => void, requiresAuth: boolean = false, message?: string) => {
+        if (requiresAuth && !isSignedIn) {
+            setAuthMessage(message || "Sign in to access this feature.");
+            setAuthModalOpen(true);
+            return;
+        }
+
         action();
         if (onCloseMobile) {
             onCloseMobile();
@@ -46,6 +102,11 @@ export function Sidebar({
 
     return (
         <>
+            <AuthModal
+                isOpen={authModalOpen}
+                onClose={() => setAuthModalOpen(false)}
+            />
+
             {/* Mobile overlay backdrop */}
             <div
                 className={`sidebar-overlay ${isMobileOpen ? 'visible' : ''}`}
@@ -53,12 +114,12 @@ export function Sidebar({
             />
 
             <aside
-                className={`sidebar ${!sidebarOpen ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}
+                className={`sidebar ${isEffectivelyCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}
             >
                 {/* Logo/Brand */}
                 <div
                     style={{
-                        padding: '24px 12px',
+                        padding: (isCompactMode || isEffectivelyCollapsed) ? '16px 12px' : '24px 12px',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
@@ -70,22 +131,22 @@ export function Sidebar({
                 >
                     <div
                         style={{
-                            width: sidebarOpen ? '135px' : '40px',
-                            height: sidebarOpen ? '135px' : '40px',
+                            width: isEffectivelyCollapsed ? '40px' : (isCompactMode ? '48px' : '135px'),
+                            height: isEffectivelyCollapsed ? '40px' : (isCompactMode ? '48px' : '135px'),
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            transition: 'all 0.2s ease',
+                            transition: 'all 0.25s ease',
                         }}
                     >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                            src="/aladdin-logo.png"
+                            src={(isCompactMode || isEffectivelyCollapsed) ? '/aladdin-icon.png' : '/favicon.png'}
                             alt="Aladdin Logo"
                             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                         />
                     </div>
-                    {sidebarOpen && (
+                    {!isEffectivelyCollapsed && !isCompactMode && (
                         <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '14px', fontFamily: 'var(--font-inter)' }}>
                             The Job Finder
                         </span>
@@ -94,112 +155,71 @@ export function Sidebar({
 
                 {/* Navigation */}
                 <nav style={{ flex: 1, padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto' }}>
-                    {/* Find Jobs */}
+                    {/* Find Jobs (Public) */}
                     <NavItem
                         icon={<SearchIcon />}
                         label="Find Jobs"
                         onClick={() => handleNavClick(onFindNow)}
                         loading={isLoading}
                         active={false}
-                        collapsed={!sidebarOpen}
+                        collapsed={isEffectivelyCollapsed}
                     />
 
-                    {/* Import Job */}
+                    {/* Import Job (Protected) */}
                     <NavItem
                         icon={<img src="/icons/import-job.png" alt="Import" style={{ width: 22, height: 22, objectFit: 'contain' }} />}
                         label="Import Job"
-                        onClick={() => handleNavClick(onImportJob)}
-                        collapsed={!sidebarOpen}
+                        onClick={() => handleNavClick(onImportJob, true, "Sign in to import jobs.")}
+                        collapsed={isEffectivelyCollapsed}
+                        disabled={!isSignedIn}
                     />
 
-                    {/* Score Jobs (New) */}
+                    {/* Score Jobs (Protected) */}
                     <NavItem
                         icon={<img src="/icons/score.png" alt="Score" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
                         label="Score Jobs"
-                        onClick={() => handleNavClick(onScoreJobs)}
+                        onClick={() => handleNavClick(onScoreJobs, true, "Sign in to score jobs.")}
                         loading={isScoring}
-                        collapsed={!sidebarOpen}
+                        collapsed={isEffectivelyCollapsed}
                         style={{ minHeight: '48px' }}
+                        disabled={!isSignedIn}
                     />
 
-                    {/* Filter (was Run Cleanup) */}
+                    {/* Filter (Protected/Public?) - Let's allow filter if it's local, but user asked for auth gating for 'features'. If filter saves, it's auth. Assuming public for now as list filter logic is client side often. BUT user prompt mentioned 'Score jobs' explicitly. Filter might be public. Let's keep it public for now unless it breaks. Actually, Filters usually helpful for public searching. */}
                     <NavItem
                         icon={<img src="/icons/broom.png" alt="Filter" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
                         label="Filter"
                         onClick={() => handleNavClick(onFilter)}
                         loading={isFiltering}
-                        collapsed={!sidebarOpen}
+                        collapsed={isEffectivelyCollapsed}
                         style={{ minHeight: '48px' }}
                     />
 
+
+
                     <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
 
-                    {/* My Resumes */}
+                    {/* My Resumes (Protected) */}
                     <NavItem
                         icon={<ResumeIcon />}
                         label="My Resumes"
-                        onClick={() => handleNavClick(() => setActiveModal('resume-selector'))}
-                        collapsed={!sidebarOpen}
+                        onClick={() => handleNavClick(() => setActiveModal('resume-selector'), true, "Sign in to manage resumes.")}
+                        collapsed={isEffectivelyCollapsed}
+                        disabled={!isSignedIn}
                     />
 
-                    {/* Upload LinkedIn */}
+                    {/* Upload LinkedIn (Protected) */}
                     <NavItem
                         icon={<LinkedInIcon />}
                         label="Upload LinkedIn Profile"
-                        onClick={() => handleNavClick(() => setActiveModal('linkedin-selector'))}
-                        collapsed={!sidebarOpen}
-                    />
-
-                    <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
-
-                    {/* Theme Toggle */}
-                    <NavItem
-                        icon={theme === 'light' ? <MoonIcon /> : <SunIcon />}
-                        label={theme === 'light' ? 'Dark Mode' : 'Light Mode'}
-                        onClick={() => handleNavClick(toggleTheme)}
-                        collapsed={!sidebarOpen}
+                        onClick={() => handleNavClick(() => setActiveModal('linkedin-selector'), true, "Sign in to upload LinkedIn profile.")}
+                        collapsed={isEffectivelyCollapsed}
+                        disabled={!isSignedIn}
                     />
                 </nav>
 
-                {/* Footer - User Info */}
-                <div
-                    style={{
-                        padding: '12px',
-                        borderTop: '1px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        flexShrink: 0,
-                    }}
-                >
-                    <div
-                        style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            background: 'var(--accent-muted)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--accent)',
-                            fontWeight: 600,
-                            fontSize: '13px',
-                            flexShrink: 0,
-                        }}
-                    >
-                        U
-                    </div>
-                    {sidebarOpen && (
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                                User
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                                Single-user mode
-                            </div>
-                        </div>
-                    )}
-                </div>
+                {/* Footer - User Account */}
+                <UserAccountSection collapsed={isEffectivelyCollapsed} />
             </aside>
         </>
     );
@@ -214,6 +234,7 @@ function NavItem({
     loading,
     collapsed,
     style,
+    disabled = false,
 }: {
     icon: React.ReactNode;
     label: string;
@@ -222,11 +243,13 @@ function NavItem({
     loading?: boolean;
     collapsed?: boolean;
     style?: React.CSSProperties;
+    disabled?: boolean;
 }) {
     return (
         <button
             onClick={onClick}
-            disabled={loading}
+            // Don't use disabled HTML attribute so we can catch clicks for modal
+            // disabled={loading} 
             style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -236,23 +259,34 @@ function NavItem({
                 background: active ? 'var(--accent-muted)' : 'transparent',
                 border: 'none',
                 borderRadius: '6px',
-                cursor: 'pointer',
-                color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                cursor: loading ? 'wait' : 'pointer',
+                color: disabled ? 'var(--text-tertiary)' : (active ? 'var(--accent)' : 'var(--text-secondary)'),
                 fontSize: '13px',
                 fontWeight: 500,
                 transition: 'all 0.15s ease',
                 width: '100%',
                 textAlign: 'left',
+                opacity: disabled ? 0.7 : 1,
                 ...style,
             }}
             onMouseLeave={(e) => {
                 if (!active) e.currentTarget.style.background = 'transparent';
             }}
+            // Only show hover effect if not strictly disabled logic (visual feedback)
+            onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = 'rgba(0,0,0,0.03)';
+            }}
         >
-            <div style={{ width: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+            <div style={{ width: '36px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, filter: disabled ? 'grayscale(100%) opacity(0.7)' : 'none' }}>
                 {loading ? <LoadingSpinner /> : icon}
             </div>
             {!collapsed && label}
+            {disabled && !collapsed && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: 'auto', opacity: 0.5 }}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            )}
         </button>
     );
 }
@@ -338,3 +372,5 @@ const LoadingSpinner = () => (
         }}
     />
 );
+
+

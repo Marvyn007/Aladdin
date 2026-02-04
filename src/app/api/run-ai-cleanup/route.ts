@@ -2,7 +2,7 @@
 // Run AI filtering on fresh jobs to delete those matching strict criteria
 
 import { NextResponse } from 'next/server';
-import { getJobs, deleteJob } from '@/lib/db';
+import { getAllFreshJobsSystem, deleteJobSystem } from '@/lib/db';
 import { batchFilterJobs } from '@/lib/gemini';
 
 export const runtime = 'nodejs';
@@ -15,7 +15,7 @@ export async function POST() {
         // 1. Fetch fresh jobs
         // Get up to 100 fresh jobs to analyze
         const limit = 100;
-        const jobs = await getJobs('fresh', limit);
+        const jobs = await getAllFreshJobsSystem(limit);
 
         if (jobs.length === 0) {
             return NextResponse.json({
@@ -51,7 +51,7 @@ export async function POST() {
         let deletedCount = 0;
         for (const id of allDeleteIds) {
             try {
-                await deleteJob(id);
+                await deleteJobSystem(id);
                 deletedCount++;
                 const jobTitle = jobs.find(j => j.id === id)?.title || 'Unknown';
                 console.log(`Deleted job ${id} (${jobTitle}): ${allReasons[id]}`);

@@ -26,6 +26,7 @@ export interface GenerationResult {
  * @param existingCoverLetterId - If provided, updates this record instead of creating new
  */
 export async function performCoverLetterGeneration(
+    userId: string,
     jobId: string,
     resumeId?: string,
     existingCoverLetterId?: string,
@@ -33,17 +34,21 @@ export async function performCoverLetterGeneration(
 ): Promise<GenerationResult> {
     try {
         // 1. Get Job
-        const job = await getJobById(jobId);
+        // Using getJobById (global or user-scoped? Assuming global for now, or use userId if I updated it.
+        // I did NOT update getJobById to take userId in previous steps. It's global.
+        // Wait, I checked. Resume/LinkedIn/Apps REQUIRE userId. Jobs are global.
+        // So passed job check remains global.
+        const job = await getJobById(userId, jobId);
         if (!job) throw new Error('Job not found');
 
         // 2. Get Resume
         let resumeData = null;
         if (resumeId) {
-            resumeData = await getResumeById(resumeId);
+            resumeData = await getResumeById(userId, resumeId);
         } else {
-            const defaultResume = await getDefaultResume();
+            const defaultResume = await getDefaultResume(userId);
             if (defaultResume) {
-                resumeData = await getResumeById(defaultResume.id);
+                resumeData = await getResumeById(userId, defaultResume.id);
             }
         }
 
@@ -64,7 +69,7 @@ export async function performCoverLetterGeneration(
             console.log(`[Service] Parsing resume ${resumeData.resume.id} (force: previous data was invalid or empty)`);
             try {
                 parsedResume = await parseResumeFromPdf(resumeData.file_data);
-                await updateResume(resumeData.resume.id, { parsed_json: parsedResume });
+                await updateResume(userId, resumeData.resume.id, { parsed_json: parsedResume });
                 console.log(`[Service] Resume re-parsed successfully, name: ${parsedResume.name}`);
             } catch (err) {
                 console.error("Failed to parse resume:", err);
@@ -75,7 +80,7 @@ export async function performCoverLetterGeneration(
         if (!parsedResume) throw new Error('Resume could not be parsed');
 
         // 4. Get LinkedIn (Optional)
-        const linkedInProfile = await getLinkedInProfile();
+        const linkedInProfile = await getLinkedInProfile(userId);
 
         // DEBUG: Log what data is being passed to AI
         console.log('[Cover Letter] Resume data being used:', {
@@ -118,13 +123,14 @@ export async function performCoverLetterGeneration(
         // 7. Store Result
         let coverLetter;
         if (existingCoverLetterId) {
-            coverLetter = await updateCoverLetter(existingCoverLetterId, {
+            coverLetter = await updateCoverLetter(userId, existingCoverLetterId, {
                 content_html: contentHtml,
                 content_text: result.text,
                 status: 'generated'
             });
         } else {
             coverLetter = await insertCoverLetter(
+                userId,
                 jobId,
                 resumeData.resume.id,
                 contentHtml,
@@ -155,7 +161,7 @@ export async function performCoverLetterGeneration(
 
         // If updating an existing record, mark as failed
         if (existingCoverLetterId) {
-            await updateCoverLetter(existingCoverLetterId, { status: 'failed' });
+            await updateCoverLetter(userId, existingCoverLetterId, { status: 'failed' });
         }
 
         // Return user-friendly error message
@@ -178,8 +184,9 @@ export async function performCoverLetterGeneration(
 /**
  * Queue a generation task
  */
-export async function queueCoverLetterGeneration(jobId: string, resumeId?: string) {
+export async function queueCoverLetterGeneration(userId: string, jobId: string, resumeId?: string) {
     return await insertCoverLetter(
+        userId,
         jobId,
         resumeId || null,
         null,

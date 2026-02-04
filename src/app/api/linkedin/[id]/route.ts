@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getLinkedInProfileById, deleteLinkedInProfile } from '@/lib/db';
+import { auth } from '@clerk/nextjs/server';
 
 export const runtime = 'nodejs';
 
@@ -9,8 +10,11 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { userId } = await auth();
+        if (!userId) return new NextResponse('Unauthorized', { status: 401 });
+
         const { id } = await params;
-        const result = await getLinkedInProfileById(id);
+        const result = await getLinkedInProfileById(userId, id);
 
         if (!result || !result.file_data) {
             return new NextResponse('Not found', { status: 404 });
@@ -33,8 +37,11 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { userId } = await auth();
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
         const { id } = await params;
-        await deleteLinkedInProfile(id);
+        await deleteLinkedInProfile(userId, id);
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error deleting LinkedIn profile:', error);
