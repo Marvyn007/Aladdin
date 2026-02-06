@@ -31,12 +31,23 @@ export type DatabaseType = 'postgres' | 'supabase' | 'sqlite';
 export function getDbType(): DatabaseType {
     // Explicit override for restricted networks (firewall blocking port 5432)
     if (process.env.USE_SUPABASE_REST === 'true' && isSupabaseConfigured()) {
+        console.log('[DB] Using Supabase REST (USE_SUPABASE_REST=true)');
         return 'supabase';
     }
 
-    if (isPostgresConfigured()) return 'postgres';
-    if (isSupabaseConfigured()) return 'supabase';
-    if (isSQLiteConfigured()) return 'sqlite';
+    if (isPostgresConfigured()) {
+        // console.log('[DB] Using Postgres'); // Noisy, uncomment if needed
+        return 'postgres';
+    }
+    if (isSupabaseConfigured()) {
+        console.log('[DB] Using Supabase (Fallback)');
+        return 'supabase';
+    }
+    if (isSQLiteConfigured()) {
+        console.log('[DB] Using SQLite');
+        return 'sqlite';
+    }
+    console.error('[DB] FATAL: No database configured!');
     throw new Error('No database configured. Set DATABASE_URL, SUPABASE_URL/KEY, or USE_SQLITE=true');
 }
 
