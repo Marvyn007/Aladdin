@@ -152,6 +152,36 @@ export interface SuggestionOptions {
 }
 
 // ============================================================================
+// Smart Suggestion Types (Enhanced with ranking and autofill)
+// ============================================================================
+
+export interface SmartSuggestion {
+  text: string;
+  type: 'title' | 'company' | 'location';
+  rank: number;
+  isPopular: boolean;
+  isExactMatch: boolean;
+  matchCount: number;
+  highlightStart: number;
+  highlightEnd: number;
+}
+
+export interface TrendingSearch {
+  text: string;
+  type: string;
+  count: number;
+}
+
+export interface SmartSuggestionResponse {
+  suggestions: SmartSuggestion[];
+  autofill: string | null;
+  autofillType: 'title' | 'company' | 'location' | null;
+  trending: TrendingSearch[];
+  query: string;
+  total: number;
+}
+
+// ============================================================================
 // Database Types (for internal use)
 // ============================================================================
 
