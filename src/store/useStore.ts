@@ -91,10 +91,12 @@ interface AppState {
 
     setSorting: (sorting: Partial<AppState['sorting']>) => void;
 
-    // Search Actions
-    enterSearchMode: (query: string) => void;
-    exitSearchMode: () => void;
-    setSearchQuery: (query: string) => void;
+// Search Actions
+enterSearchMode: (query: string) => void;
+exitSearchMode: () => void;
+setSearchQuery: (query: string) => void;
+performServerSearch: (query: string, page?: number) => Promise<void>;
+clearSearchResults: () => void;
 
     // Cookie Persistence
     initializeFilters: () => void;
@@ -480,6 +482,58 @@ export const useStore = create<AppState>()(
 
             setSearchQuery: (query) => set({ searchQuery: query }),
 
+            performServerSearch: async (query, page = 1) => {
+                const trimmedQuery = query.trim();
+                if (!trimmedQuery) {
+                    set({ searchMode: false, searchQuery: '', searchResults: [] });
+                    return;
+                }
+
+                set({ isLoadingJobs: true, searchMode: true, searchQuery: query });
+
+                try {
+                    const response = await fetch('/api/search/jobs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            query: trimmedQuery,
+                            page,
+                            limit: 50,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Search request failed');
+                    }
+
+                    const data = await response.json();
+
+                    set({
+                        searchResults: data.jobs || [],
+                        pagination: {
+                            ...get().pagination,
+                            page: data.pagination?.page || page,
+                            total: data.pagination?.total || 0,
+                            totalPages: data.pagination?.totalPages || 1,
+                        },
+                    });
+                } catch (error) {
+                    console.error('[Search] Server search failed:', error);
+                    // Fallback to client-side search
+                    get().enterSearchMode(query);
+                } finally {
+                    set({ isLoadingJobs: false });
+                }
+            },
+
+            clearSearchResults: () => {
+                set({
+                    searchMode: false,
+                    searchQuery: '',
+                    searchResults: [],
+                });
+            },
+
         }),
         {
             name: 'job-hunt-vibe-storage',
@@ -518,6 +572,8 @@ export const useStoreActions = () => useStore(
         enterSearchMode: state.enterSearchMode,
         exitSearchMode: state.exitSearchMode,
         setSearchQuery: state.setSearchQuery,
+        performServerSearch: state.performServerSearch,
+        clearSearchResults: state.clearSearchResults,
         toggleJobStatus: state.toggleJobStatus
     }))
 );

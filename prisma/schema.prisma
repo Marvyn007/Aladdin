@@ -64,18 +64,30 @@ model Job {
   geoConfidence        Float?            @map("geo_confidence")
   geoSource            String?           @map("geo_source")
   user_id              String?
+  
+  // Search-related fields (managed by database triggers)
+  titleNormalized      String?           @map("title_normalized")
+  companyNormalized    String?           @map("company_normalized")
+  locationNormalized   String?           @map("location_normalized")
+  searchBoostScore     Float?            @default(1.0) @map("search_boost_score")
+  commonTitleCategory  String?           @map("common_title_category")
+  
   applications         Application[]
   coverLetters         CoverLetter[]
   jobEmbedding         JobEmbedding?
   geoPoints            JobGeoPoint[]
   userInteractions     UserInteraction[]
   userJobs             UserJob[]
+  searchAnalytics      SearchAnalytics[]
 
   @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
   @@index([contentHash], map: "idx_jobs_content_hash")
   @@index([importTag], map: "idx_jobs_import_tag")
   @@index([status], map: "idx_jobs_status")
   @@index([user_id], map: "idx_jobs_user_id")
+  @@index([titleNormalized], map: "idx_jobs_title_normalized")
+  @@index([companyNormalized], map: "idx_jobs_company_normalized")
+  @@index([locationNormalized], map: "idx_jobs_location_normalized")
   @@map("jobs")
 }
 
@@ -257,4 +269,38 @@ model JobGeoPoint {
   @@index([jobId], map: "idx_job_geo_points_job_id")
   @@index([latitude, longitude], map: "idx_job_geo_points_lat_lng")
   @@map("job_geo_points")
+}
+
+model SearchAnalytics {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queryText         String    @map("query_text")
+  queryNormalized   String?   @map("query_normalized")
+  resultsCount      Int?      @map("results_count")
+  clickedJobId      String?   @map("clicked_job_id") @db.Uuid
+  userId            String?   @map("user_id")
+  sessionId         String?   @map("session_id")
+  searchDurationMs  Int?      @map("search_duration_ms")
+  filtersUsed       Json?     @map("filters_used")
+  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  clickedJob        Job?      @relation(fields: [clickedJobId], references: [id], onDelete: SetNull)
+  
+  @@index([queryNormalized], map: "idx_search_analytics_query")
+  @@index([createdAt(sort: Desc)], map: "idx_search_analytics_created")
+  @@index([userId], map: "idx_search_analytics_user")
+  @@map("search_analytics")
+}
+
+model SearchSuggestions {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  term        String    @unique
+  termType    String    @map("term_type")
+  frequency   Int       @default(1)
+  lastSeenAt  DateTime? @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([term], map: "idx_search_suggestions_term")
+  @@index([termType], map: "idx_search_suggestions_type")
+  @@index([frequency(sort: Desc)], map: "idx_search_suggestions_freq")
+  @@map("search_suggestions")
 }

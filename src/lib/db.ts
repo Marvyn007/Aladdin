@@ -2779,5 +2779,188 @@ export async function logInteraction(
         VALUES($1, $2, $3, $4)
             `, [userId, jobId, interactionType, JSON.stringify(metadata)]);
     }
-    // ... we can support other DBs if needed, but requirements focus on Postgres
+// ... we can support other DBs if needed, but requirements focus on Postgres
+}
+
+// ============================================================================
+// SEARCH DATABASE OPERATIONS
+// ============================================================================
+
+import type { SearchFilters } from '@/lib/search/types';
+
+/**
+ * Get search suggestions for autocomplete
+ * Returns distinct titles, companies, and locations matching the query
+ */
+export async function getSearchSuggestions(
+    query: string,
+    limit: number = 10
+): Promise<{ titles: string[]; companies: string[]; locations: string[] }> {
+    const dbType = getDbType();
+    const results = {
+        titles: [] as string[],
+        companies: [] as string[],
+        locations: [] as string[]
+    };
+
+    if (dbType !== 'postgres') {
+        return results;
+    }
+
+    const pool = getPostgresPool();
+    const normalizedQuery = query.toLowerCase().trim();
+
+    try {
+        // Title suggestions
+        const titleResult = await pool.query(`
+            SELECT DISTINCT title
+            FROM jobs
+            WHERE title_normalized ILIKE $1
+            ORDER BY 
+                CASE WHEN title_normalized = $2 THEN 0 ELSE 1 END,
+                title
+            LIMIT $3
+        `, [`%${normalizedQuery}%`, normalizedQuery, limit]);
+        results.titles = titleResult.rows.map(r => r.title);
+
+        // Company suggestions
+        const companyResult = await pool.query(`
+            SELECT DISTINCT company
+            FROM jobs
+            WHERE company_normalized ILIKE $1
+            ORDER BY 
+                CASE WHEN company_normalized = $2 THEN 0 ELSE 1 END,
+                company
+            LIMIT $3
+        `, [`%${normalizedQuery}%`, normalizedQuery, limit]);
+        results.companies = companyResult.rows.map(r => r.company).filter(Boolean);
+
+        // Location suggestions
+        const locationResult = await pool.query(`
+            SELECT DISTINCT location
+            FROM jobs
+            WHERE location_normalized ILIKE $1
+            ORDER BY 
+                CASE WHEN location_normalized = $2 THEN 0 ELSE 1 END,
+                location
+            LIMIT $3
+        `, [`%${normalizedQuery}%`, normalizedQuery, limit]);
+        results.locations = locationResult.rows.map(r => r.location).filter(Boolean);
+
+    } catch (error) {
+        console.error('[DB] Search suggestions error:', error);
+    }
+
+    return results;
+}
+
+/**
+ * Log search analytics for monitoring and improvement
+ */
+export async function logSearchAnalytics(
+    query: string,
+    resultsCount: number,
+    searchDurationMs: number,
+    filters?: SearchFilters,
+    userId?: string,
+    clickedJobId?: string
+): Promise<void> {
+    const dbType = getDbType();
+
+    if (dbType !== 'postgres') {
+        return;
+    }
+
+    const pool = getPostgresPool();
+
+    try {
+        await pool.query(`
+            INSERT INTO search_analytics (
+                query_text, 
+                query_normalized, 
+                results_count, 
+                clicked_job_id, 
+                user_id,
+                search_duration_ms, 
+                filters_used,
+                created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        `, [
+            query,
+            query.toLowerCase().trim(),
+            resultsCount,
+            clickedJobId || null,
+            userId || null,
+            searchDurationMs,
+            filters ? JSON.stringify(filters) : null
+        ]);
+    } catch (error) {
+        // Fail silently - analytics should not break search
+        console.error('[DB] Failed to log search analytics:', error);
+    }
+}
+
+/**
+ * Get popular search queries (for analytics dashboard)
+ */
+export async function getPopularSearches(
+    limit: number = 20,
+    days: number = 7
+): Promise<Array<{ query: string; count: number }>> {
+    const dbType = getDbType();
+
+    if (dbType !== 'postgres') {
+        return [];
+    }
+
+    const pool = getPostgresPool();
+
+    try {
+        const result = await pool.query(`
+            SELECT query_normalized as query, COUNT(*) as count
+            FROM search_analytics
+            WHERE created_at > NOW() - INTERVAL '${days} days'
+            GROUP BY query_normalized
+            ORDER BY count DESC
+            LIMIT $1
+        `, [limit]);
+
+        return result.rows;
+    } catch (error) {
+        console.error('[DB] Popular searches error:', error);
+        return [];
+    }
+}
+
+/**
+ * Record a job click from search results
+ * Used for click-through rate analysis and relevance feedback
+ */
+export async function recordSearchClick(
+    searchQuery: string,
+    jobId: string,
+    userId?: string
+): Promise<void> {
+    const dbType = getDbType();
+
+    if (dbType !== 'postgres') {
+        return;
+    }
+
+    const pool = getPostgresPool();
+
+    try {
+        // Update the search analytics record with the clicked job
+        await pool.query(`
+            UPDATE search_analytics
+            SET clicked_job_id = $1
+            WHERE query_text = $2
+            AND user_id = $3
+            AND created_at > NOW() - INTERVAL '1 hour'
+            ORDER BY created_at DESC
+            LIMIT 1
+        `, [jobId, searchQuery, userId || null]);
+    } catch (error) {
+        console.error('[DB] Failed to record search click:', error);
+    }
 }

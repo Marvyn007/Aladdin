@@ -1,26 +1,31 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, X, ArrowLeft, History as HistoryIcon, ArrowUpLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, X, ArrowLeft, History as HistoryIcon, ArrowUpLeft, Loader2 } from 'lucide-react';
 import { useStore, useStoreActions } from '@/store/useStore';
+import type { SuggestionResponse } from '@/lib/search/types';
 
 const HISTORY_KEY = 'aladdin_search_history';
 const MAX_HISTORY_ITEMS = 5;
+const SUGGESTION_DEBOUNCE_MS = 150;
 
 export function SearchBar() {
     const [localQuery, setLocalQuery] = useState('');
-    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [suggestions, setSuggestions] = useState<SuggestionResponse['suggestions']>({ titles: [], companies: [], locations: [] });
     const [history, setHistory] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [isLoading, setIsLoading] = useState(false);
+    const [activeCategory, setActiveCategory] = useState<'all' | 'title' | 'company' | 'location'>('all');
 
     const inputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const suggestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const jobs = useStore(state => state.jobs);
     const searchMode = useStore(state => state.searchMode);
     const searchQuery = useStore(state => state.searchQuery);
-    const { enterSearchMode, exitSearchMode } = useStoreActions();
+    const isLoadingJobs = useStore(state => state.isLoadingJobs);
+    const { performServerSearch, exitSearchMode, clearSearchResults } = useStoreActions();
 
     // Load history on mount
     useEffect(() => {
@@ -46,7 +51,7 @@ export function SearchBar() {
     };
 
     const deleteHistoryItem = (term: string, e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent search trigger
+        e.stopPropagation();
         setHistory(prev => {
             const newHistory = prev.filter(item => item !== term);
             localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
@@ -74,58 +79,110 @@ export function SearchBar() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Pre-compute phrases
-    const allPhrases = useMemo(() => {
-        const phraseSet = new Set<string>();
-        jobs.slice(0, 200).forEach(job => {
-            if (job.title) phraseSet.add(job.title.toLowerCase().trim());
-            if (job.company) phraseSet.add(job.company.toLowerCase().trim());
-            if (job.location) phraseSet.add(job.location.toLowerCase().trim());
-            if (job.title) {
-                const words = job.title.split(/\s+/).filter(w => w.length > 1);
-                for (let i = 0; i < words.length - 1; i++) {
-                    phraseSet.add(words.slice(i, i + 2).join(' ').toLowerCase());
-                }
-            }
-        });
-        return Array.from(phraseSet).filter(p => p.length > 2);
-    }, [jobs]);
-
-    // Suggestion logic
-    useEffect(() => {
-        if (!localQuery.trim() || localQuery.length < 2) {
-            setSuggestions([]);
+    // Fetch suggestions from API
+    const fetchSuggestions = useCallback(async (query: string) => {
+        if (!query.trim() || query.length < 2) {
+            setSuggestions({ titles: [], companies: [], locations: [] });
             return;
         }
-        const lower = localQuery.toLowerCase();
-        const matches = allPhrases
-            .filter(p => p.includes(lower))
-            .sort((a, b) => {
-                const aStart = a.startsWith(lower) ? 0 : 1;
-                const bStart = b.startsWith(lower) ? 0 : 1;
-                if (aStart !== bStart) return aStart - bStart;
-                return a.length - b.length;
-            })
-            .slice(0, 6);
-        setSuggestions(matches);
-        setSelectedIndex(-1); // Reset selection on query change
-    }, [localQuery, allPhrases]);
 
-    // Determine what to show in dropdown
-    const displayedItems = localQuery.length < 2 ? history : suggestions;
+        setIsLoading(true);
+        try {
+            const response = await fetch(`/api/search/suggestions?query=${encodeURIComponent(query)}&type=${activeCategory}&limit=6`);
+            if (response.ok) {
+                const data: SuggestionResponse = await response.json();
+                setSuggestions(data.suggestions);
+            }
+        } catch (error) {
+            console.error('Failed to fetch suggestions:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [activeCategory]);
+
+    // Debounced suggestion fetching
+    useEffect(() => {
+        if (suggestionTimeoutRef.current) {
+            clearTimeout(suggestionTimeoutRef.current);
+        }
+
+        if (localQuery.length >= 2) {
+            suggestionTimeoutRef.current = setTimeout(() => {
+                fetchSuggestions(localQuery);
+            }, SUGGESTION_DEBOUNCE_MS);
+        } else {
+            setSuggestions({ titles: [], companies: [], locations: [] });
+        }
+
+        setSelectedIndex(-1);
+
+        return () => {
+            if (suggestionTimeoutRef.current) {
+                clearTimeout(suggestionTimeoutRef.current);
+            }
+        };
+    }, [localQuery, fetchSuggestions]);
+
+    // Combine all suggestions for display
+    const allSuggestions = useCallback(() => {
+        const all: Array<{ text: string; type: 'title' | 'company' | 'location' }> = [];
+
+        suggestions.titles.forEach(t => {
+            if (!all.some(item => item.text === t)) {
+                all.push({ text: t, type: 'title' });
+            }
+        });
+
+        suggestions.companies.forEach(c => {
+            if (c && !all.some(item => item.text === c)) {
+                all.push({ text: c, type: 'company' });
+            }
+        });
+
+        suggestions.locations.forEach(l => {
+            if (l && !all.some(item => item.text === l)) {
+                all.push({ text: l, type: 'location' });
+            }
+        });
+
+        return all.slice(0, 8);
+    }, [suggestions]);
+
+    const getDisplayedItems = () => {
+        if (localQuery.length < 2) {
+            return history.map(h => ({ text: h, type: 'title' as const }));
+        }
+        return allSuggestions();
+    };
+
+    const displayedItems = getDisplayedItems();
     const isShowingHistory = localQuery.length < 2;
 
-    const performSearch = (term: string) => {
+    const performSearch = async (term: string) => {
         if (!term.trim()) return;
-        enterSearchMode(term);
-        saveToHistory(term);
+
         setShowSuggestions(false);
-        setLocalQuery(term); // Ensure input reflects selected term
+        setLocalQuery(term);
         inputRef.current?.blur();
+
+        saveToHistory(term);
+        await performServerSearch(term);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (!showSuggestions || displayedItems.length === 0) {
+        if (e.key === 'Escape') {
+            setShowSuggestions(false);
+            return;
+        }
+
+        if (!showSuggestions) {
+            if (e.key === 'Enter') {
+                performSearch(localQuery);
+            }
+            return;
+        }
+
+        if (displayedItems.length === 0) {
             if (e.key === 'Enter') {
                 performSearch(localQuery);
             }
@@ -141,12 +198,25 @@ export function SearchBar() {
         } else if (e.key === 'Enter') {
             e.preventDefault();
             if (selectedIndex >= 0 && selectedIndex < displayedItems.length) {
-                performSearch(displayedItems[selectedIndex]);
+                performSearch(displayedItems[selectedIndex].text);
             } else {
                 performSearch(localQuery);
             }
-        } else if (e.key === 'Escape') {
-            setShowSuggestions(false);
+        }
+    };
+
+    const clearSearch = () => {
+        clearSearchResults();
+        setLocalQuery('');
+        setShowSuggestions(false);
+    };
+
+    const getCategoryIcon = (type: 'title' | 'company' | 'location') => {
+        switch (type) {
+            case 'title': return '💼';
+            case 'company': return '🏢';
+            case 'location': return '📍';
+            default: return '🔍';
         }
     };
 
@@ -155,7 +225,7 @@ export function SearchBar() {
             <div style={{ position: 'relative' }}>
                 {searchMode ? (
                     <button
-                        onClick={() => window.location.reload()}
+                        onClick={() => window.location.href = '/'}
                         style={{
                             position: 'absolute',
                             left: '8px',
@@ -190,23 +260,26 @@ export function SearchBar() {
                     }}
                     onFocus={() => setShowSuggestions(true)}
                     onKeyDown={handleKeyDown}
+                    disabled={isLoadingJobs}
                     style={{
                         width: '100%',
-                        padding: '10px 12px 10px 40px',
+                        padding: '10px 40px 10px 40px',
                         fontSize: '14px',
                         borderRadius: '24px',
                         border: '1px solid var(--border)',
                         background: 'var(--surface)',
                         color: 'var(--text-primary)',
                         outline: 'none',
-                        transition: 'box-shadow 0.2s, border-color 0.2s'
+                        transition: 'box-shadow 0.2s, border-color 0.2s',
+                        opacity: isLoadingJobs ? 0.7 : 1,
                     }}
                     className="search-input"
                 />
 
-                {localQuery && (
+                {(localQuery || isLoadingJobs) && (
                     <button
-                        onClick={() => window.location.reload()}
+                        onClick={isLoadingJobs ? undefined : () => window.location.href = '/'}
+                        disabled={isLoadingJobs}
                         style={{
                             position: 'absolute',
                             right: '12px',
@@ -214,19 +287,24 @@ export function SearchBar() {
                             transform: 'translateY(-50%)',
                             background: 'transparent',
                             border: 'none',
-                            cursor: 'pointer',
+                            cursor: isLoadingJobs ? 'default' : 'pointer',
                             color: 'var(--text-tertiary)',
                             display: 'flex',
-                            alignItems: 'center'
+                            alignItems: 'center',
+                            opacity: isLoadingJobs ? 0.5 : 1,
                         }}
                     >
-                        <X size={16} />
+                        {isLoadingJobs ? (
+                            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                        ) : (
+                            <X size={16} />
+                        )}
                     </button>
                 )}
             </div>
 
             {/* Suggestions Dropdown */}
-            {showSuggestions && displayedItems.length > 0 && (
+            {showSuggestions && (
                 <div style={{
                     position: 'absolute',
                     top: '100%',
@@ -239,8 +317,53 @@ export function SearchBar() {
                     boxShadow: 'var(--shadow-lg)',
                     zIndex: 50,
                     overflow: 'hidden',
+                    maxHeight: '400px',
+                    overflowY: 'auto',
                 }}>
-                    {isShowingHistory && (
+                    {/* Category tabs (only show when typing) */}
+                    {!isShowingHistory && (
+                        <div style={{
+                            display: 'flex',
+                            borderBottom: '1px solid var(--border)',
+                            padding: '4px',
+                        }}>
+                            {(['all', 'title', 'company', 'location'] as const).map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setActiveCategory(cat)}
+                                    style={{
+                                        padding: '6px 12px',
+                                        fontSize: '12px',
+                                        border: 'none',
+                                        background: activeCategory === cat ? 'var(--accent-muted)' : 'transparent',
+                                        color: activeCategory === cat ? 'var(--accent)' : 'var(--text-secondary)',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontWeight: activeCategory === cat ? 600 : 400,
+                                        textTransform: 'capitalize',
+                                    }}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Loading state */}
+                    {isLoading && !isShowingHistory && (
+                        <div style={{
+                            padding: '20px',
+                            textAlign: 'center',
+                            color: 'var(--text-tertiary)',
+                            fontSize: '13px',
+                        }}>
+                            <Loader2 size={20} style={{ animation: 'spin 1s linear infinite', marginBottom: '8px' }} />
+                            Loading suggestions...
+                        </div>
+                    )}
+
+                    {/* History header */}
+                    {isShowingHistory && history.length > 0 && (
                         <div style={{
                             padding: '8px 12px',
                             fontSize: '11px',
@@ -253,67 +376,117 @@ export function SearchBar() {
                         </div>
                     )}
 
-                    {displayedItems.map((item, index) => (
-                        <div
-                            key={index}
-                            onClick={() => performSearch(item)}
-                            onMouseEnter={() => setSelectedIndex(index)}
-                            style={{
-                                width: '100%',
-                                textAlign: 'left',
-                                padding: '10px 14px',
-                                background: index === selectedIndex ? 'var(--surface-hover)' : 'transparent',
-                                border: 'none',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                                fontSize: '14px',
-                                color: 'var(--text-primary)',
-                                transition: 'background 0.1s',
-                                position: 'relative'
-                            }}
-                        >
-                            {isShowingHistory ? (
-                                <HistoryIcon size={14} style={{ color: 'var(--text-tertiary)' }} />
-                            ) : (
-                                <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
-                            )}
+                    {/* Suggestions list */}
+                    {!isLoading && displayedItems.length > 0 && (
+                        displayedItems.map((item, index) => (
+                            <div
+                                key={index}
+                                onClick={() => performSearch(item.text)}
+                                onMouseEnter={() => setSelectedIndex(index)}
+                                style={{
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '10px 14px',
+                                    background: index === selectedIndex ? 'var(--surface-hover)' : 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    fontSize: '14px',
+                                    color: 'var(--text-primary)',
+                                    transition: 'background 0.1s',
+                                    position: 'relative'
+                                }}
+                            >
+                                {isShowingHistory ? (
+                                    <HistoryIcon size={14} style={{ color: 'var(--text-tertiary)' }} />
+                                ) : (
+                                    <span style={{ fontSize: '14px' }}>{getCategoryIcon(item.type)}</span>
+                                )}
 
-                            <span style={{ flex: 1 }}>{item}</span>
+                                <span style={{ flex: 1 }}>{item.text}</span>
 
-                            {isShowingHistory && (
-                                <button
-                                    onClick={(e) => deleteHistoryItem(item, e)}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        padding: '4px',
-                                        cursor: 'pointer',
-                                        borderRadius: '50%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: 'var(--text-tertiary)'
-                                    }}
-                                    className="history-delete-btn"
-                                    title="Remove from history"
-                                >
-                                    <X size={14} />
-                                </button>
-                            )}
+                                {!isShowingHistory && (
+                                    <span style={{
+                                        fontSize: '11px',
+                                        color: 'var(--text-tertiary)',
+                                        textTransform: 'capitalize',
+                                        background: 'var(--surface-hover)',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                    }}>
+                                        {item.type}
+                                    </span>
+                                )}
 
-                            {!isShowingHistory && (
-                                <ArrowUpLeft
-                                    size={12}
-                                    style={{
-                                        opacity: index === selectedIndex ? 0.5 : 0,
-                                        color: 'var(--text-tertiary)'
-                                    }}
-                                />
-                            )}
+                                {isShowingHistory && (
+                                    <button
+                                        onClick={(e) => deleteHistoryItem(item.text, e)}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            padding: '4px',
+                                            cursor: 'pointer',
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: 'var(--text-tertiary)'
+                                        }}
+                                        className="history-delete-btn"
+                                        title="Remove from history"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+
+                                {!isShowingHistory && (
+                                    <ArrowUpLeft
+                                        size={12}
+                                        style={{
+                                            opacity: index === selectedIndex ? 0.5 : 0,
+                                            color: 'var(--text-tertiary)'
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        ))
+                    )}
+
+                    {/* No suggestions state */}
+                    {!isLoading && !isShowingHistory && displayedItems.length === 0 && localQuery.length >= 2 && (
+                        <div style={{
+                            padding: '20px',
+                            textAlign: 'center',
+                        }}>
+                            <div style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginBottom: '12px' }}>
+                                No suggestions found
+                            </div>
+                            <button
+                                onClick={() => performSearch(localQuery)}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: 'var(--accent)',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '20px',
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: 'var(--shadow-sm)',
+                                    transition: 'transform 0.1s, box-shadow 0.1s',
+                                }}
+                                className="see-results-btn"
+                            >
+                                <Search size={14} />
+                                See results for "{localQuery}"
+                            </button>
                         </div>
-                    ))}
+                    )}
                 </div>
             )}
 
@@ -325,6 +498,14 @@ export function SearchBar() {
                 .history-delete-btn:hover {
                     background: var(--surface-hover);
                     color: var(--error);
+                }
+                .see-results-btn:hover {
+                    transform: scale(1.02);
+                    box-shadow: var(--shadow-md);
+                }
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
                 }
             `}</style>
         </div>
