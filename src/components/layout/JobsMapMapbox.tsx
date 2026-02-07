@@ -6,13 +6,16 @@ import { useStore } from '@/store/useStore';
 
 interface JobsMapMapboxProps {
     onJobClick?: (jobId: string) => void;
+    onJobOpen?: (jobId: string) => void;
+    onJobSave?: (jobId: string) => void;
 }
 
-export default function JobsMapMapbox({ onJobClick }: JobsMapMapboxProps) {
+export default function JobsMapMapbox({ onJobClick, onJobOpen, onJobSave }: JobsMapMapboxProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const popupRef = useRef<mapboxgl.Popup | null>(null);
     const hoverPopupRef = useRef<mapboxgl.Popup | null>(null);
+    const savedOverrides = useRef<Map<string, string>>(new Map()); // Track local status changes
     const [debugError, setDebugError] = useState<string | null>(null);
 
     // Access global sidebar state
@@ -255,6 +258,11 @@ export default function JobsMapMapbox({ onJobClick }: JobsMapMapboxProps) {
 
                 const coordinates = (feature.geometry as any).coordinates.slice();
                 const props = feature.properties;
+                // Apply local override if exists
+                if (props.id && savedOverrides.current.has(props.id)) {
+                    props.status = savedOverrides.current.get(props.id);
+                }
+
                 while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
 
                 if (hoverPopupRef.current) hoverPopupRef.current.remove();
@@ -262,21 +270,32 @@ export default function JobsMapMapbox({ onJobClick }: JobsMapMapboxProps) {
                 const html = `
                     <div style="font-family: 'Inter', sans-serif; background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 220px; border: 1px solid rgba(0,0,0,0.05);">
                         <div style="font-weight: 700; font-size: 14px; color: #0f172a; margin-bottom: 4px; line-height: 1.4;">${props.title}</div>
-                        <div style="font-size: 12px; font-weight: 500; color: #475569;">${props.company}</div>
+                        <div style="font-size: 12px; font-weight: 500; color: #475569; margin-bottom: 8px;">${props.company}</div>
+                        
+                        <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+                            ${props.sourceUrl ? `<a href="${props.sourceUrl}" target="_blank" rel="noopener noreferrer" style="flex: 1; text-align: center; background: #fff; border: 1px solid #e2e8f0; color: #334155; font-size: 11px; font-weight: 600; padding: 6px 8px; border-radius: 6px; text-decoration: none; cursor: pointer;">View Original</a>` : ''}
+                            <button id="mapbox-popup-save-btn" style="background: ${props.status === 'saved' ? '#ecfdf5' : '#f1f5f9'}; border: ${props.status === 'saved' ? '1px solid #10b981' : 'none'}; color: ${props.status === 'saved' ? '#059669' : '#64748b'}; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px;" title="${props.status === 'saved' ? 'Saved' : 'Save Job'}">
+                                ${props.status === 'saved'
+                        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+                        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`
+                    }
+                            </button>
+                        </div>
+
                         ${props.salary ? `<div style="margin-top: 6px; font-size: 11px; font-weight: 600; color: #059669; background: #ecfdf5; display: inline-block; padding: 2px 6px; border-radius: 4px;">${props.salary}</div>` : ''}
                     </div>
                 `;
 
-                hoverPopupRef.current = new mapboxgl.Popup({
+                const popup = new mapboxgl.Popup({
                     closeButton: false,
                     closeOnClick: false,
                     offset: {
                         'top': [0, 0],
                         'top-left': [0, 0],
                         'top-right': [0, 0],
-                        'bottom': [0, -35], // Above the pin
-                        'bottom-left': [0, -35],
-                        'bottom-right': [0, -35],
+                        'bottom': [0, -25], // Slightly closer to pin top (approx 22px height + gap)
+                        'bottom-left': [0, -25],
+                        'bottom-right': [0, -25],
                         'left': [0, 0],
                         'right': [0, 0]
                     },
@@ -286,6 +305,59 @@ export default function JobsMapMapbox({ onJobClick }: JobsMapMapboxProps) {
                     .setLngLat(coordinates)
                     .setHTML(html)
                     .addTo(mapInstance);
+
+                hoverPopupRef.current = popup;
+
+                // Add Event Listeners to Popup DOM
+                const popupEl = popup.getElement();
+
+                if (popupEl) {
+                    // Keep open when hovering the popup
+                    popupEl.addEventListener('mouseenter', () => {
+                        if (hoverTimeout) clearTimeout(hoverTimeout);
+                    });
+
+                    // Close when leaving the popup
+                    popupEl.addEventListener('mouseleave', () => {
+                        handleMouseLeave();
+                    });
+
+                    // Handle Save Button
+                    const saveBtn = popupEl.querySelector('#mapbox-popup-save-btn');
+                    if (saveBtn) {
+                        saveBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (props.id) {
+                                onJobSave?.(props.id);
+
+                                // 1. Visual Feedback
+                                const newStatus = props.status === 'saved' ? 'fresh' : 'saved'; // Toggle
+                                props.status = newStatus;
+                                savedOverrides.current.set(props.id, newStatus); // Persist override
+
+                                // Update button HTML
+                                saveBtn.innerHTML = newStatus === 'saved'
+                                    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+                                    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`;
+
+                                (saveBtn as HTMLElement).style.background = newStatus === 'saved' ? '#ecfdf5' : '#f1f5f9';
+                                (saveBtn as HTMLElement).style.border = newStatus === 'saved' ? '1px solid #10b981' : 'none';
+                                (saveBtn as HTMLElement).style.color = newStatus === 'saved' ? '#059669' : '#64748b';
+
+                                // 2. Update Source Data (so if we leave and come back, it's correct)
+                                // This is tricky with GeoJSON source. We'd need to find the feature in the big collection.
+                                // let's try to do it if we have the full data?
+                                // We don't have the full data easily accessible here as a simple array variable we can mutate and set.
+                                // Wait, `triggerFetch` sets data.
+                                // We can maintain a `savedOverrides` Map<id, status> and use it during render?
+                                // That's cleaner. But `showHoverPopup` uses `e.features[0].properties`.
+                                // Let's add a global `savedOverrides` ref?
+                            }
+                        });
+                    }
+                }
+
+
             };
 
             const handleMouseEnter = (e: any) => {
@@ -298,12 +370,13 @@ export default function JobsMapMapbox({ onJobClick }: JobsMapMapboxProps) {
                 hoverTimeout = setTimeout(() => {
                     if (mapInstance.getCanvas()) mapInstance.getCanvas().style.cursor = '';
                     if (hoverPopupRef.current) hoverPopupRef.current.remove();
-                }, 100);
+                }, 150); // Slightly longer timeout to allow moving to popup
             };
 
             mapInstance.on('mouseenter', 'unclustered-point', handleMouseEnter);
             mapInstance.on('mouseenter', 'unclustered-label', handleMouseEnter);
 
+            // Important: logic for mouseleave must be shared
             mapInstance.on('mouseleave', 'unclustered-point', handleMouseLeave);
             mapInstance.on('mouseleave', 'unclustered-label', handleMouseLeave);
 

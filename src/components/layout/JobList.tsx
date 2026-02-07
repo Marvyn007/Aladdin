@@ -316,6 +316,7 @@ export function JobList({ onJobClick }: JobListProps) {
                 style={{
                     flex: 1,
                     overflowY: 'auto',
+                    overflowX: 'hidden', // Prevent horizontal scroll
                     padding: '12px', // Compact padding
                 }}
             >

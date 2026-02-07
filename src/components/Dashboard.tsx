@@ -304,7 +304,7 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
         viewMode,
         setViewMode,
     } = useStore();
-    const { setPagination, setSorting } = useStoreActions();
+    const { setPagination, setSorting, toggleJobStatus } = useStoreActions();
 
     const { isSignedIn, isLoaded: isAuthLoaded } = useAuth();
     const searchParams = useSearchParams();
@@ -322,6 +322,7 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
     const [applications, setApplications] = useState<ApplicationWithJob[]>([]);
 
     const [activeId, setActiveId] = useState<string | null>(null);
+    const [selectedMapJob, setSelectedMapJob] = useState<Job | null>(null); // State for Map Overlay
 
     // Mobile responsive state
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -1010,16 +1011,111 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                             />
                         )}
                         {isMapMode ? (
-                            <JobsMap
-                                onJobClick={(jobId: string) => {
-                                    const job = jobs.find(j => j.id === jobId);
-                                    if (job) handleJobClick(job);
-                                }}
-                                onBack={() => {
-                                    // Navigate back to Home/List
-                                    router.push('/');
-                                }}
-                            />
+                            <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                                <JobsMap
+                                    onJobClick={(jobId: string) => {
+                                        const job = jobs.find(j => j.id === jobId);
+                                        if (job) handleJobClick(job);
+                                    }}
+                                    onJobOpen={(jobId: string) => {
+                                        const job = jobs.find(j => j.id === jobId);
+                                        if (job) {
+                                            setSelectedMapJob(job);
+                                        } else {
+                                            // Fallback: If job not in current list (pagination?), we might need to fetch it.
+                                            // For now, we unfortunately can't show details if not loaded.
+                                            // TODO: Implementing single job fetch would be better.
+                                            console.warn("Job not found in current list:", jobId);
+                                        }
+                                    }}
+                                    onJobSave={(jobId: string) => {
+                                        // Toggle save status
+                                        // We need the current status. The map might not know it, but the store does.
+                                        // Actually toggleJobStatus calculates new status if we pass 'saved'/'fresh'?
+                                        // No, toggleJobStatus(id, newStatus).
+                                        // We need to find the job to know current status.
+                                        const job = jobs.find(j => j.id === jobId);
+                                        const currentStatus = job?.status || 'fresh'; // Default to fresh if unknown
+                                        toggleJobStatus(jobId, currentStatus === 'saved' ? 'fresh' : 'saved');
+                                    }}
+                                    onBack={() => {
+                                        router.push('/');
+                                    }}
+                                />
+
+                                {/* Map Detail Overlay */}
+                                {selectedMapJob && (
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            right: 0, // Align right usually
+                                            width: isNarrowLayout ? '100%' : '50%', // Full width on mobile, half on desktop? Or maybe fixed width?
+                                            maxWidth: '600px',
+                                            height: '100%',
+                                            background: 'var(--background)',
+                                            zIndex: 1000,
+                                            borderLeft: '1px solid var(--border)',
+                                            boxShadow: '-4px 0 16px rgba(0,0,0,0.1)',
+                                            display: 'flex',
+                                            flexDirection: 'column'
+                                        }}
+                                    >
+                                        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                                            <JobDetail
+                                                job={selectedMapJob}
+                                                onApply={handleApply}
+                                                onDelete={handleDeleteJob}
+                                                onGenerateCoverLetter={handleGenerateCoverLetter}
+                                                onGenerateTailoredResume={handleGenerateTailoredResume}
+                                                applicationStatus={applicationStatus[selectedMapJob.id] || 'none'}
+                                                isMobileVisible={true} // Always visible in this overlay
+                                                onBack={() => setSelectedMapJob(null)} // Close overlay
+                                                isAuthenticated={isSignedIn || false}
+                                            />
+                                        </div>
+                                        {/* Close button handled by JobDetail's onBack or custom X? 
+                                            JobDetail has a mobile back button. 
+                                            For desktop, JobDetail doesn't usually show a close button unless isMobileVisible?
+                                            Actually JobDetail only shows Back button if onBack is provided.
+                                            So passing onBack will show the "Back to Jobs" (or similar) button.
+                                            We might want a specific "X" if the design calls for it.
+                                            The user asked for: "X" on top right.
+                                            JobDetail likely needs to support closing or we overlay an X.
+                                            Let's overlay a dedicated Close button if JobDetail implementation doesn't fit perfectly.
+                                            But JobDetail header is sticky.
+                                            Let's try passing onBack first.
+                                        */}
+                                        {!isNarrowLayout && (
+                                            <button
+                                                onClick={() => setSelectedMapJob(null)}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '12px',
+                                                    right: '20px',
+                                                    zIndex: 20,
+                                                    background: 'rgba(255,255,255,0.8)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: '50%',
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    color: 'var(--text-primary)',
+                                                    backdropFilter: 'blur(4px)'
+                                                }}
+                                            >
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <>
                                 {/* Show Job List (Unified for Public/Private) */}

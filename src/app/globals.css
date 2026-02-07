@@ -673,6 +673,24 @@ body {
   background: var(--background-secondary);
   padding: 0 16px;
   flex-shrink: 0;
+  /* Horizontal scroll for mobile */
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Strict vertical lock */
+  white-space: nowrap;
+  touch-action: pan-x;
+  /* Browser handling: only horizontal pan */
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE/Edge */
+}
+
+/* Hide scrollbar for Chrome/Safari/Opera */
+.view-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .view-tab {

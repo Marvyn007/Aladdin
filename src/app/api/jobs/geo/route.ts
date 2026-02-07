@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
                 j.company, 
                 j.source_url as "sourceUrl", 
                 j.posted_at as "postedAt",
+                j.status,
                 p.location_label as location
             FROM job_geo_points p
             JOIN jobs j ON p.job_id = j.id
@@ -64,7 +65,8 @@ export async function GET(req: NextRequest) {
                 company: row.company,
                 location: row.location,
                 postedAt: row.postedAt,
-                sourceUrl: row.sourceUrl
+                sourceUrl: row.sourceUrl,
+                status: row.status
             }
         }));
 

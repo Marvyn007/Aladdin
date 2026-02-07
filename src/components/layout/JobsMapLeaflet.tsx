@@ -22,11 +22,14 @@ interface JobGeo {
         location: string;
         postedAt: string;
         sourceUrl: string;
+        status?: string;
     };
 }
 
 interface JobsMapProps {
     onJobClick?: (jobId: string) => void;
+    onJobOpen?: (jobId: string) => void;
+    onJobSave?: (jobId: string) => void;
 }
 
 function MapEvents({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLngBounds) => void }) {
@@ -69,7 +72,7 @@ const createJobIcon = (title: string) => {
     });
 };
 
-export default function JobsMapLeaflet({ onJobClick }: JobsMapProps) {
+export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: JobsMapProps) {
     const [jobs, setJobs] = useState<JobGeo[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -157,19 +160,80 @@ export default function JobsMapLeaflet({ onJobClick }: JobsMapProps) {
                         >
                             <Tooltip
                                 direction="top"
-                                offset={[0, -20]}
+                                offset={[0, -5]} // Slightly overlap to ensure no gap for hover interaction
                                 opacity={1}
+                                interactive={true} // Allow clicking buttons inside
                                 className="custom-tooltip"
                             >
                                 <div style={{
                                     padding: '8px 4px',
-                                    minWidth: '180px',
+                                    minWidth: '200px',
                                     fontFamily: "'Inter', sans-serif"
                                 }}>
                                     <h3 style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{job.properties.title}</h3>
-                                    <p style={{ margin: '0', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{job.properties.company}</p>
+                                    <p style={{ margin: '0 0 8px 0', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{job.properties.company}</p>
+
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                        {job.properties.sourceUrl && (
+                                            <a
+                                                href={job.properties.sourceUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{
+                                                    flex: 1,
+                                                    textAlign: 'center',
+                                                    background: '#fff',
+                                                    border: '1px solid #e2e8f0',
+                                                    color: '#334155',
+                                                    fontSize: '11px',
+                                                    fontWeight: 600,
+                                                    padding: '4px 8px',
+                                                    borderRadius: '4px',
+                                                    textDecoration: 'none',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                View Original
+                                            </a>
+                                        )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onJobSave?.(job.properties.id);
+
+                                                // Optimistic update
+                                                setJobs(currentStatus =>
+                                                    currentStatus.map(j =>
+                                                        j.properties.id === job.properties.id
+                                                            ? { ...j, properties: { ...j.properties, status: j.properties.status === 'saved' ? 'fresh' : 'saved' } }
+                                                            : j
+                                                    )
+                                                );
+                                            }}
+                                            title={job.properties.status === 'saved' ? 'Saved' : 'Save Job'}
+                                            style={{
+                                                background: job.properties.status === 'saved' ? '#ecfdf5' : '#f1f5f9',
+                                                border: job.properties.status === 'saved' ? '1px solid #10b981' : 'none',
+                                                color: job.properties.status === 'saved' ? '#059669' : '#64748b',
+                                                padding: '4px 8px',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: '32px'
+                                            }}
+                                        >
+                                            {job.properties.status === 'saved' ? (
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                            ) : (
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>
+                                            )}
+                                        </button>
+                                    </div>
+
                                     {job.properties.location && (
-                                        <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#64748b' }}>📍 {job.properties.location}</p>
+                                        <p style={{ margin: '8px 0 0 0', fontSize: '10px', color: '#64748b', textAlign: 'right' }}>📍 {job.properties.location}</p>
                                     )}
                                 </div>
                             </Tooltip>

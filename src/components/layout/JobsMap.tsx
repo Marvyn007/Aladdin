@@ -17,6 +17,8 @@ const JobsMapMapbox = dynamic(() => import('./JobsMapMapbox'), {
 
 interface JobsMapProps {
     onJobClick?: (jobId: string) => void;
+    onJobOpen?: (jobId: string) => void;
+    onJobSave?: (jobId: string) => void; // New prop for Save
     onBack?: () => void;
 }
 
