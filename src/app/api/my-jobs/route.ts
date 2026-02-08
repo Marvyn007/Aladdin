@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getJobs, getUserJobsCount, getLastJobIngestionTime } from '@/lib/db';
+import { getJobs, getTotalUserJobsCount, getLastJobIngestionTime } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
 
 export async function GET(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
         const [jobs, total, lastUpdated] = await Promise.all([
             getJobs(userId, status, page, limit, sortBy, sortDir),
-            getUserJobsCount(userId, status),
+            getTotalUserJobsCount(userId, status),
             getLastJobIngestionTime()
         ]);
 

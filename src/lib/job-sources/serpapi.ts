@@ -1,4 +1,5 @@
 import { BaseJobSource, JobFilter, ScrapedJob } from './types';
+import { validateJobDescription } from '../job-validation';
 
 export class SerpAPIAdapter extends BaseJobSource {
     constructor() {
@@ -63,7 +64,15 @@ export class SerpAPIAdapter extends BaseJobSource {
                     raw_source_data: j
                 }));
 
-                results.push(...mapped);
+                const validJobs = mapped.filter((job: ScrapedJob) => {
+                    const validation = validateJobDescription(job.description);
+                    if (!validation.valid) {
+                        console.warn(`[SerpAPI] Job rejected: ${job.title} - ${validation.reason}`);
+                    }
+                    return validation.valid;
+                });
+
+                results.push(...validJobs);
                 await this.delay(500); // Mild delay
             }
 

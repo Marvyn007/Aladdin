@@ -558,9 +558,30 @@ function ProfileTab({
     const [isSavingUsername, setIsSavingUsername] = useState(false);
     const [localUsernameError, setLocalUsernameError] = useState<string | null>(null);
     const [usernameSaved, setUsernameSaved] = useState(true);
+    const [reputation, setReputation] = useState<number>(0);
+    const [loadingReputation, setLoadingReputation] = useState(true);
 
     // Track if username has unsaved changes
     const hasUnsavedUsername = username !== savedUsername;
+
+    // Fetch user's reputation from database
+    const refreshReputation = () => {
+        if (!user?.id) return;
+        setLoadingReputation(true);
+        fetch(`/api/vote-job?userId=${user.id}`)
+            .then(res => res.json())
+            .then(data => {
+                if (typeof data.votes === 'number') {
+                    setReputation(data.votes);
+                }
+            })
+            .catch(err => console.error('Failed to fetch reputation:', err))
+            .finally(() => setLoadingReputation(false));
+    };
+
+    useEffect(() => {
+        refreshReputation();
+    }, [user?.id]);
 
     // Update savedUsername when it changes externally
     useEffect(() => {
@@ -645,20 +666,92 @@ function ProfileTab({
         }
     };
 
-
-
     const displayError = localUsernameError || usernameError;
     const canSaveUsername = !localUsernameError && hasUnsavedUsername && !isSavingUsername;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-
-
-
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
                 Profile Information
             </h3>
+
+            {/* Reputation Section */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between', // Changed to space-between to accommodate button
+                padding: '16px',
+                background: 'var(--background-secondary)',
+                borderRadius: '12px',
+                border: '1px solid var(--border)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '50%',
+                        background: reputation >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: `2px solid ${reputation >= 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                    }}>
+                        <span style={{
+                            fontSize: '20px',
+                            fontWeight: 700,
+                            color: reputation >= 0 ? '#22c55e' : '#ef4444',
+                        }}>
+                            {loadingReputation ? '...' : (reputation >= 0 ? `+${reputation}` : reputation)}
+                        </span>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                            Your Reputation
+                        </p>
+                        <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '4px 0 0' }}>
+                            Based on votes from jobs you&apos;ve posted
+                        </p>
+                    </div>
+                </div>
+
+                <button
+                    onClick={refreshReputation}
+                    disabled={loadingReputation}
+                    style={{
+                        padding: '8px',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        cursor: loadingReputation ? 'default' : 'pointer',
+                        color: 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: loadingReputation ? 0.7 : 1,
+                        transition: 'all 0.2s ease'
+                    }}
+                    title="Refresh Reputation"
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{
+                            animation: loadingReputation ? 'spin 1s linear infinite' : 'none'
+                        }}
+                    >
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                        <path d="M21 3v5h-5" />
+                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                        <path d="M3 21v-5h5" />
+                    </svg>
+                </button>
+            </div>
 
             {/* Success Message */}
             {successMessage && (

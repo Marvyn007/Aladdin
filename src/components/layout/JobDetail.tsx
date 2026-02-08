@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore, useStoreActions } from '@/store/useStore';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -19,6 +19,182 @@ interface JobDetailProps {
     isMobileVisible?: boolean;
     onBack?: () => void;
     isAuthenticated?: boolean;
+}
+
+// User Reputation Vote Control Component
+interface VoteControlProps {
+    targetUser: {
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        votes: number;
+    } | null;
+    currentUserId: string | null;
+    onVoteSuccess?: () => void;
+}
+
+function VoteControl({ targetUser, currentUserId, onVoteSuccess }: VoteControlProps) {
+    const [votes, setVotes] = useState(targetUser?.votes || 0);
+    const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    // Sync votes with prop (initial load)
+    useEffect(() => {
+        setVotes(targetUser?.votes || 0);
+    }, [targetUser?.votes]);
+
+    // Polling for real-time updates (Short Polling: 3s)
+    useEffect(() => {
+        if (!targetUser?.id) return;
+
+        let isMounted = true;
+        const fetchVotes = async () => {
+            try {
+                const url = new URL('/api/vote-job', window.location.origin);
+                url.searchParams.set('userId', targetUser.id);
+
+                const res = await fetch(url.toString());
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted) {
+                        setVotes(data.votes); // Always update total count
+                        if (currentUserId && data.userVote !== undefined) {
+                            setUserVote(data.userVote); // Update own vote status if logged in
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Vote polling error:', error);
+            }
+        };
+
+        // Initial fetch
+        fetchVotes();
+
+        // Poll every 3 seconds
+        const intervalId = setInterval(fetchVotes, 3000);
+
+        return () => {
+            isMounted = false;
+            clearInterval(intervalId);
+        };
+    }, [targetUser?.id, currentUserId]);
+
+    const handleVote = async (type: 'up' | 'down') => {
+        if (!currentUserId || !targetUser || loading) return;
+
+        // Prevent self-voting
+        if (currentUserId === targetUser.id) return;
+
+        // If user already voted this way, do nothing (strict single vote per type)
+        // Actually, if clicking same vote, we might want to toggle it off?
+        // User request says "exactly once". Usually means toggle support or strict one-time.
+        // Let's assume strict set for now, or toggle if backend supports deletion.
+        // Current backend supports flipping. If same, it returns current.
+        // Let's keep UI simple: clicking same does nothing as per typical "one vote" interpretation unless toggle requested.
+
+        if (userVote === type) return;
+
+        setLoading(true);
+        const oldVote = userVote;
+        const oldVotes = votes;
+
+        // Optimistic Calc
+        // No vote -> Up (+1)
+        // Down -> Up (+2)
+        // No vote -> Down (-1)
+        // Up -> Down (-2)
+
+        let delta = 0;
+        if (type === 'up') {
+            delta = oldVote === 'down' ? 2 : 1;
+        } else {
+            delta = oldVote === 'up' ? -2 : -1;
+        }
+
+        // Optimistic update
+        setVotes(prev => prev + delta);
+        setUserVote(type);
+
+        try {
+            const res = await fetch('/api/vote-job', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: targetUser.id, voteType: type })
+            });
+
+            if (!res.ok) {
+                // Revert on failure
+                setVotes(oldVotes);
+                setUserVote(oldVote);
+                const err = await res.json();
+                if (err.error === 'Cannot vote for yourself') {
+                    alert("You cannot vote for yourself.");
+                }
+            } else {
+                const data = await res.json();
+                // Sync with server truth just in case
+                setVotes(data.votes);
+                if (onVoteSuccess) onVoteSuccess();
+            }
+        } catch (err) {
+            // Revert on error
+            setVotes(oldVotes);
+            setUserVote(oldVote);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!targetUser) return null;
+
+    const userName = [targetUser.firstName, targetUser.lastName].filter(Boolean).join(' ') || 'User';
+    const canVote = currentUserId && currentUserId !== targetUser.id;
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', background: 'var(--surface)', padding: '6px 10px', borderRadius: '12px', minWidth: '50px' }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '2px' }}>
+                Reputation
+            </span>
+            <button
+                onClick={(e) => { e.stopPropagation(); handleVote('up'); }}
+                disabled={!canVote || loading}
+                title={!currentUserId ? "Sign in to vote" : (currentUserId === targetUser.id ? "You cannot vote for yourself" : `Upvote ${userName}`)}
+                style={{
+                    color: userVote === 'up' ? 'var(--success)' : 'var(--text-tertiary)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: canVote && userVote !== 'up' ? 'pointer' : 'default',
+                    padding: '2px',
+                    lineHeight: 0,
+                    opacity: canVote ? 1 : 0.5,
+                    transition: 'transform 0.1s'
+                }}
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={userVote === 'up' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+            </button>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: votes >= 0 ? 'var(--success)' : 'var(--error)', minWidth: '20px', textAlign: 'center' }}>
+                {votes > 0 ? '+' : ''}{votes}
+            </span>
+            <button
+                onClick={(e) => { e.stopPropagation(); handleVote('down'); }}
+                disabled={!canVote || loading}
+                title={!currentUserId ? "Sign in to vote" : (currentUserId === targetUser.id ? "You cannot vote for yourself" : `Downvote ${userName}`)}
+                style={{
+                    color: userVote === 'down' ? 'var(--error)' : 'var(--text-tertiary)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: canVote && userVote !== 'down' ? 'pointer' : 'default',
+                    padding: '2px',
+                    lineHeight: 0,
+                    opacity: canVote ? 1 : 0.5,
+                    transition: 'transform 0.1s'
+                }}
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={userVote === 'down' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+            </button>
+        </div>
+    );
 }
 
 // Notion-like text parser and renderer
@@ -324,56 +500,95 @@ export function JobDetail({
                                 <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, lineHeight: 1.4 }}>
                                     {job.title}
                                 </h2>
-                                {job.isImported && (
-                                    <span style={{
-                                        fontSize: '11px',
-                                        background: 'var(--accent)',
-                                        color: '#fff',
-                                        padding: '3px 8px',
-                                        borderRadius: '12px',
-                                        fontWeight: 600,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.5px',
-                                        flexShrink: 0,
-                                    }}>
-                                        Imported
-                                    </span>
-                                )}
                             </div>
                             {job.company && (
-                                <p style={{ fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                                <p style={{ fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                                     {job.company}
                                 </p>
                             )}
                         </div>
-                        <div
-                            style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                padding: '16px 20px',
-                                background: 'var(--surface)',
-                                borderRadius: 'var(--radius-lg)',
-                                minWidth: '80px',
-                            }}
-                        >
-                            <span
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                            {/* Poster Card (Profile + Reputation) */}
+                            {job.postedBy && (
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    padding: '6px 12px 6px 6px',
+                                    background: 'var(--surface)',
+                                    borderRadius: 'var(--radius-lg)',
+                                    border: '1px solid var(--border)',
+                                }}>
+                                    {/* Avatar & Name */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <img
+                                            src={job.postedBy.imageUrl || '/placeholder-user.jpg'}
+                                            alt={`${job.postedBy.firstName || 'User'}`}
+                                            style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                objectFit: 'cover',
+                                                border: '1px solid var(--border)',
+                                            }}
+                                            onError={(e) => {
+                                                e.currentTarget.src = '/placeholder-user.jpg';
+                                            }}
+                                        />
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                                                {job.postedBy.firstName} {job.postedBy.lastName}
+                                            </span>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', lineHeight: 1 }}>
+                                                Poster
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Vertical Separator */}
+                                    <div style={{ width: '1px', height: '24px', background: 'var(--border)' }}></div>
+
+                                    {/* Vote Control */}
+                                    <VoteControl
+                                        targetUser={job.postedBy}
+                                        currentUserId={isAuthenticated ? 'user' : null}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Match Score */}
+                            <div
                                 style={{
-                                    fontSize: '28px',
-                                    fontWeight: 700,
-                                    color: getScoreColor(job.match_score),
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    padding: '12px 16px',
+                                    background: 'var(--surface)',
+                                    borderRadius: 'var(--radius-lg)',
+                                    minWidth: '70px',
                                 }}
                             >
-                                {job.match_score}
-                            </span>
-                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
-                                Match
-                            </span>
+                                <span
+                                    style={{
+                                        fontSize: '24px',
+                                        fontWeight: 700,
+                                        color: getScoreColor(job.match_score),
+                                    }}
+                                >
+                                    {job.match_score}
+                                </span>
+                                <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                                    Match
+                                </span>
+                            </div>
                         </div>
                     </div>
 
                     {/* Meta info */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '8px' }}>
+                        {/* Poster Info */}
+
+
                         {(job.location_display || job.location) && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

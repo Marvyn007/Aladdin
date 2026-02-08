@@ -39,6 +39,9 @@ export function getDbType(): DatabaseType {
         // console.log('[DB] Using Postgres'); // Noisy, uncomment if needed
         return 'postgres';
     }
+
+    // Force strict Neon usage requested by user
+    /*
     if (isSupabaseConfigured()) {
         console.log('[DB] Using Supabase (Fallback)');
         return 'supabase';
@@ -47,7 +50,9 @@ export function getDbType(): DatabaseType {
         console.log('[DB] Using SQLite');
         return 'sqlite';
     }
-    console.error('[DB] FATAL: No database configured!');
+    */
+
+    console.error('[DB] FATAL: Neon (Postgres) is not configured! DATABASE_URL is missing.');
     throw new Error('No database configured. Set DATABASE_URL, SUPABASE_URL/KEY, or USE_SQLITE=true');
 }
 
@@ -133,68 +138,109 @@ export async function getAllPublicJobs(
     page: number = 1,
     limit: number = 50,
     sortBy: 'time' | 'imported' | 'score' = 'time',
-    sortDir: 'asc' | 'desc' = 'desc'
+    sortDir: 'asc' | 'desc' = 'desc',
+    currentUserId: string | null = null
 ): Promise<Job[]> {
     const dbType = getDbType();
     const offset = (page - 1) * limit;
 
-    // Determine sort column and direction
-    let orderByClause = '';
-    const dir = sortDir === 'asc' ? 'ASC' : 'DESC'; // Safe direction
-
-    // Sort logic mapping
-    if (sortBy === 'imported') {
-        orderByClause = `is_imported ${dir}, posted_at DESC NULLS LAST`;
-    } else {
-        // default time
-        orderByClause = `posted_at ${dir} NULLS LAST`;
-    }
+    // Mapping
+    const sortColumn = {
+        'time': 'created_at',
+        'imported': 'scraped_at',
+        'score': 'created_at' // Public jobs don't have match_score usually
+    }[sortBy] || 'created_at';
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
-        const res = await pool.query(
-            `SELECT * FROM jobs 
-             ORDER BY ${orderByClause}, id ASC
-             LIMIT $1 OFFSET $2`,
-            [limit, offset]
-        );
-        return res.rows.map(row => ({
+        const query = currentUserId
+            ? `
+            SELECT j.*, 
+                   uj.poster_first_name, uj.poster_last_name, uj.poster_image_url,
+                   u.votes as poster_votes,
+                   u.id as poster_id,
+                   viewer_uj.status as viewer_status
+            FROM jobs j
+            LEFT JOIN user_jobs uj ON j.id = uj.job_id AND j.posted_by_user_id = uj.user_id
+            LEFT JOIN users u ON j.posted_by_user_id = u.id
+            LEFT JOIN user_jobs viewer_uj ON j.id = viewer_uj.job_id AND viewer_uj.user_id = $3
+            ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}
+            LIMIT $1 OFFSET $2
+            `
+            : `
+            SELECT j.*, 
+                   uj.poster_first_name, uj.poster_last_name, uj.poster_image_url,
+                   u.votes as poster_votes,
+                   u.id as poster_id
+            FROM jobs j
+            LEFT JOIN user_jobs uj ON j.id = uj.job_id AND j.posted_by_user_id = uj.user_id
+            LEFT JOIN users u ON j.posted_by_user_id = u.id
+            ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}
+            LIMIT $1 OFFSET $2
+            `;
+
+        const params = currentUserId ? [limit, offset, currentUserId] : [limit, offset];
+        const res = await pool.query(query, params);
+
+        console.log(`[DB] getAllPublicJobs: returned ${res.rows.length} rows (offset ${offset}, limit ${limit})`);
+
+        return res.rows.map((row) => ({
             ...row,
-            matched_skills: typeof row.matched_skills === 'string' ? JSON.parse(row.matched_skills) : row.matched_skills,
-            missing_skills: typeof row.missing_skills === 'string' ? JSON.parse(row.missing_skills) : row.missing_skills,
-            isImported: Boolean(row.is_imported),
-            date_posted_relative: Boolean(row.date_posted_relative),
-            extraction_confidence: typeof row.extraction_confidence === 'string' ? JSON.parse(row.extraction_confidence) : row.extraction_confidence,
+            status: row.viewer_status || 'fresh',
+            matched_skills: row.matched_skills,
+            missing_skills: row.missing_skills,
+            postedBy: row.poster_id ? {
+                id: row.poster_id,
+                firstName: row.poster_first_name || row.first_name, // Fallback to user table if snapshot missing
+                lastName: row.poster_last_name || row.last_name,
+                imageUrl: row.poster_image_url || row.image_url,
+                votes: row.poster_votes || 0
+            } : null
         })) as Job[];
+
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
-        let query = client.from('jobs').select('*');
+        // For Supabase, simplified approach: fetch jobs then fetch status in parallel or let the client handle it?
+        // Ideally we use a similar join. Supabase JS is tricky with complex self-joins on same table with different filters.
+        // We'll stick to the existing behavior for Supabase for now or add a basic post-fetch enhancement if needed.
+        // Assuming Postgres is the primary target as per logs.
 
-        // Supabase ordering
-        if (sortBy === 'imported') {
-            query = query.order('is_imported', { ascending: sortDir === 'asc', nullsFirst: false })
-                .order('posted_at', { ascending: false, nullsFirst: false });
-        } else {
-            query = query.order('posted_at', { ascending: sortDir === 'asc', nullsFirst: false });
-        }
-
-        // Always tie-break with ID
-        query = query.order('id', { ascending: true })
+        const { data, error } = await client
+            .from('jobs')
+            .select('*, postedBy:users!jobs_posted_by_user_id_fkey(id, votes), user_jobs(user_id, poster_first_name, poster_last_name, poster_image_url)')
+            .order(sortColumn, { ascending: sortDir === 'asc' })
             .range(offset, offset + limit - 1);
 
-        const { data, error } = await query;
-
         if (error) throw error;
-        return (data || []).map((row: any) => ({
-            ...row,
-            isImported: Boolean(row.is_imported),
-            date_posted_relative: Boolean(row.date_posted_relative),
-        })) as Job[];
+
+        // If currentUserId is provided, we might need a separate query to get statuses 
+        // OR filtering the user_jobs result if it returns all.
+        // The current select user_jobs(...) returns ALL user_jobs for that job. 
+        // We can find the one matching currentUserId.
+
+        return (data || []).map((row: any) => {
+            const posterUj = row.user_jobs?.find((uj: any) => uj.user_id === row.posted_by_user_id);
+            const viewerUj = currentUserId ? row.user_jobs?.find((uj: any) => uj.user_id === currentUserId) : null;
+
+            return {
+                ...row,
+                status: viewerUj?.status || 'fresh', // Default to fresh if not found
+                postedBy: row.postedBy ? {
+                    id: row.postedBy.id,
+                    firstName: posterUj?.poster_first_name || null,
+                    lastName: posterUj?.poster_last_name || null,
+                    imageUrl: posterUj?.poster_image_url || null,
+                    votes: row.postedBy.votes || 0
+                } : null
+            };
+        }) as Job[];
+
     } else {
         const db = getSQLiteDB();
+        // SQLite local handling
         const rows = db.prepare(`
             SELECT * FROM jobs 
-            ORDER BY ${orderByClause}, id ASC
+            ORDER BY ${sortColumn} ${sortDir.toUpperCase()}, id ASC
             LIMIT ? OFFSET ?
         `).all(limit, offset) as Record<string, unknown>[];
 
@@ -205,12 +251,133 @@ export async function getAllPublicJobs(
             isImported: Boolean(row.is_imported),
             date_posted_relative: Boolean(row.date_posted_relative),
             extraction_confidence: row.extraction_confidence ? JSON.parse(row.extraction_confidence as string) : null,
+            postedBy: null // SQLite local
         })) as Job[];
     }
 }
 
 /**
- * Get total count of ALL public jobs (for pagination UI)
+ * Get jobs filtered by user status
+ */
+export async function getJobs(
+    userId: string,
+    status: JobStatus = 'fresh',
+    page: number = 1,
+    limit: number = 50,
+    sortBy: 'time' | 'imported' | 'score' | 'relevance' = 'time',
+    sortDir: 'asc' | 'desc' = 'desc'
+): Promise<Job[]> {
+    const offset = (page - 1) * limit;
+    const dbType = getDbType();
+
+    // Mapping for sort columns
+    // We default to created_at for time
+    const sortColumn = {
+        'time': 'created_at',
+        'imported': 'scraped_at',
+        'score': 'match_score',
+        'relevance': 'match_score'
+    }[sortBy] || 'created_at';
+
+    if (dbType === 'postgres') {
+        const pool = getPostgresPool();
+        const res = await pool.query(`
+            SELECT j.*, 
+                   uj.status, 
+                   uj.match_score, 
+                   uj.matched_skills, 
+                   uj.missing_skills, 
+                   uj.why, 
+                   uj.archived_at,
+                   poster_uj.poster_first_name, poster_uj.poster_last_name, poster_uj.poster_image_url,
+                   u.id as poster_id, u.votes as poster_votes
+            FROM jobs j
+            JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
+            LEFT JOIN user_jobs poster_uj ON j.id = poster_uj.job_id AND j.posted_by_user_id = poster_uj.user_id
+            LEFT JOIN users u ON j.posted_by_user_id = u.id
+            WHERE (uj.status = $2 OR (uj.status IS NULL AND $2 = 'fresh'))
+            ORDER BY ${(sortBy === 'score' || sortBy === 'relevance') ? 'uj.match_score' : 'j.' + sortColumn} ${sortDir.toUpperCase()}
+            LIMIT $3 OFFSET $4
+        `, [userId, status, limit, offset]);
+
+        return res.rows.map((row) => ({
+            ...row,
+            matched_skills: row.matched_skills, // Postgres driver parses JSON automatically
+            missing_skills: row.missing_skills,
+            postedBy: row.poster_id ? {
+                id: row.poster_id,
+                firstName: row.poster_first_name,
+                lastName: row.poster_last_name,
+                imageUrl: row.poster_image_url,
+                votes: row.poster_votes || 0
+            } : null
+        })) as Job[];
+
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+
+        let query = client.from('jobs')
+            .select(`
+                *,
+                user_jobs!inner (
+                    status, match_score, matched_skills, missing_skills, why, archived_at
+                ),
+                postedBy:users!jobs_posted_by_user_id_fkey(
+                    id, votes
+                ),
+                poster_uj:user_jobs(user_id, poster_first_name, poster_last_name, poster_image_url)
+            `)
+            .eq('user_jobs.user_id', userId)
+            .eq('user_jobs.status', status)
+            .range(offset, offset + limit - 1);
+
+        if (sortBy === 'score' || sortBy === 'relevance') {
+            query = query.order('match_score', { foreignTable: 'user_jobs', ascending: sortDir === 'asc' });
+        } else {
+            query = query.order(sortColumn, { ascending: sortDir === 'asc' });
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return (data || []).map((row: any) => {
+            const posterUj = row.poster_uj?.find((uj: any) => uj.user_id === row.posted_by_user_id);
+            return {
+                ...row,
+                ...row.user_jobs[0], // Flatten user_jobs props (the one for current user)
+                postedBy: row.postedBy ? {
+                    id: row.postedBy.id,
+                    firstName: posterUj?.poster_first_name || null,
+                    lastName: posterUj?.poster_last_name || null,
+                    imageUrl: posterUj?.poster_image_url || null,
+                    votes: row.postedBy.votes || 0
+                } : null
+            };
+        }) as Job[];
+
+    } else {
+        const db = getSQLiteDB();
+        // Simplified SQLite query - might need adjustment for JOINs if strictly needed but usually local doesn't have users table fully populated same way
+        const rows = db.prepare(`
+            SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at
+            FROM jobs j
+            JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
+            WHERE (uj.status = ? OR (uj.status IS NULL AND ? = 'fresh'))
+            ORDER BY ${(sortBy === 'score' || sortBy === 'relevance') ? 'uj.match_score' : 'j.' + sortColumn} ${sortDir.toUpperCase()}
+            LIMIT ? OFFSET ?
+        `).all(userId, status, status, limit, offset) as Record<string, unknown>[];
+
+        return rows.map((row) => ({
+            ...row,
+            matched_skills: row.matched_skills ? JSON.parse(row.matched_skills as string) : null,
+            missing_skills: row.missing_skills ? JSON.parse(row.missing_skills as string) : null,
+            postedBy: null // SQLite mostly local, might not have separate user records
+        })) as Job[];
+    }
+}
+
+/**
+ * Get total count of public jobs for pagination
  */
 export async function getTotalPublicJobsCount(): Promise<number> {
     const dbType = getDbType();
@@ -235,15 +402,14 @@ export async function getTotalPublicJobsCount(): Promise<number> {
 }
 
 /**
- * Get the timestamp of the last job ingestion (max scraped_at)
- * Used for "Updated at" display
+ * Get the timestamp of the most recently ingested job
  */
 export async function getLastJobIngestionTime(): Promise<string | null> {
     const dbType = getDbType();
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
-        // scraped_at is the reliable ingestion timestamp
+        // Check scraped_at first, fallback to created_at
         const res = await pool.query('SELECT MAX(scraped_at) as last_updated FROM jobs');
         return res.rows[0]?.last_updated ? new Date(res.rows[0].last_updated).toISOString() : null;
     } else if (dbType === 'supabase') {
@@ -252,298 +418,15 @@ export async function getLastJobIngestionTime(): Promise<string | null> {
             .from('jobs')
             .select('scraped_at')
             .order('scraped_at', { ascending: false })
-            .limit(1);
+            .limit(1)
+            .single();
 
-        if (error) throw error;
-        return data && data.length > 0 ? data[0].scraped_at : null;
+        if (error) return null; // Safe fail
+        return data?.scraped_at || null;
     } else {
         const db = getSQLiteDB();
         const result = db.prepare('SELECT MAX(scraped_at) as last_updated FROM jobs').get() as { last_updated: string };
         return result?.last_updated || null;
-    }
-}
-
-/**
- * Get total count of user-specific jobs for pagination
- */
-export async function getUserJobsCount(userId: string, status: JobStatus = 'fresh'): Promise<number> {
-    const dbType = getDbType();
-
-    if (dbType === 'postgres') {
-        const params: any[] = [userId];
-        let statusClause = '';
-
-        if (status === 'fresh') {
-            statusClause = `(uj.status IS DISTINCT FROM 'archived')`;
-        } else if (status === 'saved') {
-            statusClause = `(uj.status = 'saved')`;
-        } else {
-            statusClause = `(uj.status = 'archived')`;
-        }
-
-        return executeWithUser(userId, async (client) => {
-            const res = await client.query(
-                `SELECT COUNT(*) as count 
-                 FROM jobs j
-                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
-                 WHERE ${statusClause}`,
-                params
-            );
-            return parseInt(res.rows[0].count, 10);
-        });
-
-    } else if (dbType === 'supabase') {
-        const client = getSupabaseClient();
-
-        // Supabase logic depends on join which is tricky with simple client.
-        // We might need an RPC or assume user_jobs filter.
-        // For 'saved'/'archived', we can query user_jobs directly.
-        // For 'fresh', it's harder (NOT in user_jobs OR status != archived).
-
-        if (status === 'saved' || status === 'archived') {
-            const { count, error } = await client
-                .from('user_jobs')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', userId)
-                .eq('status', status);
-            if (error) throw error;
-            return count || 0;
-        } else {
-            // 'fresh' count is complex in Supabase JS client without join.
-            // Simplest approximation: Total Jobs - Archived Jobs count
-            // This assumes specific archival logic.
-            // Or keep it simple: return Total Public Jobs Count? No, that includes archived.
-            // Let's rely on RPC if possible or accept potentially slightly inaccurate count?
-            // Or just do a raw query if enabled?
-            // Since we prioritized Postgres, I'll fallback to a simpler count or 0 for now if complex.
-            // Actually, we can fetch all jobs? No.
-            // Let's just return 0 or implement properly if RPC exists.
-            // Assuming User is on Postgres (based on user request), making Supabase 'best effort'.
-
-            // Count of non-archived jobs:
-            // We can fetch total jobs and subtract archived count?
-            const total = await getTotalPublicJobsCount();
-
-            const { count: archivedCount } = await client
-                .from('user_jobs')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', userId)
-                .eq('status', 'archived');
-
-            return total - (archivedCount || 0);
-        }
-
-    } else {
-        const db = getSQLiteDB();
-        let statusClause = '';
-        if (status === 'fresh') {
-            statusClause = `(uj.status IS NOT 'archived' OR uj.status IS NULL)`;
-        } else if (status === 'saved') {
-            statusClause = `(uj.status = 'saved')`;
-        } else {
-            statusClause = `(uj.status = 'archived')`;
-        }
-
-        const result = db.prepare(`
-            SELECT COUNT(*) as count 
-            FROM jobs j 
-            LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
-            WHERE ${statusClause}
-        `).get(userId) as { count: number };
-        return result.count;
-    }
-}
-
-export async function getJobs(
-    userId: string,
-    status: JobStatus = 'fresh',
-    page: number = 1,
-    limit: number = 50,
-    sortBy: 'time' | 'imported' | 'score' | 'relevance' = 'score',
-    sortDir: 'asc' | 'desc' = 'desc'
-): Promise<Job[]> {
-    const dbType = getDbType();
-    const offset = (page - 1) * limit;
-
-    // Determine sort
-    const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
-    let orderByClause = '';
-
-    if (sortBy === 'time') {
-        orderByClause = `j.posted_at ${dir} NULLS LAST`;
-    } else if (sortBy === 'imported') {
-        orderByClause = `j.is_imported ${dir}, j.posted_at DESC NULLS LAST`;
-    } else if (sortBy === 'relevance') {
-        // Fallback for non-vector DBs: Score + Recency
-        orderByClause = `uj.match_score ${dir}, j.posted_at DESC NULLS LAST`;
-    } else {
-        // Default score
-        orderByClause = `uj.match_score ${dir}`;
-    }
-
-    if (dbType === 'postgres') {
-
-        // Handle sorting safely
-        let effectiveOrderBy = orderByClause;
-        let vectorJoin = '';
-        let vectorSelect = '';
-        const params: any[] = [userId, limit, offset]; // $1, $2, $3
-        let statusClause = '';
-
-        if (status === 'fresh') {
-            statusClause = `(uj.status IS DISTINCT FROM 'archived')`;
-        } else if (status === 'saved') {
-            statusClause = `(uj.status = 'saved')`;
-        } else {
-            statusClause = `(uj.status = 'archived')`;
-        }
-
-        return executeWithUser(userId, async (client) => {
-            // Check relevance sorting requirements (User Preference > Resume Embedding)
-            if (sortBy === 'relevance') {
-                // 1. Try to get User Preference Embedding
-                const userRes = await client.query(`
-                    SELECT preference_embedding FROM users WHERE id = $1
-                `, [userId]);
-
-                let embedding = null;
-
-                if (userRes.rows.length > 0 && userRes.rows[0].preference_embedding) {
-                    embedding = userRes.rows[0].preference_embedding;
-                } else {
-                    // 2. Fallback to Resume Embedding
-                    const resumeRes = await client.query(`
-                        SELECT embedding FROM resume_embeddings 
-                        JOIN resumes ON resumes.id = resume_embeddings.resume_id 
-                        WHERE resumes.user_id = $1 AND resumes.is_default = true
-                        ORDER BY resumes.created_at DESC LIMIT 1
-                    `, [userId]);
-
-                    if (resumeRes.rows.length > 0 && resumeRes.rows[0].embedding) {
-                        embedding = resumeRes.rows[0].embedding;
-                    }
-                }
-
-                if (embedding) {
-                    params.push(embedding); // Becomes $4
-
-                    vectorJoin = `LEFT JOIN job_embeddings je ON j.id = je.job_id`;
-                    // Order by distance ASC (closest first)
-                    effectiveOrderBy = `(je.embedding <=> $4) ASC, j.posted_at DESC`;
-                    vectorSelect = `, (je.embedding <=> $4) as relevance_score`;
-                } else {
-                    // Fallback if no embedding
-                    effectiveOrderBy = `j.posted_at DESC NULLS LAST`;
-                }
-            } else if (sortBy === 'score') {
-                effectiveOrderBy = `match_score ${dir}`;
-            } else if (sortBy === 'time') {
-                effectiveOrderBy = `j.posted_at ${dir} NULLS LAST`;
-            } else if (sortBy === 'imported') {
-                effectiveOrderBy = `j.is_imported ${dir}, j.posted_at DESC NULLS LAST`;
-            }
-
-            const res = await client.query(
-                `SELECT j.*, 
-                        COALESCE(uj.status, 'fresh') as status, 
-                        COALESCE(uj.match_score, 0) as match_score, 
-                        uj.matched_skills, 
-                        uj.missing_skills, 
-                        uj.why, 
-                        uj.archived_at
-                        ${vectorSelect}
-                 FROM jobs j
-                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
-                 ${vectorJoin}
-                 WHERE ${statusClause}
-                 ORDER BY ${effectiveOrderBy}, j.id ASC LIMIT $2 OFFSET $3`,
-                params
-            );
-            return res.rows.map(row => ({
-                ...row,
-                matched_skills: typeof row.matched_skills === 'string' ? JSON.parse(row.matched_skills) : row.matched_skills,
-                missing_skills: typeof row.missing_skills === 'string' ? JSON.parse(row.missing_skills) : row.missing_skills,
-                isImported: Boolean(row.is_imported),
-                date_posted_relative: Boolean(row.date_posted_relative),
-                extraction_confidence: typeof row.extraction_confidence === 'string' ? JSON.parse(row.extraction_confidence) : row.extraction_confidence,
-            })) as Job[];
-        });
-    } else if (dbType === 'supabase') {
-        const client = getSupabaseClient();
-        let query = client
-            .from('user_jobs')
-            .select(`
-                status, match_score, matched_skills, missing_skills, why, archived_at,
-                jobs:job_id (*)
-            `)
-            .eq('user_id', userId);
-
-        if (status === 'fresh') {
-            query = query.neq('status', 'archived');
-        } else {
-            query = query.eq('status', status);
-        }
-
-        // Sorting for Supabase (joined table sorting is tricky)
-        // Ideally define order on the relationship, but Supabase JS client sorts on the result?
-        // Actually, we can order by foreign table columns sometimes: .order('fetched_at', { foreignTable: 'jobs' })
-        // But let's try direct first.
-
-        if (sortBy === 'time') {
-            // Order by jobs.fetched_at
-            // Note: Supabase might require explicit foreign table syntax or not support it easily in one query without RPC.
-            // Workaround: We might need to sort in-memory if datasets are small, but pagination makes this hard.
-            // Correct way: use `!inner` join maybe?
-            // Since we know the table structure, `order` on foreign table:
-            query = query.order('posted_at', { foreignTable: 'jobs', ascending: sortDir === 'asc', nullsFirst: false });
-        } else if (sortBy === 'imported') {
-            query = query.order('is_imported', { foreignTable: 'jobs', ascending: sortDir === 'asc', nullsFirst: false });
-        } else {
-            // Score (on user_jobs)
-            query = query.order('match_score', { ascending: sortDir === 'asc' });
-        }
-
-        // Secondary sort
-        query = query.order('job_id', { ascending: true }) // Using job_id from user_jobs as stable sort
-            .range(offset, offset + limit - 1);
-
-        const { data, error } = await query;
-
-        if (error) throw error;
-        // Flatten the result
-        return (data || []).map((row: any) => ({
-            ...row.jobs,
-            ...row, // Overwrite with user-specific data (status, score)
-            matched_skills: row.matched_skills, // Already parsed by Supabase client usually
-            missing_skills: row.missing_skills,
-            isImported: Boolean(row.jobs.is_imported),
-            date_posted_relative: Boolean(row.jobs.date_posted_relative),
-        })) as Job[];
-    } else {
-        const db = getSQLiteDB();
-        let whereClause = '';
-        if (status === 'fresh') {
-            whereClause = "uj.status IS NOT 'archived'";
-        } else {
-            whereClause = `uj.status = '${status}'`;
-        }
-
-        const rows = db.prepare(`
-            SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at
-            FROM user_jobs uj
-            JOIN jobs j ON uj.job_id = j.id
-            WHERE uj.user_id = ? AND ${whereClause}
-            ORDER BY ${orderByClause}, j.id ASC LIMIT ? OFFSET ?
-        `).all(userId, limit, offset) as Record<string, unknown>[];
-
-        return rows.map((row) => ({
-            ...row,
-            matched_skills: row.matched_skills ? JSON.parse(row.matched_skills as string) : null,
-            missing_skills: row.missing_skills ? JSON.parse(row.missing_skills as string) : null,
-            isImported: Boolean(row.is_imported),
-            date_posted_relative: Boolean(row.date_posted_relative),
-            extraction_confidence: row.extraction_confidence ? JSON.parse(row.extraction_confidence as string) : null,
-        })) as Job[];
     }
 }
 
@@ -689,13 +572,54 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
     }
 }
 
-export async function insertJob(userId: string, job: Omit<Job, 'id' | 'fetched_at' | 'status' | 'match_score' | 'matched_skills' | 'missing_skills' | 'why' | 'content_hash'>): Promise<Job> {
+export async function insertJob(
+    userId: string,
+    job: Omit<Job, 'id' | 'fetched_at' | 'status' | 'match_score' | 'matched_skills' | 'missing_skills' | 'why' | 'content_hash'>,
+    posterDetails?: { firstName: string | null; lastName: string | null; imageUrl: string | null }
+): Promise<Job> {
+    const { validateJobDescription } = await import('./job-validation');
+
+    const descriptionToValidate = job.normalized_text || job.job_description_plain || '';
+    const descValidation = validateJobDescription(descriptionToValidate);
+
+    if (!descValidation.valid) {
+        const errorMsg = `Job validation failed: ${descValidation.reason}`;
+        console.error('[DB] Insert job validation error:', errorMsg);
+        console.error('[DB] Job details:', {
+            title: job.title,
+            company: job.company,
+            descLength: descriptionToValidate.length
+        });
+        throw new Error(errorMsg);
+    }
+
     const dbType = getDbType();
     const contentHash = generateContentHash(job.title, job.company, job.location, job.normalized_text || '');
     let jobId: string | null = null;
 
+    // Fetch user details for snapshotting
+    let posterFirstName: string | null = null;
+    let posterLastName: string | null = null;
+    let posterImageUrl: string | null = null;
+
+    if (posterDetails) {
+        posterFirstName = posterDetails.firstName;
+        posterLastName = posterDetails.lastName;
+        posterImageUrl = posterDetails.imageUrl;
+    }
+
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
+
+        if (!posterDetails) {
+            const userRes = await pool.query('SELECT first_name, last_name, image_url FROM users WHERE id = $1', [userId]);
+            if (userRes.rows.length > 0) {
+                posterFirstName = userRes.rows[0].first_name;
+                posterLastName = userRes.rows[0].last_name;
+                posterImageUrl = userRes.rows[0].image_url;
+            }
+        }
+
         // 1. Check/Insert Global Job
         const existing = await pool.query('SELECT id FROM jobs WHERE content_hash = $1', [contentHash]);
         if (existing.rows.length > 0) {
@@ -704,13 +628,14 @@ export async function insertJob(userId: string, job: Omit<Job, 'id' | 'fetched_a
             jobId = uuidv4();
             await pool.query(`
                 INSERT INTO jobs (
-                    id, title, company, location, source_url, posted_at, 
-                    normalized_text, raw_text_summary, content_hash, is_imported, 
+                    id, title, company, location, source_url, posted_at,
+                    normalized_text, raw_text_summary, content_hash, is_imported,
                     original_posted_date, original_posted_raw, original_posted_source, location_display, import_tag,
                     raw_description_html, job_description_plain, date_posted_iso,
-                    date_posted_display, date_posted_relative, source_host, scraped_at, extraction_confidence
+                    date_posted_display, date_posted_relative, source_host, scraped_at, extraction_confidence,
+                    posted_by_user_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
             `, [
                 jobId, job.title, job.company, job.location, job.source_url, job.posted_at,
                 job.normalized_text, job.raw_text_summary, contentHash, job.isImported ? 1 : 0,
@@ -719,24 +644,34 @@ export async function insertJob(userId: string, job: Omit<Job, 'id' | 'fetched_a
                 job.raw_description_html || null, job.job_description_plain || null, job.date_posted_iso || null,
                 job.date_posted_display || null, job.date_posted_relative ? 1 : 0,
                 job.source_host || null, job.scraped_at || null,
-                job.extraction_confidence ? JSON.stringify(job.extraction_confidence) : null
+                job.extraction_confidence ? JSON.stringify(job.extraction_confidence) : null,
+                userId
             ]);
         }
 
-        // 2. Insert User Job linkage
+        // 2. Insert User Job linkage with Snapshot
         await executeWithUser(userId, async (client) => {
             await client.query(`
-                INSERT INTO user_jobs (user_id, job_id, status, match_score)
-                VALUES ($1, $2, 'fresh', 0)
+                INSERT INTO user_jobs (user_id, job_id, status, match_score, poster_first_name, poster_last_name, poster_image_url)
+                VALUES ($1, $2, 'fresh', 0, $3, $4, $5)
                 ON CONFLICT (user_id, job_id) DO NOTHING
-            `, [userId, jobId]);
+            `, [userId, jobId, posterFirstName, posterLastName, posterImageUrl]);
         });
-        // Return full job (simplification: returning input + id)
-        // Ideally fetch full joined row, but for import this is enough context.
+
         return { ...job, id: jobId!, status: 'fresh', match_score: 0, matched_skills: null, missing_skills: null, why: null, content_hash: contentHash, fetched_at: new Date().toISOString() };
 
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
+
+        // Fetch user details for snapshotting
+        if (!posterDetails) {
+            const { data: user } = await client.from('users').select('first_name, last_name, image_url').eq('id', userId).single();
+            if (user) {
+                posterFirstName = user.first_name;
+                posterLastName = user.last_name;
+                posterImageUrl = user.image_url;
+            }
+        }
 
         // 1. Check Global Job
         const { data: existing } = await client.from('jobs').select('id').eq('content_hash', contentHash).single();
@@ -769,16 +704,20 @@ export async function insertJob(userId: string, job: Omit<Job, 'id' | 'fetched_a
                 source_host: job.source_host || null,
                 scraped_at: job.scraped_at || null,
                 extraction_confidence: job.extraction_confidence || null,
+                posted_by_user_id: userId,
             });
             if (insertError) throw insertError;
         }
 
-        // 2. Link User
+        // 2. Link User with Snapshot
         const { error: linkError } = await client.from('user_jobs').upsert({
             user_id: userId,
             job_id: jobId,
             status: 'fresh',
-            match_score: 0
+            match_score: 0,
+            poster_first_name: posterFirstName,
+            poster_last_name: posterLastName,
+            poster_image_url: posterImageUrl
         }, { onConflict: 'user_id, job_id' });
 
         if (linkError) throw linkError;
@@ -794,13 +733,14 @@ export async function insertJob(userId: string, job: Omit<Job, 'id' | 'fetched_a
             jobId = uuidv4();
             db.prepare(`
             INSERT INTO jobs (
-                id, title, company, location, source_url, posted_at, 
-                normalized_text, raw_text_summary, content_hash, is_imported, 
+                id, title, company, location, source_url, posted_at,
+                normalized_text, raw_text_summary, content_hash, is_imported,
                 original_posted_date, original_posted_raw, original_posted_source, location_display, import_tag,
                 raw_description_html, job_description_plain, date_posted_iso,
-                date_posted_display, date_posted_relative, source_host, scraped_at, extraction_confidence
+                date_posted_display, date_posted_relative, source_host, scraped_at, extraction_confidence,
+                posted_by_user_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 jobId, job.title, job.company, job.location, job.source_url, job.posted_at,
                 job.normalized_text, job.raw_text_summary, contentHash, job.isImported ? 1 : 0,
@@ -809,7 +749,8 @@ export async function insertJob(userId: string, job: Omit<Job, 'id' | 'fetched_a
                 job.raw_description_html || null, job.job_description_plain || null, job.date_posted_iso || null,
                 job.date_posted_display || null, job.date_posted_relative ? 1 : 0,
                 job.source_host || null, job.scraped_at || null,
-                job.extraction_confidence ? JSON.stringify(job.extraction_confidence) : null
+                job.extraction_confidence ? JSON.stringify(job.extraction_confidence) : null,
+                userId
             );
         }
 
@@ -2779,7 +2720,7 @@ export async function logInteraction(
         VALUES($1, $2, $3, $4)
             `, [userId, jobId, interactionType, JSON.stringify(metadata)]);
     }
-// ... we can support other DBs if needed, but requirements focus on Postgres
+    // ... we can support other DBs if needed, but requirements focus on Postgres
 }
 
 // ============================================================================
@@ -2897,6 +2838,116 @@ export async function logSearchAnalytics(
     } catch (error) {
         // Fail silently - analytics should not break search
         console.error('[DB] Failed to log search analytics:', error);
+    }
+}
+
+/**
+ * Vote on a job (upvote/downvote)
+ */
+export async function voteJob(
+    userId: string,
+    jobId: string,
+    voteType: 'upvote' | 'downvote'
+): Promise<{ success: boolean; upvotes: number; downvotes: number }> {
+    const dbType = getDbType();
+
+    if (dbType !== 'postgres') {
+        return { success: false, upvotes: 0, downvotes: 0 };
+    }
+
+    const pool = getPostgresPool();
+
+    try {
+        const result = await pool.query(`
+            UPDATE user_jobs
+            SET
+                upvotes = CASE
+                    WHEN $1 = 'upvote' THEN upvotes + 1
+                    WHEN $1 = 'downvote' THEN upvotes
+                    ELSE upvotes
+                END,
+                downvotes = CASE
+                    WHEN $1 = 'upvote' THEN downvotes
+                    WHEN $1 = 'downvote' THEN downvotes + 1
+                    ELSE downvotes
+                END,
+                updated_at = NOW()
+            WHERE user_id = $2 AND job_id = $3
+            RETURNING upvotes, downvotes
+        `, [voteType, userId, jobId]);
+
+        return {
+            success: true,
+            upvotes: result.rows[0].upvotes,
+            downvotes: result.rows[0].downvotes
+        };
+    } catch (error: unknown) {
+        console.error('[DB] Vote error:', error);
+        return { success: false, upvotes: 0, downvotes: 0 };
+    }
+}
+
+/**
+ * Get vote counts for a job by specific user
+ */
+export async function getJobVotes(
+    userId: string,
+    jobId: string
+): Promise<{ upvotes: number; downvotes: number } | null> {
+    const dbType = getDbType();
+
+    if (dbType !== 'postgres') {
+        return null;
+    }
+
+    const pool = getPostgresPool();
+
+    try {
+        const result = await pool.query(
+            'SELECT upvotes, downvotes FROM user_jobs WHERE user_id = $1 AND job_id = $2',
+            [userId, jobId]
+        );
+
+        return result.rows[0] || null;
+    } catch (error: unknown) {
+        console.error('[DB] Get vote error:', error);
+        return null;
+    }
+}
+
+/**
+ * Get posted by user info for a job
+ */
+export async function getPostedByUserInfo(jobId: string): Promise<{
+    userId: string;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl: string | null;
+} | null> {
+    const dbType = getDbType();
+
+    if (dbType !== 'postgres') {
+        return null;
+    }
+
+    const pool = getPostgresPool();
+
+    try {
+        const result = await pool.query(`
+            SELECT
+                u.id as user_id,
+                u.first_name as first_name,
+                u.last_name as last_name,
+                u.image_url as image_url
+            FROM users u
+            JOIN jobs j ON u.id = j.posted_by_user_id
+            WHERE j.id = $1
+        `, [jobId]);
+
+        return result.rows[0] || null;
+    } catch (error: unknown) {
+        console.error('[DB] Get posted by user error:', error);
+        return null;
     }
 }
 

@@ -13,9 +13,10 @@ export function ImportJobModal({ onClose, onImportSuccess }: ImportJobModalProps
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<{ job: any } | null>(null);
+    const [canBypass, setCanBypass] = useState(false);
     const { addImportedJob } = useStore();
 
-    const handleImport = async () => {
+    const handleImport = async (bypass: boolean = false) => {
         if (!url) {
             setError('Please enter a valid URL');
             return;
@@ -31,12 +32,13 @@ export function ImportJobModal({ onClose, onImportSuccess }: ImportJobModalProps
 
         setIsLoading(true);
         setError(null);
+        setCanBypass(false);
 
         try {
             const res = await fetch('/api/import-job', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify({ url, bypassValidation: bypass }),
             });
 
             const data = await res.json();
@@ -52,6 +54,9 @@ export function ImportJobModal({ onClose, onImportSuccess }: ImportJobModalProps
                 }, 2000);
             } else {
                 setError(data.error || 'Failed to import job');
+                if (data.canBypass) {
+                    setCanBypass(true);
+                }
             }
         } catch (err: any) {
             setError(err.message || 'Failed to connect to server');
@@ -222,7 +227,7 @@ export function ImportJobModal({ onClose, onImportSuccess }: ImportJobModalProps
                                 fontSize: '14px',
                             }}
                             onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !isLoading) handleImport();
+                                if (e.key === 'Enter' && !isLoading) handleImport(false);
                             }}
                             autoFocus
                         />
@@ -236,9 +241,30 @@ export function ImportJobModal({ onClose, onImportSuccess }: ImportJobModalProps
                             borderRadius: '6px',
                             color: 'var(--error)',
                             fontSize: '13px',
-                            marginBottom: '16px'
+                            marginBottom: '16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px'
                         }}>
-                            {error}
+                            <span>{error}</span>
+                            {canBypass && (
+                                <button
+                                    onClick={() => handleImport(true)}
+                                    style={{
+                                        alignSelf: 'flex-start',
+                                        background: 'var(--error)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        padding: '4px 12px',
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        fontWeight: 500
+                                    }}
+                                >
+                                    Continue Anyway
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -259,7 +285,7 @@ export function ImportJobModal({ onClose, onImportSuccess }: ImportJobModalProps
                             Cancel
                         </button>
                         <button
-                            onClick={handleImport}
+                            onClick={() => handleImport(false)}
                             disabled={isLoading}
                             className="btn btn-primary"
                             style={{

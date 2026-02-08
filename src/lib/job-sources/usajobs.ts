@@ -1,4 +1,5 @@
 import { BaseJobSource, JobFilter, ScrapedJob } from './types';
+import { validateJobDescription } from '../job-validation';
 
 export class USAJobsAdapter extends BaseJobSource {
     constructor() {
@@ -56,7 +57,7 @@ export class USAJobsAdapter extends BaseJobSource {
                         title: desc.PositionTitle,
                         company: desc.OrganizationName,
                         location: desc.PositionLocation?.[0]?.LocationName || 'US',
-                        posted_at: desc.PublicationStartDate, // Already ISO-like
+                        posted_at: desc.PublicationStartDate,
                         source_url: desc.PositionURI,
                         description: desc.UserArea?.Details?.JobSummary || desc.Description,
                         salary: desc.PositionRemuneration?.[0]?.MinimumRange ?
@@ -66,7 +67,15 @@ export class USAJobsAdapter extends BaseJobSource {
                     };
                 });
 
-                results.push(...mapped);
+                const validJobs = mapped.filter((job: ScrapedJob) => {
+                    const validation = validateJobDescription(job.description);
+                    if (!validation.valid) {
+                        console.warn(`[USAJobs] Job rejected: ${job.title} - ${validation.reason}`);
+                    }
+                    return validation.valid;
+                });
+
+                results.push(...validJobs);
                 await this.delay(500);
             }
 

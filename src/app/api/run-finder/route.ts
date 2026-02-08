@@ -1,107 +1,174 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { JobSourceCoordinator } from '@/lib/job-sources';
+import { NextResponse } from 'next/server';
 import { insertJob } from '@/lib/db';
 import { Job } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { AdzunaAdapter } from '@/lib/job-sources/adzuna';
+import { validateJobDescription } from '@/lib/job-validation';
 
-// Allow running this every 5 minutes if needed, but cron will handle scheduling
-export const maxDuration = 300; // 5 minutes max duration for Vercel Pro (functions)
+export const maxDuration = 300; // 5 minutes max duration for Vercel Pro
 
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
     try {
         const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        // Optional: Secure this endpoint with a secret if exposed publicly
-        // const authHeader = request.headers.get('authorization');
-        // if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const coordinator = new JobSourceCoordinator();
+        console.log('[Finder] Adzuna-only job fetch started...');
 
-        // UNFILTERED FETCH: Get ALL jobs without whitelist/location/date filters
-        console.log('Running UNFILTERED Job Fetch (ALL Jobs)...');
-        const jobs = await coordinator.fetchAllJobsUnfiltered({
+        const adzunaAdapter = new AdzunaAdapter();
+
+        if (!adzunaAdapter.isEnabled()) {
+            console.log('[Finder] Adzuna API keys not configured');
+            return NextResponse.json({
+                success: true,
+                message: 'Adzuna API keys not configured. No jobs fetched.',
+                jobsFound: 0,
+                jobsAdded: 0,
+                jobsFailed: 0,
+                jobsSkipped: 0
+            });
+        }
+
+        const user = await currentUser();
+        const posterDetails = user ? {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            imageUrl: user.imageUrl
+        } : undefined;
+
+        // Fetch Adzuna jobs with unfiltered parameters
+
+        // Fetch Adzuna jobs with unfiltered parameters
+        console.log('[Finder] Fetching from Adzuna...');
+        const rawJobs = await adzunaAdapter.fetchJobs({
             recent: false,
             location: 'us',
             keywords: ['software engineer', 'developer', 'full stack', 'frontend', 'backend', 'web developer'],
             level: []
         });
 
-        console.log(`[Import] Fetched ${jobs.length} total jobs for persistence`);
+        console.log(`[Finder] Fetched ${rawJobs.length} raw jobs from Adzuna`);
 
-        // Current time for consistency
         const now = new Date();
         let addedCount = 0;
         let failedCount = 0;
+        let skippedCount = 0;
         const failedJobs: { title: string; error: string }[] = [];
+        const skippedJobs: { title: string; reason: string; descriptionLength: number }[] = [];
 
-        // Process jobs in chunks to speed up insertion while managing connection pool
         const CHUNK_SIZE = 10;
-        for (let i = 0; i < jobs.length; i += CHUNK_SIZE) {
-            const chunk = jobs.slice(i, i + CHUNK_SIZE);
-            await Promise.all(chunk.map(async (scrapedJob) => {
-                // Generate ID here to satisfy Job interface
+        for (let i = 0; i < rawJobs.length; i += CHUNK_SIZE) {
+            const chunk = rawJobs.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(async (rawJob) => {
                 const jobId = uuidv4();
 
-                // Convert ScrapedJob to DB Job
-                const cleanJob: Job = {
+                // Clean and validate description
+                const cleanDescription = rawJob.description
+                    ? rawJob.description.replace(/<[^>]*>?/gm, '')
+                    : rawJob.title;
+
+                // Validate description quality (≥3000 chars)
+                const descValidation = validateJobDescription(cleanDescription);
+
+                if (!descValidation.valid) {
+                    // Silently skip low-quality jobs
+                    skippedCount++;
+                    if (skippedJobs.length < 10) {
+                        skippedJobs.push({
+                            title: rawJob.title,
+                            reason: descValidation.reason || 'Validation failed',
+                            descriptionLength: cleanDescription.length
+                        });
+                    }
+                    return;
+                }
+
+                const dbJob: Job = {
                     id: jobId,
-                    title: scrapedJob.title,
-                    company: scrapedJob.company || 'Unknown',
-                    location: scrapedJob.location || 'Remote',
-                    source_url: scrapedJob.source_url,
-                    posted_at: scrapedJob.posted_at || null,
+                    title: rawJob.title,
+                    company: rawJob.company || 'Unknown',
+                    location: rawJob.location || 'Remote',
+                    source_url: rawJob.source_url,
+                    posted_at: rawJob.posted_at || null,
                     fetched_at: now.toISOString(),
                     status: 'fresh',
                     match_score: 0,
                     matched_skills: null,
                     missing_skills: null,
                     why: null,
-                    normalized_text: scrapedJob.description
-                        ? scrapedJob.description.replace(/<[^>]*>?/gm, '') // Strip HTML
-                        : scrapedJob.title,
-                    raw_text_summary: scrapedJob.description ? scrapedJob.description.substring(0, 1000) : null,
-                    content_hash: null
+                    normalized_text: cleanDescription,
+                    raw_text_summary: cleanDescription.substring(0, 1000),
+                    content_hash: null,
+                    isImported: false,
+                    original_posted_source: 'adzuna',
+                    raw_description_html: rawJob.description,
+                    job_description_plain: cleanDescription,
+                    scraped_at: now.toISOString(),
+                    extraction_confidence: { description: 1.0, date: 0.5, location: 0.4 }
                 };
 
                 try {
-                    await insertJob(userId, cleanJob);
+                    await insertJob(userId, dbJob, posterDetails);
                     addedCount++;
-                } catch (e: any) {
-                    // ERROR TOLERANT: Log failure but continue with other jobs
-                    const errorMsg = e.message || 'Unknown error';
-                    if (!errorMsg.includes('unique constraint') && !errorMsg.includes('Duplicate job')) {
-                        console.error(`[Import] Failed to insert job "${scrapedJob.title}":`, errorMsg);
-                        failedCount++;
-                        if (failedJobs.length < 10) { // Only track first 10 failures for response
-                            failedJobs.push({ title: scrapedJob.title, error: errorMsg });
-                        }
+                } catch (e: unknown) {
+                    const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+
+                    // Don't overwrite existing jobs (duplicate constraint)
+                    if (errorMsg.includes('unique constraint') ||
+                        errorMsg.includes('Duplicate job') ||
+                        errorMsg.includes('already exists')) {
+                        // Silently skip duplicates
+                        return;
                     }
-                    // Duplicates are expected and not counted as failures
+
+                    failedCount++;
+                    if (failedJobs.length < 10) {
+                        failedJobs.push({ title: rawJob.title, error: errorMsg });
+                    }
+                    console.error(`[Finder] Failed to insert Adzuna job "${rawJob.title}":`, errorMsg);
                 }
             }));
 
-            // Log progress occasionally
-            if ((i + CHUNK_SIZE) % 100 === 0 || i + CHUNK_SIZE >= jobs.length) {
-                console.log(`[Import] Processed ${Math.min(i + CHUNK_SIZE, jobs.length)}/${jobs.length} jobs...`);
+            if ((i + CHUNK_SIZE) % 100 === 0 || i + CHUNK_SIZE >= rawJobs.length) {
+                console.log(`[Finder] Processed ${Math.min(i + CHUNK_SIZE, rawJobs.length)}/${rawJobs.length} jobs...`);
             }
         }
 
-        console.log(`[Import] Complete: ${addedCount} added, ${failedCount} failed`);
+        console.log(`[Finder] Adzuna fetch complete: ${addedCount} added, ${failedCount} failed, ${skippedCount} skipped`);
+
+        // Sample description length from first successfully inserted job (if any)
+        let sampleDescriptionLength: number | undefined;
+        if (addedCount > 0) {
+            const firstValidJob = rawJobs.find(j => {
+                const cleanDesc = j.description?.replace(/<[^>]*>?/gm, '') || j.title;
+                const validation = validateJobDescription(cleanDesc);
+                return validation.valid;
+            });
+            if (firstValidJob) {
+                sampleDescriptionLength = firstValidJob.description?.length;
+            }
+        }
 
         return NextResponse.json({
             success: true,
-            jobsFound: jobs.length,
+            message: addedCount > 0
+                ? `Successfully fetched and inserted ${addedCount} Adzuna jobs.`
+                : 'No high-quality jobs found from Adzuna. Try again later or use Import Job.',
+            jobsFound: rawJobs.length,
             jobsAdded: addedCount,
             jobsFailed: failedCount,
-            failedSamples: failedJobs.length > 0 ? failedJobs : undefined
+            jobsSkipped: skippedCount,
+            failedSamples: failedJobs.length > 0 ? failedJobs : undefined,
+            skippedSamples: skippedJobs.length > 0 ? skippedJobs : undefined,
+            sampleDescriptionLength
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Finder run failed:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }

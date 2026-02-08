@@ -1,55 +1,49 @@
 /**
  * API Route: GET /api/job-sources-status
- * Returns the status of all job source adapters
+ * Returns status of all job source adapters (now disabled)
  */
 
 import { NextResponse } from 'next/server';
 
-// Check which adapters have their API keys configured
-function getAdapterStatuses() {
-    return [
-        {
-            name: 'Adzuna',
-            enabled: !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY),
-            requiredEnvVars: ['ADZUNA_APP_ID', 'ADZUNA_API_KEY'],
-            docsUrl: 'https://developer.adzuna.com/',
-        },
-        {
-            name: 'RapidAPI (JSearch)',
-            enabled: !!process.env.RAPIDAPI_KEY,
-            requiredEnvVars: ['RAPIDAPI_KEY'],
-            docsUrl: 'https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch',
-        },
-        {
-            name: 'Jooble',
-            enabled: !!process.env.JOOBLE_KEY,
-            requiredEnvVars: ['JOOBLE_KEY'],
-            docsUrl: 'https://jooble.org/api/about',
-        },
-        {
-            name: 'SerpAPI (Google Jobs)',
-            enabled: !!process.env.SERPAPI_KEY,
-            requiredEnvVars: ['SERPAPI_KEY'],
-            docsUrl: 'https://serpapi.com/',
-        },
-        {
-            name: 'USAJobs',
-            enabled: !!process.env.USAJOBS_API_KEY,
-            requiredEnvVars: ['USAJOBS_API_KEY'],
-            docsUrl: 'https://developer.usajobs.gov/',
-        },
-    ];
-}
-
 export async function GET() {
-    const adapters = getAdapterStatuses();
-    const enabledCount = adapters.filter(a => a.enabled).length;
+    const adzunaEnabled = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
 
     return NextResponse.json({
-        summary: enabledCount > 0
-            ? `${enabledCount} of ${adapters.length} job sources configured`
-            : 'No job sources configured - no new jobs will be fetched!',
-        canFetchJobs: enabledCount > 0,
-        adapters,
+        summary: adzunaEnabled
+            ? 'Only Adzuna job fetching is enabled. Click "Find Jobs" to fetch.'
+            : 'Adzuna not configured. Configure ADZUNA_APP_ID and ADZUNA_API_KEY to enable job fetching.',
+        canFetchJobs: adzunaEnabled,
+        adapters: [
+            {
+                name: 'Adzuna',
+                enabled: adzunaEnabled,
+                requiredEnvVars: ['ADZUNA_APP_ID', 'ADZUNA_API_KEY'],
+                docsUrl: 'https://developer.adzuna.com/',
+            },
+            {
+                name: 'RapidAPI (JSearch)',
+                enabled: false,
+                requiredEnvVars: ['RAPIDAPI_KEY'],
+                docsUrl: 'https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch',
+            },
+            {
+                name: 'Jooble',
+                enabled: false,
+                requiredEnvVars: ['JOOBLE_KEY'],
+                docsUrl: 'https://jooble.org/api/about',
+            },
+            {
+                name: 'SerpAPI (Google Jobs)',
+                enabled: false,
+                requiredEnvVars: ['SERPAPI_KEY'],
+                docsUrl: 'https://serpapi.com/',
+            },
+            {
+                name: 'USAJobs',
+                enabled: false,
+                requiredEnvVars: ['USAJOBS_API_KEY'],
+                docsUrl: 'https://developer.usajobs.gov/',
+            },
+        ]
     });
 }

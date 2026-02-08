@@ -382,50 +382,63 @@ export function JobList({ onJobClick }: JobListProps) {
                                         {job.title}
                                     </h3>
 
-                                    {/* Action Buttons (Save) */}
-                                    {isSignedIn && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved');
-                                            }}
-                                            style={{
-                                                background: 'transparent',
-                                                border: 'none',
-                                                cursor: 'pointer',
-                                                color: job.status === 'saved' ? 'var(--accent)' : 'var(--text-tertiary)',
-                                                padding: '4px',
-                                                marginLeft: 'auto', // Push to the right
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
-                                            title={job.status === 'saved' ? "Unsave" : "Save Job"}
-                                        >
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill={job.status === 'saved' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
-                                            </svg>
-                                        </button>
-                                    )}
+                                    {/* Action Buttons (Save) & Profile Image */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                                        {job.postedBy && (
+                                            <div
+                                                title={`Posted by ${job.postedBy.firstName} ${job.postedBy.lastName}`}
+                                                style={{ display: 'block', lineHeight: 0 }}
+                                            >
+                                                <img
+                                                    src={job.postedBy.imageUrl || '/placeholder-user.jpg'}
+                                                    alt="Poster"
+                                                    style={{
+                                                        width: '28px',
+                                                        height: '28px',
+                                                        minWidth: '28px',
+                                                        minHeight: '28px',
+                                                        maxWidth: '28px',
+                                                        maxHeight: '28px',
+                                                        borderRadius: '50%',
+                                                        objectFit: 'cover',
+                                                        border: '1px solid var(--border)',
+                                                        display: 'block'
+                                                    }}
+                                                    onError={(e) => {
+                                                        e.currentTarget.style.display = 'none';
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {isSignedIn && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved');
+                                                }}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    color: job.status === 'saved' ? 'var(--accent)' : 'var(--text-tertiary)',
+                                                    padding: '4px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                }}
+                                                title={job.status === 'saved' ? "Unsave" : "Save Job"}
+                                            >
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill={job.status === 'saved' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    {job.isImported && (
-                                        <div
-                                            style={{
-                                                background: 'var(--accent)',
-                                                color: '#fff',
-                                                fontSize: '9px',
-                                                fontWeight: 700,
-                                                padding: '2px 4px',
-                                                borderRadius: '4px',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.5px',
-                                            }}
-                                        >
-                                            Imported
-                                        </div>
-                                    )}
+                                    {/* Profile Image removed from here */}
                                     {job.match_score > 0 && (
                                         <div
                                             style={{

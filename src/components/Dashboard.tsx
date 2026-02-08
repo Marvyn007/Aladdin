@@ -533,27 +533,15 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                 status: useStore.getState().jobStatus
             });
 
-            // If signed in, fetch personalized jobs
-            if (isSignedIn) {
-                params.append('rescore', rescore.toString());
-                const res = await fetch(`/api/my-jobs?${params.toString()}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setJobs(data.jobs || []);
-                    setPagination({ total: data.total, totalPages: data.totalPages });
-                    setLastUpdated(data.lastUpdated);
-                } else {
-                    console.error("Failed to fetch my jobs");
-                }
+            // Always fetch public jobs - all jobs are globally visible
+            const res = await fetch(`/api/jobs?${params.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+                setJobs(data.jobs || []);
+                setPagination({ total: data.total, totalPages: data.totalPages });
+                setLastUpdated(data.lastUpdated);
             } else {
-                // Public jobs
-                const res = await fetch(`/api/jobs?${params.toString()}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setJobs(data.jobs || []);
-                    setPagination({ total: data.total, totalPages: data.totalPages });
-                    setLastUpdated(data.lastUpdated);
-                }
+                console.error("Failed to fetch jobs");
             }
         } catch (error) {
             console.error('Error loading jobs:', error);

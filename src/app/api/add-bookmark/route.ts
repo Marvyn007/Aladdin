@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertJob } from '@/lib/db';
 import { normalizeText, validateJobCriteria } from '@/lib/job-utils';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 
 interface BookmarkPayload {
     title: string;
@@ -111,6 +111,13 @@ export async function POST(request: NextRequest) {
         const normalizedText = normalizeText(jobInfo.description);
 
         // Insert job
+        const user = await currentUser();
+        const posterDetails = user ? {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            imageUrl: user.imageUrl
+        } : undefined;
+
         try {
             const job = await insertJob(userId, {
                 title: jobInfo.title,
@@ -120,7 +127,7 @@ export async function POST(request: NextRequest) {
                 posted_at: null, // Bookmarked jobs don't have reliable posted date
                 normalized_text: normalizedText,
                 raw_text_summary: jobInfo.description.slice(0, 1000), // First 1000 chars
-            });
+            }, posterDetails);
 
             return NextResponse.json({
                 success: true,

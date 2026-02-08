@@ -20,12 +20,11 @@ export interface Job {
   raw_text_summary: string | null;
   content_hash: string | null;
   isImported?: boolean;
-  original_posted_date?: string | null; // ISO string
+  original_posted_date?: string | null;
   original_posted_raw?: string | null;
   original_posted_source?: string | null;
   location_display?: string | null;
   import_tag?: string | null;
-  // Scraper v2 fields
   raw_description_html?: string | null;
   job_description_plain?: string | null;
   date_posted_iso?: string | null;
@@ -34,14 +33,30 @@ export interface Job {
   source_host?: string | null;
   scraped_at?: string | null;
   extraction_confidence?: { description: number; date: number; location: number } | null;
-
-  // Geolocation
   latitude?: number | null;
   longitude?: number | null;
   geo_resolved?: boolean;
   geo_confidence?: number | null;
   geo_source?: string | null;
   location_raw?: string | null;
+  postedByUserId?: string | null;
+  postedBy?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl: string | null;
+    votes: number;
+  } | null;
+}
+
+export interface JobWithPostedBy extends Job {
+  postedBy?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl: string | null;
+    votes: number;
+  } | null;
 }
 
 export interface JobWithApplication extends Job {

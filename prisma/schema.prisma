@@ -16,78 +16,110 @@ model User {
   createdAt           DateTime?              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime?              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   preferenceEmbedding Unsupported("vector")? @map("preference_embedding")
+  firstName           String?                @map("first_name")
+  lastName            String?                @map("last_name")
   appSettings         AppSettings?
   applications        Application[]
   coverLetters        CoverLetter[]
+  postedJobs          Job[]
   linkedInProfiles    LinkedInProfile[]
   resumes             Resume[]
+  search_analytics    SearchAnalytics[]
   searchHistory       SearchHistory[]
   userInteractions    UserInteraction[]
   userJobs            UserJob[]
+  votes               Int                    @default(0)
+  castVotes           UserReputationVote[]   @relation("CastVotes")
+  receivedVotes       UserReputationVote[]   @relation("ReceivedVotes")
 
   @@index([email], map: "idx_users_email")
   @@map("users")
 }
 
+model UserReputationVote {
+  id           String   @id @default(uuid()) @db.Uuid
+  voterId      String   @map("voter_id")
+  targetUserId String   @map("target_user_id")
+  value        Int // 1 for up, -1 for down
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  voter      User @relation("CastVotes", fields: [voterId], references: [id], onDelete: Cascade)
+  targetUser User @relation("ReceivedVotes", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([voterId, targetUserId], map: "uniq_reputation_vote")
+  @@map("user_reputation_votes")
+}
+
 model Job {
-  id                   String            @id @default(uuid()) @db.Uuid
-  title                String
-  company              String?
-  location             String?
-  sourceUrl            String            @map("source_url")
-  postedAt             DateTime?         @map("posted_at") @db.Timestamptz(6)
-  fetchedAt            DateTime?         @default(now()) @map("fetched_at") @db.Timestamptz(6)
-  status               String?           @default("fresh")
-  archived_at          DateTime?         @db.Timestamptz(6)
-  normalizedText       String?           @map("normalized_text")
-  rawTextSummary       String?           @map("raw_text_summary")
-  contentHash          String?           @unique @map("content_hash")
-  createdAt            DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime?         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  isImported           Int?              @default(0) @map("is_imported")
-  originalPostedDate   String?           @map("original_posted_date")
-  originalPostedRaw    String?           @map("original_posted_raw")
-  originalPostedSource String?           @map("original_posted_source")
-  locationDisplay      String?           @map("location_display")
-  importTag            String?           @map("import_tag")
-  rawDescriptionHtml   String?           @map("raw_description_html")
-  jobDescriptionPlain  String?           @map("job_description_plain")
-  datePostedIso        String?           @map("date_posted_iso")
-  datePostedDisplay    String?           @map("date_posted_display")
-  datePostedRelative   Int?              @default(0) @map("date_posted_relative")
-  sourceHost           String?           @map("source_host")
-  scrapedAt            DateTime?         @map("scraped_at") @db.Timestamptz(6)
-  extractionConfidence Json?             @map("extraction_confidence")
-  latitude             Float?
-  longitude            Float?
-  geoResolved          Boolean           @default(false) @map("geo_resolved")
-  geoConfidence        Float?            @map("geo_confidence")
-  geoSource            String?           @map("geo_source")
-  user_id              String?
-  
-  // Search-related fields (managed by database triggers)
-  titleNormalized      String?           @map("title_normalized")
-  companyNormalized    String?           @map("company_normalized")
-  locationNormalized   String?           @map("location_normalized")
-  searchBoostScore     Float?            @default(1.0) @map("search_boost_score")
-  commonTitleCategory  String?           @map("common_title_category")
-  
-  applications         Application[]
-  coverLetters         CoverLetter[]
-  jobEmbedding         JobEmbedding?
-  geoPoints            JobGeoPoint[]
-  userInteractions     UserInteraction[]
-  userJobs             UserJob[]
-  searchAnalytics      SearchAnalytics[]
+  id                     String                   @id @default(uuid()) @db.Uuid
+  title                  String
+  company                String?
+  location               String?
+  sourceUrl              String                   @map("source_url")
+  postedAt               DateTime?                @map("posted_at") @db.Timestamptz(6)
+  fetchedAt              DateTime?                @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  status                 String?                  @default("fresh")
+  archived_at            DateTime?                @db.Timestamptz(6)
+  normalizedText         String?                  @map("normalized_text")
+  rawTextSummary         String?                  @map("raw_text_summary")
+  contentHash            String?                  @unique @map("content_hash")
+  createdAt              DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime?                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isImported             Int?                     @default(0) @map("is_imported")
+  originalPostedDate     String?                  @map("original_posted_date")
+  originalPostedRaw      String?                  @map("original_posted_raw")
+  originalPostedSource   String?                  @map("original_posted_source")
+  locationDisplay        String?                  @map("location_display")
+  importTag              String?                  @map("import_tag")
+  rawDescriptionHtml     String?                  @map("raw_description_html")
+  jobDescriptionPlain    String?                  @map("job_description_plain")
+  datePostedIso          String?                  @map("date_posted_iso")
+  datePostedDisplay      String?                  @map("date_posted_display")
+  datePostedRelative     Int?                     @default(0) @map("date_posted_relative")
+  sourceHost             String?                  @map("source_host")
+  scrapedAt              DateTime?                @map("scraped_at") @db.Timestamptz(6)
+  extractionConfidence   Json?                    @map("extraction_confidence")
+  latitude               Float?
+  longitude              Float?
+  geoResolved            Boolean                  @default(false) @map("geo_resolved")
+  geoConfidence          Float?                   @map("geo_confidence")
+  geoSource              String?                  @map("geo_source")
+  user_id                String?
+  titleNormalized        String?                  @map("title_normalized")
+  companyNormalized      String?                  @map("company_normalized")
+  locationNormalized     String?                  @map("location_normalized")
+  search_title_tokens    Unsupported("tsvector")?
+  search_company_tokens  Unsupported("tsvector")?
+  search_location_tokens Unsupported("tsvector")?
+  search_content         Unsupported("tsvector")?
+  searchBoostScore       Float?                   @default(1.0) @map("search_boost_score")
+  commonTitleCategory    String?                  @map("common_title_category")
+  postedByUserId         String?                  @map("posted_by_user_id")
+  applications           Application[]
+  coverLetters           CoverLetter[]
+  jobEmbedding           JobEmbedding?
+  geoPoints              JobGeoPoint[]
+  postedBy               User?                    @relation(fields: [postedByUserId], references: [id], onUpdate: NoAction, map: "fk_jobs_posted_by_user")
+  searchAnalytics        SearchAnalytics[]
+  userInteractions       UserInteraction[]
+  userJobs               UserJob[]
 
   @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
   @@index([contentHash], map: "idx_jobs_content_hash")
   @@index([importTag], map: "idx_jobs_import_tag")
   @@index([status], map: "idx_jobs_status")
   @@index([user_id], map: "idx_jobs_user_id")
+  @@index([postedByUserId], map: "idx_jobs_posted_by_user_id")
   @@index([titleNormalized], map: "idx_jobs_title_normalized")
   @@index([companyNormalized], map: "idx_jobs_company_normalized")
   @@index([locationNormalized], map: "idx_jobs_location_normalized")
+  @@index([company(ops: raw("gin_trgm_ops"))], map: "idx_jobs_company_trgm", type: Gin)
+  @@index([location(ops: raw("gin_trgm_ops"))], map: "idx_jobs_location_trgm", type: Gin)
+  @@index([search_company_tokens], map: "idx_jobs_search_company", type: Gin)
+  @@index([search_content], map: "idx_jobs_search_content", type: Gin)
+  @@index([search_location_tokens], map: "idx_jobs_search_location", type: Gin)
+  @@index([search_title_tokens], map: "idx_jobs_search_title", type: Gin)
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_jobs_title_trgm", type: Gin)
   @@map("jobs")
 }
 
@@ -103,6 +135,11 @@ model UserJob {
   why            String?
   archived_at    DateTime? @db.Timestamptz(6)
   updatedAt      DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  upvotes        Int?      @default(0)
+  downvotes      Int?      @default(0)
+  posterFirstName String?  @map("poster_first_name")
+  posterLastName  String?  @map("poster_last_name")
+  posterImageUrl  String?  @map("poster_image_url")
   job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_jobs_job")
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_jobs_user")
 
@@ -118,9 +155,9 @@ model Resume {
   isDefault       Boolean?         @default(false) @map("is_default")
   fileData        Bytes?           @map("file_data")
   s3Key           String?          @map("s3_key")
-  archivedAt      DateTime?        @map("archived_at") @db.Timestamptz(6)
   createdAt       DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
   userId          String           @map("user_id")
+  archivedAt      DateTime?        @map("archived_at") @db.Timestamptz(6)
   applications    Application[]
   coverLetters    CoverLetter[]
   resumeEmbedding ResumeEmbedding?
@@ -272,32 +309,35 @@ model JobGeoPoint {
 }
 
 model SearchAnalytics {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  queryText         String    @map("query_text")
-  queryNormalized   String?   @map("query_normalized")
-  resultsCount      Int?      @map("results_count")
-  clickedJobId      String?   @map("clicked_job_id") @db.Uuid
-  userId            String?   @map("user_id")
-  sessionId         String?   @map("session_id")
-  searchDurationMs  Int?      @map("search_duration_ms")
-  filtersUsed       Json?     @map("filters_used")
-  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  
-  clickedJob        Job?      @relation(fields: [clickedJobId], references: [id], onDelete: SetNull)
-  
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queryText        String    @map("query_text")
+  queryNormalized  String?   @map("query_normalized")
+  resultsCount     Int?      @map("results_count")
+  clickedJobId     String?   @map("clicked_job_id") @db.Uuid
+  userId           String?   @map("user_id")
+  sessionId        String?   @map("session_id")
+  searchDurationMs Int?      @map("search_duration_ms")
+  filtersUsed      Json?     @map("filters_used")
+  createdAt        DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  clickedJob       Job?      @relation(fields: [clickedJobId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users            User?     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
   @@index([queryNormalized], map: "idx_search_analytics_query")
   @@index([createdAt(sort: Desc)], map: "idx_search_analytics_created")
   @@index([userId], map: "idx_search_analytics_user")
+  @@index([queryNormalized, createdAt, resultsCount, userId], map: "idx_search_analytics_aggregated")
+  @@index([queryNormalized, createdAt(sort: Desc)], map: "idx_search_analytics_query_created")
+  @@index([userId, queryNormalized, createdAt(sort: Desc)], map: "idx_search_analytics_user_query")
   @@map("search_analytics")
 }
 
 model SearchSuggestions {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  term        String    @unique
-  termType    String    @map("term_type")
-  frequency   Int       @default(1)
-  lastSeenAt  DateTime? @default(now()) @map("last_seen_at") @db.Timestamptz(6)
-  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  term       String    @unique
+  termType   String    @map("term_type")
+  frequency  Int?      @default(1)
+  lastSeenAt DateTime? @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([term], map: "idx_search_suggestions_term")
   @@index([termType], map: "idx_search_suggestions_type")

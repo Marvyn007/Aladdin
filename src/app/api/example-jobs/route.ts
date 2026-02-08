@@ -4,7 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { insertJob } from '@/lib/db';
 
@@ -79,6 +79,13 @@ export async function POST(request: Request) {
 
         const body = await request.json();
 
+        const user = await currentUser();
+        const posterDetails = user ? {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            imageUrl: user.imageUrl
+        } : undefined;
+
         // Use the centralized insert logic to handle Global/User split correctly
         const job = await insertJob(userId, {
             title: body.title,
@@ -88,7 +95,7 @@ export async function POST(request: Request) {
             normalized_text: body.normalizedText,
             raw_text_summary: body.rawTextSummary,
             posted_at: new Date().toISOString(),
-        });
+        }, posterDetails);
 
         return NextResponse.json({
             success: true,

@@ -5,16 +5,23 @@ import {
     getLinkedInProfile,
     updateJobScore,
     getResumeById,
-    updateResume
+    updateResume,
+    getPostedByUserInfo,
 } from '@/lib/db';
 import { scoreJob, parseResumeFromPdf } from '@/lib/gemini';
-import type { ParsedResume } from '@/types';
+import type { ParsedResume, ResumeSkill } from '@/types';
 import type { ScrapeResult } from '@/lib/job-scraper-fetch';
+import {
+    validateJobSourceDomain,
+    validateJobDescription,
+    validateJobScrapeResult,
+    getValidationErrorMessage,
+} from '@/lib/job-validation';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow longer for scraping
+export const maxDuration = 60;
 
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 
 export async function POST(req: NextRequest) {
     try {
@@ -22,55 +29,112 @@ export async function POST(req: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        const { url } = await req.json();
+        const { url, description, bypassValidation } = await req.json();
 
-        if (!url) {
-            return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+        if (!url && !description) {
+            return NextResponse.json(
+                { error: 'Either url or description is required' },
+                { status: 400 }
+            );
         }
 
-        console.log('[Import] Scraping job page:', url);
+        let scrapeResult: ScrapeResult;
 
-        // Always use fetch-based scraper for speed (instant imports)
-        // Puppeteer is slow (60+ seconds) and problematic on serverless
-        const { scrapeJobPageFetch } = await import('@/lib/job-scraper-fetch');
-        const scrapeResult = await scrapeJobPageFetch(url);
-        console.log('[Import] Using fetch-based scraper (fast)');
+        if (description) {
+            const descValidation = validateJobDescription(description);
+            if (!descValidation.valid && !bypassValidation) {
+                return NextResponse.json(
+                    {
+                        error: getValidationErrorMessage({ descriptionValidation: descValidation }),
+                        canBypass: true
+                    },
+                    { status: 400 }
+                );
+            }
 
-        console.log('[Import] Extracted:', {
-            title: scrapeResult.title,
-            company: scrapeResult.company,
-            location: scrapeResult.location,
-            descriptionLength: scrapeResult.job_description_plain.length,
-            confidence: scrapeResult.confidence
-        });
+            scrapeResult = {
+                title: 'Manually Imported Job',
+                company: 'Unknown Company',
+                location: 'Not specified',
+                source_url: 'manual-import',
+                source_host: 'manual',
+                raw_description_html: description,
+                job_description_plain: description,
+                date_posted_iso: new Date().toISOString(),
+                date_posted_display: 'Today',
+                date_posted_relative: false,
+                scraped_at: new Date().toISOString(),
+                confidence: {
+                    description: 1.0,
+                    date: 0,
+                    location: 0
+                }
+            };
+        } else {
+            if (!url) {
+                return NextResponse.json(
+                    { error: 'URL is required' },
+                    { status: 400 }
+                );
+            }
 
-        // Log warnings for low confidence
-        if (scrapeResult.confidence.description < 0.5) {
-            console.warn('[Import] Low confidence for description:', scrapeResult.confidence.description);
+            const domainValidation = validateJobSourceDomain(url);
+            if (!domainValidation.valid && !bypassValidation) {
+                return NextResponse.json(
+                    {
+                        error: getValidationErrorMessage({ domainValidation }),
+                        warning: 'Jobs cannot be fetched from LinkedIn, Indeed, or Glassdoor. Please use the original job posting link instead.',
+                        canBypass: true
+                    },
+                    { status: 400 }
+                );
+            }
+
+            console.log('[Import] Scraping job page:', url);
+
+            const { scrapeJobPageFetch } = await import('@/lib/job-scraper-fetch');
+            const fetchedResult = await scrapeJobPageFetch(url);
+            console.log('[Import] Using fetch-based scraper (fast)');
+
+            console.log('[Import] Extracted:', {
+                title: fetchedResult.title,
+                company: fetchedResult.company,
+                location: fetchedResult.location,
+                descriptionLength: fetchedResult.job_description_plain.length,
+                confidence: fetchedResult.confidence
+            });
+
+            const scrapeValidation = validateJobScrapeResult(fetchedResult);
+            if (!scrapeValidation.valid && !bypassValidation) {
+                console.error('[Import] Scrape validation failed:', scrapeValidation.reasons);
+                return NextResponse.json(
+                    {
+                        error: getValidationErrorMessage({ scrapeValidation }),
+                        canBypass: true
+                    },
+                    { status: 400 }
+                );
+            }
+
+            scrapeResult = fetchedResult;
         }
-        if (scrapeResult.confidence.date < 0.5) {
-            console.warn('[Import] Low confidence for date:', scrapeResult.confidence.date);
-        }
-        if (scrapeResult.confidence.location < 0.5) {
-            console.warn('[Import] Low confidence for location:', scrapeResult.confidence.location);
-        }
 
-        // Insert job with all new fields
+        const user = await currentUser();
+
         const newJob = await insertJob(userId, {
             title: scrapeResult.title,
             company: scrapeResult.company,
             location: scrapeResult.location,
-            source_url: url,
+            source_url: scrapeResult.source_url,
             posted_at: scrapeResult.date_posted_iso || scrapeResult.scraped_at,
             normalized_text: scrapeResult.job_description_plain,
-            raw_text_summary: scrapeResult.job_description_plain, // Full text, no truncation
+            raw_text_summary: scrapeResult.job_description_plain,
             isImported: true,
             original_posted_date: scrapeResult.date_posted_iso,
             original_posted_raw: scrapeResult.date_posted_display,
             original_posted_source: scrapeResult.date_posted_relative ? 'relative' : 'absolute',
             location_display: scrapeResult.location,
             import_tag: 'imported',
-            // V2 fields
             raw_description_html: scrapeResult.raw_description_html,
             job_description_plain: scrapeResult.job_description_plain,
             date_posted_iso: scrapeResult.date_posted_iso,
@@ -79,11 +143,14 @@ export async function POST(req: NextRequest) {
             source_host: scrapeResult.source_host,
             scraped_at: scrapeResult.scraped_at,
             extraction_confidence: scrapeResult.confidence
-        });
+        }, user ? {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            imageUrl: user.imageUrl
+        } : undefined);
 
         console.log('[Import] Job inserted:', newJob.id);
 
-        // Scoring with DETERMINISTIC skill matching
         const defaultResume = await getDefaultResume(userId);
         const linkedinProfile = await getLinkedInProfile(userId);
         let score = 0;
@@ -92,7 +159,6 @@ export async function POST(req: NextRequest) {
         let why = 'Imported job';
 
         if (defaultResume) {
-            // Lazy parse resume if needed
             if (!defaultResume.parsed_json || Object.keys(defaultResume.parsed_json).length === 0) {
                 console.log('[Import] Parsing default resume for first time...');
                 const resumeData = await getResumeById(userId, defaultResume.id);
@@ -105,7 +171,6 @@ export async function POST(req: NextRequest) {
 
             const linkedinParsed = linkedinProfile?.parsed_json as ParsedResume | null;
 
-            // DETERMINISTIC: Extract resume skills
             const resumeParsed = defaultResume.parsed_json as ParsedResume;
             const resumeSkillNames: string[] = [];
             if (resumeParsed.skills) {
@@ -113,12 +178,11 @@ export async function POST(req: NextRequest) {
                     if (typeof skill === 'string') {
                         resumeSkillNames.push(skill);
                     } else if (skill && typeof skill === 'object' && 'name' in skill) {
-                        resumeSkillNames.push((skill as any).name);
+                        resumeSkillNames.push((skill as ResumeSkill).name);
                     }
                 }
             }
 
-            // DETERMINISTIC: Match skills against job text
             const { analyzeSkills } = await import('@/lib/skill-matcher');
             const jobText = scrapeResult.job_description_plain || '';
             const skillAnalysis = analyzeSkills(jobText, resumeSkillNames);
@@ -132,47 +196,30 @@ export async function POST(req: NextRequest) {
                 jobSkillsFound: skillAnalysis.jobSkills.length
             });
 
-            // AI: Get score and explanation only
             try {
                 const scoreResult = await scoreJob(resumeParsed, linkedinParsed, newJob);
                 score = scoreResult.match_score;
                 why = scoreResult.why || 'Imported and scored';
-                // IGNORE AI's skill suggestions - use deterministic instead
-            } catch (aiErr: any) {
+            } catch {
                 console.warn('[Import] AI scoring failed, using skill-based fallback');
-                if (skillAnalysis.jobSkills.length > 0) {
-                    score = Math.round((matchedSkills.length / skillAnalysis.jobSkills.length) * 100);
-                    why = `${matchedSkills.length}/${skillAnalysis.jobSkills.length} skills matched`;
-                }
             }
-
-            await updateJobScore(
-                userId,
-                newJob.id,
-                score,
-                matchedSkills,    // ← DETERMINISTIC: 100% accurate
-                missingSkills,    // ← DETERMINISTIC: 100% accurate
-                why
-            );
         }
 
-        const finalJob = { ...newJob, match_score: score };
+        await updateJobScore(userId, newJob.id, score, matchedSkills, missingSkills, why);
 
-        // Return full scrape result for transparency
+        const postedByUser = await getPostedByUserInfo(newJob.id);
+
         return NextResponse.json({
             success: true,
-            job: finalJob,
-            scrape_metadata: {
-                source_host: scrapeResult.source_host,
-                scraped_at: scrapeResult.scraped_at,
-                confidence: scrapeResult.confidence,
-                description_length: scrapeResult.job_description_plain.length,
-                date_posted_display: scrapeResult.date_posted_display
+            job: {
+                ...newJob,
+                postedBy: postedByUser
             }
         });
 
-    } catch (error: any) {
-        console.error('Import Job Error:', error);
-        return NextResponse.json({ error: error.message || 'Failed to import job' }, { status: 500 });
+    } catch (error: unknown) {
+        console.error('[Import] Error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: errorMessage || 'Failed to import job' }, { status: 500 });
     }
 }

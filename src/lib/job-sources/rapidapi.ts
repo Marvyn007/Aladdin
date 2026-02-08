@@ -1,4 +1,5 @@
 import { BaseJobSource, JobFilter, ScrapedJob } from './types';
+import { validateJobDescription } from '../job-validation';
 
 export class RapidAPIAdapter extends BaseJobSource {
     constructor() {
@@ -47,17 +48,25 @@ export class RapidAPIAdapter extends BaseJobSource {
             const data = await response.json();
             const jobs = data.data || [];
 
-            return jobs.map((j: any) => ({
+            const mapped = jobs.map((j: any) => ({
                 id: j.job_id,
                 title: j.job_title,
                 company: j.employer_name,
                 location: j.job_country === 'US' ? (j.job_city ? `${j.job_city}, ${j.job_state}` : 'United States') : j.job_country,
-                posted_at: j.job_posted_at_datetime_utc, // ISO string usually
+                posted_at: j.job_posted_at_datetime_utc,
                 source_url: j.job_apply_link,
-                description: j.job_description, // Full description often available
+                description: j.job_description,
                 original_source: 'rapidapi_jsearch',
                 raw_source_data: j
             }));
+
+            return mapped.filter((job: ScrapedJob) => {
+                const validation = validateJobDescription(job.description);
+                if (!validation.valid) {
+                    console.warn(`[RapidAPI] Job rejected: ${job.title} - ${validation.reason}`);
+                }
+                return validation.valid;
+            });
 
         } catch (e) {
             console.error('RapidAPI fetch failed:', e);

@@ -91,12 +91,12 @@ interface AppState {
 
     setSorting: (sorting: Partial<AppState['sorting']>) => void;
 
-// Search Actions
-enterSearchMode: (query: string) => void;
-exitSearchMode: () => void;
-setSearchQuery: (query: string) => void;
-performServerSearch: (query: string, page?: number) => Promise<void>;
-clearSearchResults: () => void;
+    // Search Actions
+    enterSearchMode: (query: string) => void;
+    exitSearchMode: () => void;
+    setSearchQuery: (query: string) => void;
+    performServerSearch: (query: string, page?: number) => Promise<void>;
+    clearSearchResults: () => void;
 
     // Cookie Persistence
     initializeFilters: () => void;
@@ -533,10 +533,9 @@ export const useStore = create<AppState>()(
                     searchResults: [],
                 });
             },
-
         }),
         {
-            name: 'job-hunt-vibe-storage',
+            name: 'job-hunt-vibe-storage-v2', // Bump version to invalidate old cache including stale jobs
             partialize: (state) => ({
                 theme: state.theme,
                 themeId: state.themeId,
