@@ -43,23 +43,20 @@ export async function POST(req: NextRequest) {
 
             const existingVote = existingRes.rows[0];
 
-            if (existingVote) {
-                // If same vote, ignore (idempotent)
-                if (existingVote.value === voteValue) {
-                    await client.query('ROLLBACK');
-                    const currentVotesRes = await client.query(`SELECT votes FROM users WHERE id = $1`, [targetUserId]);
-                    return NextResponse.json({
-                        success: true,
-                        votes: currentVotesRes.rows[0]?.votes || 0,
-                        userVote: voteType
-                    });
-                }
+            let finalUserVote = voteType;
 
-                // If different vote, update (flip)
-                await client.query(
-                    `UPDATE user_reputation_votes SET value = $1, created_at = NOW() WHERE id = $2`,
-                    [voteValue, existingVote.id]
-                );
+            if (existingVote) {
+                // If same vote, DELETE it (toggle off/cancel)
+                if (existingVote.value === voteValue) {
+                    await client.query('DELETE FROM user_reputation_votes WHERE id = $1', [existingVote.id]);
+                    finalUserVote = null;
+                } else {
+                    // If different vote, UPDATE it (flip)
+                    await client.query(
+                        `UPDATE user_reputation_votes SET value = $1, created_at = NOW() WHERE id = $2`,
+                        [voteValue, existingVote.id]
+                    );
+                }
             } else {
                 // Insert new vote
                 await client.query(
@@ -83,7 +80,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 success: true,
                 votes: newTotal,
-                userVote: voteType
+                userVote: finalUserVote
             });
 
         } catch (e) {

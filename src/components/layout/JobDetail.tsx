@@ -27,13 +27,14 @@ interface VoteControlProps {
         id: string;
         firstName: string | null;
         lastName: string | null;
+        imageUrl: string | null;
         votes: number;
     } | null;
     currentUserId: string | null;
     onVoteSuccess?: () => void;
 }
 
-function VoteControl({ targetUser, currentUserId, onVoteSuccess }: VoteControlProps) {
+function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteControlProps) {
     const [votes, setVotes] = useState(targetUser?.votes || 0);
     const [userVote, setUserVote] = useState<'up' | 'down' | null>(null);
     const [loading, setLoading] = useState(false);
@@ -57,9 +58,9 @@ function VoteControl({ targetUser, currentUserId, onVoteSuccess }: VoteControlPr
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {
-                        setVotes(data.votes); // Always update total count
+                        setVotes(data.votes);
                         if (currentUserId && data.userVote !== undefined) {
-                            setUserVote(data.userVote); // Update own vote status if logged in
+                            setUserVote(data.userVote);
                         }
                     }
                 }
@@ -68,53 +69,35 @@ function VoteControl({ targetUser, currentUserId, onVoteSuccess }: VoteControlPr
             }
         };
 
-        // Initial fetch
         fetchVotes();
-
-        // Poll every 3 seconds
         const intervalId = setInterval(fetchVotes, 3000);
-
-        return () => {
-            isMounted = false;
-            clearInterval(intervalId);
-        };
+        return () => { isMounted = false; clearInterval(intervalId); };
     }, [targetUser?.id, currentUserId]);
 
     const handleVote = async (type: 'up' | 'down') => {
         if (!currentUserId || !targetUser || loading) return;
-
-        // Prevent self-voting
         if (currentUserId === targetUser.id) return;
-
-        // If user already voted this way, do nothing (strict single vote per type)
-        // Actually, if clicking same vote, we might want to toggle it off?
-        // User request says "exactly once". Usually means toggle support or strict one-time.
-        // Let's assume strict set for now, or toggle if backend supports deletion.
-        // Current backend supports flipping. If same, it returns current.
-        // Let's keep UI simple: clicking same does nothing as per typical "one vote" interpretation unless toggle requested.
-
-        if (userVote === type) return;
 
         setLoading(true);
         const oldVote = userVote;
         const oldVotes = votes;
 
-        // Optimistic Calc
-        // No vote -> Up (+1)
-        // Down -> Up (+2)
-        // No vote -> Down (-1)
-        // Up -> Down (-2)
-
         let delta = 0;
-        if (type === 'up') {
-            delta = oldVote === 'down' ? 2 : 1;
+        let newUserVote: 'up' | 'down' | null = type;
+
+        if (userVote === type) {
+            delta = type === 'up' ? -1 : 1;
+            newUserVote = null;
         } else {
-            delta = oldVote === 'up' ? -2 : -1;
+            if (type === 'up') {
+                delta = userVote === 'down' ? 2 : 1;
+            } else {
+                delta = userVote === 'up' ? -2 : -1;
+            }
         }
 
-        // Optimistic update
         setVotes(prev => prev + delta);
-        setUserVote(type);
+        setUserVote(newUserVote);
 
         try {
             const res = await fetch('/api/vote-job', {
@@ -124,21 +107,18 @@ function VoteControl({ targetUser, currentUserId, onVoteSuccess }: VoteControlPr
             });
 
             if (!res.ok) {
-                // Revert on failure
                 setVotes(oldVotes);
                 setUserVote(oldVote);
                 const err = await res.json();
                 if (err.error === 'Cannot vote for yourself') {
-                    alert("You cannot vote for yourself.");
+                    // Silent fail or handled by UI state
                 }
             } else {
                 const data = await res.json();
-                // Sync with server truth just in case
                 setVotes(data.votes);
                 if (onVoteSuccess) onVoteSuccess();
             }
         } catch (err) {
-            // Revert on error
             setVotes(oldVotes);
             setUserVote(oldVote);
         } finally {
@@ -152,47 +132,135 @@ function VoteControl({ targetUser, currentUserId, onVoteSuccess }: VoteControlPr
     const canVote = currentUserId && currentUserId !== targetUser.id;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', background: 'var(--surface)', padding: '6px 10px', borderRadius: '12px', minWidth: '50px' }}>
-            <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '2px' }}>
-                Reputation
-            </span>
-            <button
-                onClick={(e) => { e.stopPropagation(); handleVote('up'); }}
-                disabled={!canVote || loading}
-                title={!currentUserId ? "Sign in to vote" : (currentUserId === targetUser.id ? "You cannot vote for yourself" : `Upvote ${userName}`)}
-                style={{
-                    color: userVote === 'up' ? 'var(--success)' : 'var(--text-tertiary)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: canVote && userVote !== 'up' ? 'pointer' : 'default',
-                    padding: '2px',
-                    lineHeight: 0,
-                    opacity: canVote ? 1 : 0.5,
-                    transition: 'transform 0.1s'
-                }}
-            >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={userVote === 'up' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
-            </button>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: votes >= 0 ? 'var(--success)' : 'var(--error)', minWidth: '20px', textAlign: 'center' }}>
-                {votes > 0 ? '+' : ''}{votes}
-            </span>
-            <button
-                onClick={(e) => { e.stopPropagation(); handleVote('down'); }}
-                disabled={!canVote || loading}
-                title={!currentUserId ? "Sign in to vote" : (currentUserId === targetUser.id ? "You cannot vote for yourself" : `Downvote ${userName}`)}
-                style={{
-                    color: userVote === 'down' ? 'var(--error)' : 'var(--text-tertiary)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: canVote && userVote !== 'down' ? 'pointer' : 'default',
-                    padding: '2px',
-                    lineHeight: 0,
-                    opacity: canVote ? 1 : 0.5,
-                    transition: 'transform 0.1s'
-                }}
-            >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={userVote === 'down' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-            </button>
+        <div style={{
+            background: 'linear-gradient(145deg, var(--surface), var(--background-secondary))',
+            borderRadius: '16px',
+            padding: '24px',
+            boxShadow: 'var(--shadow-md)',
+            border: '1px solid var(--border)',
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+        }}>
+            {/* Decorative background element */}
+            <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, var(--accent), var(--success))',
+                opacity: 0.8
+            }} />
+
+            <div style={{
+                width: '100%',
+                textAlign: 'center',
+                marginBottom: '20px',
+                fontSize: '12px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                color: 'var(--text-secondary)'
+            }}>
+                Posted by
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                <img
+                    src={targetUser.imageUrl || '/placeholder-user.jpg'}
+                    alt={userName}
+                    style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        border: '2px solid var(--surface)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }}
+                    onError={(e) => { e.currentTarget.src = '/placeholder-user.jpg'; }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {userName}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                        Community Member
+                    </span>
+                </div>
+            </div>
+
+            {/* Voting Section styled as "Giving Thanks" */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: 'var(--background)',
+                padding: '8px 24px',
+                borderRadius: '30px',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)',
+                gap: '32px',
+                opacity: canVote ? 1 : 0.5,
+                filter: canVote ? 'none' : 'grayscale(100%) blur(0.5px)',
+                pointerEvents: canVote ? 'auto' : 'none',
+                transition: 'all 0.3s ease'
+            }}>
+                <button
+                    onClick={(e) => { e.stopPropagation(); handleVote('up'); }}
+                    disabled={!canVote || loading}
+                    title={!currentUserId ? "Sign in to thank" : (currentUserId === targetUser.id ? "You cannot thank yourself" : `Give thanks to ${userName}`)}
+                    style={{
+                        color: userVote === 'up' ? 'var(--accent)' : 'var(--text-tertiary)',
+                        background: userVote === 'up' ? 'rgba(var(--accent-rgb), 0.1)' : 'transparent',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
+                        border: 'none',
+                        cursor: canVote ? 'pointer' : 'default',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                        transform: userVote === 'up' ? 'scale(1.1)' : 'scale(1)'
+                    }}
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill={userVote === 'up' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+                </button>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
+                        {votes}
+                    </span>
+                    <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginTop: '2px' }}>
+                        Reputation
+                    </span>
+                </div>
+
+                <button
+                    onClick={(e) => { e.stopPropagation(); handleVote('down'); }}
+                    disabled={!canVote || loading}
+                    title={!currentUserId ? "Sign in to vote" : (currentUserId === targetUser.id ? "You cannot vote for yourself" : `Downvote ${userName}`)}
+                    style={{
+                        color: userVote === 'down' ? 'var(--error)' : 'var(--text-tertiary)',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: canVote ? 'pointer' : 'default',
+                        padding: '8px',
+                        lineHeight: 0,
+                        opacity: canVote ? 1 : 0.5,
+                        transition: 'transform 0.1s',
+                        transform: userVote === 'down' ? 'scale(1.1)' : 'scale(1)'
+                    }}
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={userVote === 'down' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>
+                </button>
+            </div>
+
+            <div style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                {userVote === 'up' ? "You thanked the poster!" : "Found this job helpful? Give thanks!"}
+            </div>
         </div>
     );
 }
@@ -509,52 +577,7 @@ export function JobDetail({
                         </div>
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                             {/* Poster Card (Profile + Reputation) */}
-                            {job.postedBy && (
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '12px',
-                                    padding: '6px 12px 6px 6px',
-                                    background: 'var(--surface)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    border: '1px solid var(--border)',
-                                }}>
-                                    {/* Avatar & Name */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <img
-                                            src={job.postedBy.imageUrl || '/placeholder-user.jpg'}
-                                            alt={`${job.postedBy.firstName || 'User'}`}
-                                            style={{
-                                                width: '32px',
-                                                height: '32px',
-                                                borderRadius: '50%',
-                                                objectFit: 'cover',
-                                                border: '1px solid var(--border)',
-                                            }}
-                                            onError={(e) => {
-                                                e.currentTarget.src = '/placeholder-user.jpg';
-                                            }}
-                                        />
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                                                {job.postedBy.firstName} {job.postedBy.lastName}
-                                            </span>
-                                            <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', lineHeight: 1 }}>
-                                                Poster
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Vertical Separator */}
-                                    <div style={{ width: '1px', height: '24px', background: 'var(--border)' }}></div>
-
-                                    {/* Vote Control */}
-                                    <VoteControl
-                                        targetUser={job.postedBy}
-                                        currentUserId={isAuthenticated ? 'user' : null}
-                                    />
-                                </div>
-                            )}
+                            {/* Poster Card (Profile + Reputation) removed from here */}
 
                             {/* Match Score */}
                             <div
@@ -831,6 +854,16 @@ export function JobDetail({
                             </div>
                         )
                     }
+
+                    {/* Poster Reputation Card */}
+                    {job.postedBy && (
+                        <div style={{ marginTop: '40px', marginBottom: '20px', width: '100%' }}>
+                            <ReputationCard
+                                targetUser={job.postedBy}
+                                currentUserId={isAuthenticated ? 'user' : null}
+                            />
+                        </div>
+                    )}
 
                     {/* Source link */}
                     <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--border)' }}>
