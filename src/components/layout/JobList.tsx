@@ -12,6 +12,7 @@ import { useAuth } from '@clerk/nextjs';
 import { SearchBar } from '@/components/common/SearchBar';
 import { SearchEmptyState } from '@/components/common/SearchEmptyState';
 import { JobLoadingState } from '@/components/common/JobLoadingState';
+import { ImageWithRetry } from '@/components/common/ImageWithRetry';
 import { trackJobInteraction } from '@/lib/actions';
 
 interface JobListProps {
@@ -389,7 +390,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                                 title={`Posted by ${job.postedBy.firstName} ${job.postedBy.lastName}`}
                                                 style={{ display: 'block', lineHeight: 0 }}
                                             >
-                                                <img
+                                                <ImageWithRetry
                                                     src={job.postedBy.imageUrl || '/placeholder-user.jpg'}
                                                     alt="Poster"
                                                     style={{
@@ -403,9 +404,6 @@ export function JobList({ onJobClick }: JobListProps) {
                                                         objectFit: 'cover',
                                                         border: '1px solid var(--border)',
                                                         display: 'block'
-                                                    }}
-                                                    onError={(e) => {
-                                                        e.currentTarget.style.display = 'none';
                                                     }}
                                                 />
                                             </div>
