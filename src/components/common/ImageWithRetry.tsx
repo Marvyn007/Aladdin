@@ -3,37 +3,59 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'lucide-react';
 
-interface ImageWithRetryProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+interface ImageWithRetryProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
+    src?: string | Blob | null;
     fallbackIcon?: React.ReactNode;
 }
 
 export function ImageWithRetry({ src, alt, className, style, fallbackIcon, ...props }: ImageWithRetryProps) {
-    const [imgSrc, setImgSrc] = useState<string | null>(src || null);
+    // Fix: Handle Blob in initial state safely
+    const [imgSrc, setImgSrc] = useState<string | null>(() => {
+        if (typeof src === 'string') return src;
+        // Blob or null -> utilize useEffect to generate object URL if needed
+        return null;
+    });
+
     const [retryCount, setRetryCount] = useState(0);
     const [hasError, setHasError] = useState(false);
 
     useEffect(() => {
-        setImgSrc(src || null);
-        setRetryCount(0);
+        // Reset state on src change
         setHasError(false);
+        setRetryCount(0);
+
+        if (!src) {
+            setImgSrc(null);
+            return;
+        }
+
+        if (src instanceof Blob) {
+            const objectUrl = URL.createObjectURL(src);
+            setImgSrc(objectUrl);
+            return () => URL.revokeObjectURL(objectUrl);
+        }
+
+        setImgSrc(src);
     }, [src]);
 
     const handleError = () => {
-        console.log(`Image load error for ${src}. Retry count: ${retryCount}`);
+        // console.log(`Image load error for ${src}. Retry count: ${retryCount}`);
         if (retryCount < 5) {
             const nextRetry = retryCount + 1;
             setRetryCount(nextRetry);
 
-            // Exponential backoff or simple delay
-            setTimeout(() => {
-                if (src) {
+            // Only retry if it's a string URL (can't really retry a Blob)
+            if (typeof src === 'string') {
+                setTimeout(() => {
                     // Try to re-fetch by appending a cache buster
                     const separator = src.includes('?') ? '&' : '?';
                     setImgSrc(`${src}${separator}retry=${nextRetry}-${Date.now()}`);
-                }
-            }, 1000 * nextRetry); // Wait 1s, 2s, 3s etc.
+                }, 1000 * nextRetry);
+            } else {
+                setHasError(true);
+            }
         } else {
-            console.log(`Max retries reached for ${src}. Showing fallback.`);
+            // console.log(`Max retries reached. Showing fallback.`);
             setHasError(true);
         }
     };
