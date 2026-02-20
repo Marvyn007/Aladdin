@@ -876,6 +876,110 @@ export async function deleteJob(userId: string, jobId: string): Promise<void> {
     }
 }
 
+export interface JobEditFields {
+    title: string;
+    company: string;
+    location: string;
+    description: string; // Maps to job_description_plain + normalized_text
+}
+
+/**
+ * Update editable job fields. Only the poster (posted_by_user_id) may edit.
+ * Returns the updated job or null if not found / not authorized.
+ */
+export async function updateJobById(
+    userId: string,
+    jobId: string,
+    fields: JobEditFields
+): Promise<Job | null> {
+    const dbType = getDbType();
+
+    // Audit log (no PII — just userId hash prefix, jobId, field names)
+    console.log('[DB] Job edit audit:', {
+        userId: userId.substring(0, 8) + '...',
+        jobId,
+        changedFields: Object.keys(fields),
+        timestamp: new Date().toISOString(),
+    });
+
+    if (dbType === 'postgres') {
+        const pool = getPostgresPool();
+
+        const res = await pool.query(`
+            UPDATE jobs
+            SET title = $1, company = $2, location = $3,
+                job_description_plain = $4, normalized_text = $4
+            WHERE id = $5 AND posted_by_user_id = $6
+            RETURNING *
+        `, [fields.title, fields.company, fields.location, fields.description, jobId, userId]);
+
+        if (res.rows.length === 0) return null;
+
+        const row = res.rows[0];
+        return {
+            ...row,
+            matched_skills: typeof row.matched_skills === 'string' ? JSON.parse(row.matched_skills) : row.matched_skills,
+            missing_skills: typeof row.missing_skills === 'string' ? JSON.parse(row.missing_skills) : row.missing_skills,
+            isImported: Boolean(row.is_imported),
+            date_posted_relative: Boolean(row.date_posted_relative),
+            extraction_confidence: typeof row.extraction_confidence === 'string' ? JSON.parse(row.extraction_confidence) : row.extraction_confidence,
+        } as Job;
+
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+
+        const { data, error } = await client
+            .from('jobs')
+            .update({
+                title: fields.title,
+                company: fields.company,
+                location: fields.location,
+                job_description_plain: fields.description,
+                normalized_text: fields.description,
+            })
+            .eq('id', jobId)
+            .eq('posted_by_user_id', userId)
+            .select()
+            .single();
+
+        if (error || !data) return null;
+
+        return {
+            ...data,
+            isImported: Boolean(data.is_imported),
+            date_posted_relative: Boolean(data.date_posted_relative),
+        } as Job;
+
+    } else {
+        const db = getSQLiteDB();
+
+        const result = db.prepare(`
+            UPDATE jobs
+            SET title = ?, company = ?, location = ?,
+                job_description_plain = ?, normalized_text = ?
+            WHERE id = ? AND posted_by_user_id = ?
+        `).run(
+            fields.title, fields.company, fields.location,
+            fields.description, fields.description,
+            jobId, userId
+        );
+
+        if ((result as any).changes === 0) return null;
+
+        const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId) as any;
+        if (!row) return null;
+
+        return {
+            ...row,
+            matched_skills: row.matched_skills ? JSON.parse(row.matched_skills as string) : null,
+            missing_skills: row.missing_skills ? JSON.parse(row.missing_skills as string) : null,
+            isImported: Boolean(row.is_imported),
+            date_posted_relative: Boolean(row.date_posted_relative),
+            extraction_confidence: row.extraction_confidence ? JSON.parse(row.extraction_confidence as string) : null,
+        } as Job;
+    }
+}
+
 export async function archiveOldJobs(): Promise<number> {
     const dbType = getDbType();
 

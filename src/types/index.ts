@@ -39,7 +39,10 @@ export interface Job {
   geo_confidence?: number | null;
   geo_source?: string | null;
   location_raw?: string | null;
-  postedByUserId?: string | null;
+  edited_by_user?: boolean;
+  updated_at?: string | null;
+  posted_by_user_id?: string | null; // actual DB column (snake_case)
+  postedByUserId?: string | null;    // camelCase alias (mapped in some contexts)
   postedBy?: {
     id: string;
     firstName: string | null;

@@ -2,7 +2,8 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { JobEditModal } from '@/components/modals/JobEditModal';
 import { useStore, useStoreActions } from '@/store/useStore';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
@@ -20,6 +21,8 @@ interface JobDetailProps {
     isMobileVisible?: boolean;
     onBack?: () => void;
     isAuthenticated?: boolean;
+    currentUserId?: string | null;
+    onJobUpdate?: (updatedJob: Job) => void;
 }
 
 // User Reputation Vote Control Component
@@ -172,7 +175,7 @@ function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteContro
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
                 <ImageWithRetry
-                    src={targetUser.imageUrl || '/placeholder-user.jpg'}
+                    src={targetUser.imageUrl || null}
                     alt={userName}
                     className="job-detail-avatar"
                     style={{
@@ -446,11 +449,76 @@ export function JobDetail({
     applicationStatus,
     isMobileVisible,
     onBack,
-    isAuthenticated = false
+    isAuthenticated = false,
+    currentUserId,
+    onJobUpdate,
 }: JobDetailProps) {
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingResume, setIsGeneratingResume] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const { toggleJobStatus } = useStoreActions();
+
+    // The DB row spreads posted_by_user_id (snake_case); postedByUserId (camelCase) is only set in some mappers.
+    const jobPosterId = job?.posted_by_user_id || job?.postedByUserId || job?.postedBy?.id || null;
+
+    // Temporary debug log – remove after validation
+    if (process.env.NODE_ENV === 'development' && job) {
+        console.log('Edit check:', {
+            currentUserId,
+            'job.posted_by_user_id': job.posted_by_user_id,
+            'job.postedByUserId': job.postedByUserId,
+            'job.postedBy?.id': job.postedBy?.id,
+            resolved: jobPosterId,
+            match: currentUserId === jobPosterId,
+        });
+    }
+
+    const canEdit = Boolean(
+        currentUserId && jobPosterId && String(currentUserId) === String(jobPosterId)
+    );
+
+    const handleEditSave = useCallback(async (fields: { title: string; company: string; location: string; description: string }) => {
+        if (!job) return;
+        const previousJob = { ...job };
+
+        // Optimistic update
+        const optimisticJob = {
+            ...job,
+            title: fields.title,
+            company: fields.company,
+            location: fields.location,
+            job_description_plain: fields.description,
+            normalized_text: fields.description,
+            edited_by_user: true,
+        };
+        onJobUpdate?.(optimisticJob);
+        setIsEditModalOpen(false);
+
+        try {
+            const res = await fetch(`/api/job/${job.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fields),
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                // Revert optimistic update
+                onJobUpdate?.(previousJob);
+                throw new Error(data.error || 'Failed to save changes');
+            }
+
+            const data = await res.json();
+            if (data.job) {
+                onJobUpdate?.(data.job);
+            }
+        } catch (err) {
+            // Revert optimistic update on network error
+            onJobUpdate?.(previousJob);
+            setIsEditModalOpen(true);
+            throw err;
+        }
+    }, [job, onJobUpdate]);
 
     // ... (helper functions stay same)
 
@@ -767,6 +835,23 @@ export function JobDetail({
                             )}
                         </button>
 
+                        {canEdit && (
+                            <button
+                                onClick={() => setIsEditModalOpen(true)}
+                                className="btn btn-outline"
+                                style={{
+                                    borderColor: 'var(--border)',
+                                }}
+                                title="Edit Job Details"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                                Edit
+                            </button>
+                        )}
+
                         {onDelete && (
                             <button
                                 onClick={() => {
@@ -873,7 +958,16 @@ export function JobDetail({
                         </p>
                     </div>
                 </div >
-            </div>
+            </div >
+
+            {/* Edit Job Modal */}
+            {isEditModalOpen && job && (
+                <JobEditModal
+                    job={job}
+                    onClose={() => setIsEditModalOpen(false)}
+                    onSave={handleEditSave}
+                />
+            )}
         </div >
     );
 }

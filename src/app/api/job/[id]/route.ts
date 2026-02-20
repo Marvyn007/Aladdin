@@ -83,6 +83,60 @@ export async function PATCH(
 }
 
 
+export async function PUT(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { userId } = await auth();
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        const { id } = await params;
+        const body = await request.json();
+        const { title, company, location, description } = body;
+
+        // Validate required fields
+        if (!title?.trim() || !company?.trim() || !description?.trim()) {
+            return NextResponse.json(
+                { error: 'Title, company, and description are required' },
+                { status: 400 }
+            );
+        }
+
+        if (description.trim().length < 50) {
+            return NextResponse.json(
+                { error: 'Description must be at least 50 characters' },
+                { status: 400 }
+            );
+        }
+
+        const { updateJobById } = await import('@/lib/db');
+        const updatedJob = await updateJobById(userId, id, {
+            title: title.trim(),
+            company: company.trim(),
+            location: (location || '').trim(),
+            description: description.trim(),
+        });
+
+        if (!updatedJob) {
+            return NextResponse.json(
+                { error: 'Job not found or you are not authorized to edit this job' },
+                { status: 403 }
+            );
+        }
+
+        return NextResponse.json({ success: true, job: updatedJob });
+    } catch (error) {
+        console.error('Error updating job:', error);
+        return NextResponse.json({
+            error: 'Failed to update job',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
+    }
+}
+
+
+
 export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }

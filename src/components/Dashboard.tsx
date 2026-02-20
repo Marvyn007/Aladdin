@@ -316,7 +316,7 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
     } = useStore();
     const { setPagination, setSorting, toggleJobStatus } = useStoreActions();
 
-    const { isSignedIn, isLoaded: isAuthLoaded } = useAuth();
+    const { isSignedIn, isLoaded: isAuthLoaded, userId } = useAuth();
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
@@ -739,6 +739,17 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
 
     const handleCloseMobileSidebar = () => {
         setIsMobileSidebarOpen(false);
+    };
+
+    const handleJobUpdate = (updatedJob: Job) => {
+        // Update the jobs list in store
+        setJobs(jobs.map(j => j.id === updatedJob.id ? { ...j, ...updatedJob } : j));
+        // Update selected job
+        if (selectedJob?.id === updatedJob.id) {
+            setSelectedJob({ ...selectedJob, ...updatedJob });
+        }
+        // Invalidate cache
+        invalidateJobsCache();
     };
 
     const handleDeleteJob = async (jobId: string) => {
@@ -1186,6 +1197,8 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                                                 isMobileVisible={true} // Always visible in this overlay
                                                 onBack={() => setSelectedMapJob(null)} // Close overlay
                                                 isAuthenticated={isSignedIn || false}
+                                                currentUserId={userId || null}
+                                                onJobUpdate={handleJobUpdate}
                                             />
                                         </div>
                                         {/* Close button handled by JobDetail's onBack or custom X? 
@@ -1257,6 +1270,8 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                                         isMobileVisible={isMobileJobDetailVisible}
                                         onBack={isNarrowLayout ? handleMobileBack : undefined}
                                         isAuthenticated={isSignedIn || false}
+                                        currentUserId={userId || null}
+                                        onJobUpdate={handleJobUpdate}
                                     />
                                 </div>
                             </>

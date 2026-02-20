@@ -9,23 +9,21 @@ interface ImageWithRetryProps extends Omit<React.ImgHTMLAttributes<HTMLImageElem
 }
 
 export function ImageWithRetry({ src, alt, className, style, fallbackIcon, ...props }: ImageWithRetryProps) {
-    // Fix: Handle Blob in initial state safely
+    // If src is empty/null/undefined, skip all loading — render fallback immediately
     const [imgSrc, setImgSrc] = useState<string | null>(() => {
-        if (typeof src === 'string') return src;
-        // Blob or null -> utilize useEffect to generate object URL if needed
+        if (typeof src === 'string' && src.trim()) return src;
         return null;
     });
 
-    const [retryCount, setRetryCount] = useState(0);
     const [hasError, setHasError] = useState(false);
 
     useEffect(() => {
         // Reset state on src change
         setHasError(false);
-        setRetryCount(0);
 
-        if (!src) {
+        if (!src || (typeof src === 'string' && !src.trim())) {
             setImgSrc(null);
+            setHasError(true); // Immediately show fallback, no flicker
             return;
         }
 
@@ -38,26 +36,9 @@ export function ImageWithRetry({ src, alt, className, style, fallbackIcon, ...pr
         setImgSrc(src);
     }, [src]);
 
+    // On ANY error, immediately show the fallback — no retries, no flicker
     const handleError = () => {
-        // console.log(`Image load error for ${src}. Retry count: ${retryCount}`);
-        if (retryCount < 5) {
-            const nextRetry = retryCount + 1;
-            setRetryCount(nextRetry);
-
-            // Only retry if it's a string URL (can't really retry a Blob)
-            if (typeof src === 'string') {
-                setTimeout(() => {
-                    // Try to re-fetch by appending a cache buster
-                    const separator = src.includes('?') ? '&' : '?';
-                    setImgSrc(`${src}${separator}retry=${nextRetry}-${Date.now()}`);
-                }, 1000 * nextRetry);
-            } else {
-                setHasError(true);
-            }
-        } else {
-            // console.log(`Max retries reached. Showing fallback.`);
-            setHasError(true);
-        }
+        setHasError(true);
     };
 
     if (hasError || !imgSrc) {

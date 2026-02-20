@@ -391,7 +391,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                                 style={{ display: 'block', lineHeight: 0 }}
                                             >
                                                 <ImageWithRetry
-                                                    src={job.postedBy.imageUrl || '/placeholder-user.jpg'}
+                                                    src={job.postedBy.imageUrl || null}
                                                     alt="Poster"
                                                     style={{
                                                         width: '28px',
