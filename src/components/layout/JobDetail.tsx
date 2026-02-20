@@ -487,6 +487,7 @@ export function JobDetail({
             title: fields.title,
             company: fields.company,
             location: fields.location,
+            location_display: fields.location,
             job_description_plain: fields.description,
             normalized_text: fields.description,
             edited_by_user: true,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Job } from '@/types';
 
 interface JobEditModalProps {
@@ -10,11 +10,22 @@ interface JobEditModalProps {
 }
 
 const MIN_DESCRIPTION_LENGTH = 50;
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
+
+interface LocationSuggestion {
+    id: string;
+    place_name: string;
+}
 
 export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
     const [title, setTitle] = useState(job.title);
     const [company, setCompany] = useState(job.company || '');
-    const [location, setLocation] = useState(job.location || '');
+    const [location, setLocation] = useState(job.location_display || job.location || '');
+    const [locationInput, setLocationInput] = useState(job.location_display || job.location || '');
+    const [locationConfirmed, setLocationConfirmed] = useState(true); // starts confirmed (original value)
+    const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
     const [description, setDescription] = useState(
         job.job_description_plain || job.normalized_text || job.raw_text_summary || ''
     );
@@ -24,6 +35,9 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
 
     const modalRef = useRef<HTMLDivElement>(null);
     const titleInputRef = useRef<HTMLInputElement>(null);
+    const locationInputRef = useRef<HTMLInputElement>(null);
+    const suggestionsRef = useRef<HTMLDivElement>(null);
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Focus trap + Esc close
     useEffect(() => {
@@ -31,6 +45,10 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
+                if (showSuggestions) {
+                    setShowSuggestions(false);
+                    return;
+                }
                 onClose();
                 return;
             }
@@ -54,7 +72,107 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
+    }, [onClose, showSuggestions]);
+
+    // Close suggestions when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (
+                suggestionsRef.current &&
+                !suggestionsRef.current.contains(e.target as Node) &&
+                locationInputRef.current &&
+                !locationInputRef.current.contains(e.target as Node)
+            ) {
+                setShowSuggestions(false);
+                // Revert if not confirmed
+                if (!locationConfirmed) {
+                    setLocationInput(location);
+                    setLocationConfirmed(true);
+                }
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [location, locationConfirmed]);
+
+    // Fetch location suggestions from Mapbox
+    const fetchSuggestions = useCallback(async (query: string) => {
+        if (!query.trim() || query.trim().length < 2 || !MAPBOX_TOKEN) {
+            setSuggestions([]);
+            return;
+        }
+
+        try {
+            const encoded = encodeURIComponent(query.trim());
+            const res = await fetch(
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${MAPBOX_TOKEN}&types=place,locality,neighborhood,district,region,country&limit=7&language=en`
+            );
+            if (!res.ok) return;
+            const data = await res.json();
+            const results: LocationSuggestion[] = (data.features || []).map((f: { id: string; place_name: string }) => ({
+                id: f.id,
+                place_name: f.place_name,
+            }));
+            setSuggestions(results);
+            setShowSuggestions(results.length > 0);
+            setActiveSuggestionIndex(-1);
+        } catch {
+            // Silently fail — user can still type
+        }
+    }, []);
+
+    const handleLocationInputChange = (value: string) => {
+        setLocationInput(value);
+        setLocationConfirmed(false);
+        setErrors(prev => ({ ...prev, location: '' }));
+
+        // If cleared, confirm empty
+        if (!value.trim()) {
+            setLocation('');
+            setLocationConfirmed(true);
+            setSuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+
+        // Debounce API calls
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = setTimeout(() => {
+            fetchSuggestions(value);
+        }, 300);
+    };
+
+    const handleSelectSuggestion = (suggestion: LocationSuggestion) => {
+        setLocation(suggestion.place_name);
+        setLocationInput(suggestion.place_name);
+        setLocationConfirmed(true);
+        setShowSuggestions(false);
+        setSuggestions([]);
+        setErrors(prev => ({ ...prev, location: '' }));
+    };
+
+    const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (!showSuggestions || suggestions.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveSuggestionIndex(prev =>
+                prev < suggestions.length - 1 ? prev + 1 : 0
+            );
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveSuggestionIndex(prev =>
+                prev > 0 ? prev - 1 : suggestions.length - 1
+            );
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.length) {
+                handleSelectSuggestion(suggestions[activeSuggestionIndex]);
+            }
+        }
+    };
 
     const validate = (): boolean => {
         const errs: Record<string, string> = {};
@@ -63,6 +181,10 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
         if (!description.trim()) errs.description = 'Description is required';
         else if (description.trim().length < MIN_DESCRIPTION_LENGTH)
             errs.description = `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters`;
+        // Location: if user typed something but didn't select from dropdown
+        if (locationInput.trim() && !locationConfirmed) {
+            errs.location = 'Please select a location from the dropdown';
+        }
         setErrors(errs);
         return Object.keys(errs).length === 0;
     };
@@ -219,17 +341,151 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
                         {errors.company && <p style={errorStyle}>{errors.company}</p>}
                     </div>
 
-                    {/* Location */}
-                    <div>
-                        <label htmlFor="edit-job-location" style={labelStyle}>Location</label>
-                        <input
-                            id="edit-job-location"
-                            type="text"
-                            value={location}
-                            onChange={(e) => setLocation(e.target.value)}
-                            style={inputStyle}
-                            placeholder="e.g. San Francisco, CA (Remote)"
-                        />
+                    {/* Location with Autocomplete */}
+                    <div style={{ position: 'relative' }}>
+                        <label htmlFor="edit-job-location" style={labelStyle}>
+                            Location
+                            <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: '6px', fontSize: '11px' }}>
+                                (select from suggestions)
+                            </span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                ref={locationInputRef}
+                                id="edit-job-location"
+                                type="text"
+                                value={locationInput}
+                                onChange={(e) => handleLocationInputChange(e.target.value)}
+                                onKeyDown={handleLocationKeyDown}
+                                onFocus={() => {
+                                    if (suggestions.length > 0) setShowSuggestions(true);
+                                }}
+                                style={{
+                                    ...inputStyle,
+                                    borderColor: errors.location ? '#ef4444' : (showSuggestions ? 'var(--accent)' : undefined),
+                                    paddingRight: locationInput ? '36px' : '12px',
+                                }}
+                                placeholder="e.g. San Francisco, CA"
+                                autoComplete="off"
+                            />
+                            {/* Clear button */}
+                            {locationInput && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setLocationInput('');
+                                        setLocation('');
+                                        setLocationConfirmed(true);
+                                        setSuggestions([]);
+                                        setShowSuggestions(false);
+                                        setErrors(prev => ({ ...prev, location: '' }));
+                                        locationInputRef.current?.focus();
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '8px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: 'var(--text-tertiary)',
+                                        padding: '2px',
+                                        lineHeight: 0,
+                                        borderRadius: '50%',
+                                    }}
+                                    aria-label="Clear location"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <line x1="15" y1="9" x2="9" y2="15" />
+                                        <line x1="9" y1="9" x2="15" y2="15" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Suggestions dropdown */}
+                        {showSuggestions && suggestions.length > 0 && (
+                            <div
+                                ref={suggestionsRef}
+                                style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    marginTop: '4px',
+                                    background: 'var(--surface)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 'var(--radius-md, 8px)',
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                                    zIndex: 1001,
+                                    maxHeight: '220px',
+                                    overflowY: 'auto',
+                                }}
+                            >
+                                {suggestions.map((suggestion, index) => (
+                                    <button
+                                        key={suggestion.id}
+                                        type="button"
+                                        onClick={() => handleSelectSuggestion(suggestion)}
+                                        onMouseEnter={() => setActiveSuggestionIndex(index)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            border: 'none',
+                                            background: index === activeSuggestionIndex
+                                                ? 'var(--accent-muted, rgba(59, 130, 246, 0.1))'
+                                                : 'transparent',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '13px',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            borderBottom: index < suggestions.length - 1 ? '1px solid var(--border)' : 'none',
+                                            transition: 'background 0.15s',
+                                        }}
+                                    >
+                                        <svg
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="var(--text-tertiary)"
+                                            strokeWidth="2"
+                                            style={{ flexShrink: 0 }}
+                                        >
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                                            <circle cx="12" cy="10" r="3" />
+                                        </svg>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {suggestion.place_name}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {errors.location && <p style={errorStyle}>{errors.location}</p>}
+
+                        {/* Confirmed indicator */}
+                        {locationConfirmed && location && (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                marginTop: '4px',
+                                fontSize: '11px',
+                                color: 'var(--success, #22c55e)',
+                            }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                    <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                Location confirmed
+                            </div>
+                        )}
                     </div>
 
                     {/* Description */}
@@ -377,3 +633,4 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
         </div>
     );
 }
+

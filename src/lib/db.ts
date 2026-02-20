@@ -908,7 +908,8 @@ export async function updateJobById(
         const res = await pool.query(`
             UPDATE jobs
             SET title = $1, company = $2, location = $3,
-                job_description_plain = $4, normalized_text = $4
+                job_description_plain = $4, normalized_text = $4,
+                location_display = $3
             WHERE id = $5 AND posted_by_user_id = $6
             RETURNING *
         `, [fields.title, fields.company, fields.location, fields.description, jobId, userId]);
@@ -934,6 +935,7 @@ export async function updateJobById(
                 title: fields.title,
                 company: fields.company,
                 location: fields.location,
+                location_display: fields.location,
                 job_description_plain: fields.description,
                 normalized_text: fields.description,
             })
@@ -956,12 +958,13 @@ export async function updateJobById(
         const result = db.prepare(`
             UPDATE jobs
             SET title = ?, company = ?, location = ?,
-                job_description_plain = ?, normalized_text = ?
+                job_description_plain = ?, normalized_text = ?,
+                location_display = ?
             WHERE id = ? AND posted_by_user_id = ?
         `).run(
             fields.title, fields.company, fields.location,
             fields.description, fields.description,
-            jobId, userId
+            fields.location, jobId, userId
         );
 
         if ((result as any).changes === 0) return null;
