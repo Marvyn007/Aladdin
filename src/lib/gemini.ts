@@ -15,7 +15,8 @@ import {
     COVER_LETTER_PROMPT,
     JOB_CLEANUP_PROMPT,
     BATCH_SCORER_PROMPT,
-    TAILORED_RESUME_PROMPT
+    TAILORED_RESUME_PROMPT,
+    JOB_AUTHENTICITY_PROMPT
 } from './gemini-prompts';
 import type {
     ParsedResume,
@@ -608,6 +609,59 @@ export async function checkGeminiConnection(): Promise<boolean> {
  */
 export function getAIStatus(): string {
     return getStatusMessage();
+}
+
+/**
+ * Verify Job Authenticity (Mismatch and Fraud Check)
+ */
+export async function verifyJobAuthenticity(
+    scrapedText: string,
+    manualData: { title: string; company: string; description: string }
+): Promise<{ isAuthentic: boolean; confidence: number; reasoning: string }> {
+    const { truncateInput, INPUT_LIMITS } = await import('./adapters/ollama');
+
+    // Truncate scraped text to avoid token bloat
+    const cleanScraped = truncateInput(scrapedText, INPUT_LIMITS.JOB_TEXT, 'scrapedText');
+
+    // Truncate manual description
+    const cleanManual = truncateInput(manualData.description, INPUT_LIMITS.JOB_TEXT, 'manualDesc');
+
+    const prompt = `${JOB_AUTHENTICITY_PROMPT}
+
+=== SCRAPED PAGE DATA (Ground Truth) ===
+${cleanScraped}
+
+=== USER'S MANUAL INPUT ===
+Title: ${manualData.title}
+Company: ${manualData.company}
+
+Description:
+${cleanManual}
+
+Output ONLY valid JSON evaluating if the User's Manual Input matches the Scraped Data AND checking the Scraped Data for scams.`;
+
+    try {
+        const text = await routeAICall(prompt);
+        console.log('[verifyJobAuthenticity] Raw AI Response:', text);
+        const parsed = extractJson<{ isAuthentic: boolean; confidence: number; reasoning: string }>(text);
+
+        // Ensure defaults if AI acts weird
+        return {
+            isAuthentic: typeof parsed.isAuthentic === 'boolean' ? parsed.isAuthentic : false,
+            confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+            reasoning: parsed.reasoning || "Failed to determine authenticity due to AI parsing error."
+        };
+    } catch (error: any) {
+        console.error('[verifyJobAuthenticity] Error:', error.message);
+        // Fail-safe: If AI is down, we allow the job to pass (or we could strictly block it).
+        // Let's strictly block it or log warning. The user wants security.
+        // Let's block it with a specific message.
+        return {
+            isAuthentic: false,
+            confidence: 0,
+            reasoning: "Authenticity verification service is temporarily unavailable. Please try again later."
+        };
+    }
 }
 
 /**

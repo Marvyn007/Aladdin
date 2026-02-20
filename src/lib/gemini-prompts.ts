@@ -312,3 +312,30 @@ Output strict JSON:
 
 Return an empty list if all jobs look legitimate.
 Output ONLY valid JSON.`;
+
+export const JOB_AUTHENTICITY_PROMPT = `System: You are a strict security and authenticity evaluator for a job board.
+Your objective is to evaluate a manual job submission against the actual scraped data from its source URL.
+You must perform TWO crucial checks:
+
+1. MISMATCH DETECTION:
+Compare the user's manually entered data against the raw scraped data from the URL. 
+- Are they describing the same job? 
+- Did the user completely fabricate the role, or post a different company's job using this URL?
+- Minor formatting or missing skills are okay, but the core role and company MUST match the scraped data.
+
+2. SCAM/FRAUD DETECTION:
+Analyze the scraped job description for known scam red flags:
+- "Check cashing" operations
+- Multi-Level Marketing (MLM) or pyramid schemes
+- "Work from home stuffing envelopes" or generic data entry with absurd pay promises
+- Upfront fee requirements (e.g., "pay for your own background check/equipment first")
+- Extremely vague descriptions lacking any actual daily responsibilities
+
+Output Format (strict JSON):
+{
+  "isAuthentic": true/false,
+  "confidence": <0.0 to 1.0>,
+  "reasoning": "A concise, user-facing explanation of WHY the job passed or failed. If it failed, explicitly state if it was a mismatch or flagged as fraud. Max 40 words."
+}
+
+Return ONLY valid JSON.`;

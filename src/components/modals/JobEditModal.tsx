@@ -20,9 +20,13 @@ interface LocationSuggestion {
 export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
     const [title, setTitle] = useState(job.title);
     const [company, setCompany] = useState(job.company || '');
-    const [location, setLocation] = useState(job.location_display || job.location || '');
-    const [locationInput, setLocationInput] = useState(job.location_display || job.location || '');
+    const initialIsRemote = job.location === 'Remote' || job.location_display === 'Remote';
+    const initialLocation = initialIsRemote ? '' : (job.location_display || job.location || '');
+
+    const [location, setLocation] = useState(initialLocation);
+    const [locationInput, setLocationInput] = useState(initialLocation);
     const [locationConfirmed, setLocationConfirmed] = useState(true); // starts confirmed (original value)
+    const [isRemote, setIsRemote] = useState(initialIsRemote);
     const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
@@ -105,7 +109,7 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
         try {
             const encoded = encodeURIComponent(query.trim());
             const res = await fetch(
-                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${MAPBOX_TOKEN}&types=place,locality,neighborhood,district,region,country&limit=7&language=en`
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${MAPBOX_TOKEN}&types=place,locality,neighborhood,district,region,country&limit=3&language=en`
             );
             if (!res.ok) return;
             const data = await res.json();
@@ -182,7 +186,7 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
         else if (description.trim().length < MIN_DESCRIPTION_LENGTH)
             errs.description = `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters`;
         // Location: if user typed something but didn't select from dropdown
-        if (locationInput.trim() && !locationConfirmed) {
+        if (!isRemote && locationInput.trim() && !locationConfirmed) {
             errs.location = 'Please select a location from the dropdown';
         }
         setErrors(errs);
@@ -197,7 +201,7 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
             await onSave({
                 title: title.trim(),
                 company: company.trim(),
-                location: location.trim(),
+                location: isRemote ? 'Remote' : location.trim(),
                 description: description.trim(),
             });
         } catch (err) {
@@ -354,22 +358,27 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
                                 ref={locationInputRef}
                                 id="edit-job-location"
                                 type="text"
-                                value={locationInput}
+                                value={isRemote ? 'Remote' : locationInput}
+                                disabled={isRemote}
                                 onChange={(e) => handleLocationInputChange(e.target.value)}
                                 onKeyDown={handleLocationKeyDown}
                                 onFocus={() => {
-                                    if (suggestions.length > 0) setShowSuggestions(true);
+                                    if (!isRemote && suggestions.length > 0) setShowSuggestions(true);
                                 }}
                                 style={{
                                     ...inputStyle,
                                     borderColor: errors.location ? '#ef4444' : (showSuggestions ? 'var(--accent)' : undefined),
-                                    paddingRight: locationInput ? '36px' : '12px',
+                                    paddingRight: (!isRemote && locationInput) ? '36px' : '12px',
+                                    opacity: isRemote ? 0.6 : 1,
+                                    cursor: isRemote ? 'not-allowed' : 'text',
+                                    background: isRemote ? 'var(--surface-hover, #f3f4f6)' : 'var(--background)',
+                                    color: isRemote ? 'var(--text-secondary)' : 'var(--text-primary)',
                                 }}
                                 placeholder="e.g. San Francisco, CA"
                                 autoComplete="off"
                             />
                             {/* Clear button */}
-                            {locationInput && (
+                            {!isRemote && locationInput && (
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -470,22 +479,45 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
 
                         {errors.location && <p style={errorStyle}>{errors.location}</p>}
 
-                        {/* Confirmed indicator */}
-                        {locationConfirmed && location && (
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                marginTop: '4px',
-                                fontSize: '11px',
-                                color: 'var(--success, #22c55e)',
-                            }}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                    <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                                Location confirmed
-                            </div>
-                        )}
+                        {/* Remote Toggle */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '14px' }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsRemote(!isRemote);
+                                    setErrors(prev => ({ ...prev, location: '' }));
+                                    if (showSuggestions) setShowSuggestions(false);
+                                }}
+                                style={{
+                                    width: '36px',
+                                    height: '20px',
+                                    borderRadius: '10px',
+                                    background: isRemote ? 'var(--accent)' : 'var(--border)',
+                                    border: 'none',
+                                    position: 'relative',
+                                    cursor: 'pointer',
+                                    transition: 'background 0.2s',
+                                    padding: 0,
+                                }}
+                                aria-label="Toggle Remote"
+                                aria-pressed={isRemote}
+                            >
+                                <div style={{
+                                    width: '16px',
+                                    height: '16px',
+                                    borderRadius: '50%',
+                                    background: 'white',
+                                    position: 'absolute',
+                                    top: '2px',
+                                    left: isRemote ? '18px' : '2px',
+                                    transition: 'left 0.2s',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                }} />
+                            </button>
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                                This position is fully remote
+                            </span>
+                        </div>
                     </div>
 
                     {/* Description */}

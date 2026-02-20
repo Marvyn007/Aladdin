@@ -8,9 +8,10 @@ import {
     updateResume,
     getPostedByUserInfo,
 } from '@/lib/db';
-import { scoreJob, parseResumeFromPdf } from '@/lib/gemini';
+import { scoreJob, parseResumeFromPdf, verifyJobAuthenticity } from '@/lib/gemini';
 import type { ParsedResume, ResumeSkill } from '@/types';
 import type { ScrapeResult } from '@/lib/job-scraper-fetch';
+import { scrapeJobPageFetch } from '@/lib/job-scraper-fetch';
 import {
     validateJobSourceDomain,
     validateJobDescription,
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        const { url, description, bypassValidation } = await req.json();
+        const { url, description, title, company, location, bypassValidation } = await req.json();
 
         if (!url && !description) {
             return NextResponse.json(
@@ -52,23 +53,58 @@ export async function POST(req: NextRequest) {
                 );
             }
 
+            // Manual flow
+            // If URL is provided in manual flow, we must run Authenticity Verification
+            if (url) {
+                console.log(`[Import API] Running Authentic Verification for manual job: ${url}`);
+                try {
+                    // 1. Scrape the URL to get the Ground Truth
+                    const groundTruth = await scrapeJobPageFetch(url);
+
+                    // 2. Run the Dual ML Verification (Mismatch + Scam Check)
+                    const verification = await verifyJobAuthenticity(
+                        groundTruth.job_description_plain || groundTruth.raw_description_html || '',
+                        { title: title || '', company: company || '', description }
+                    );
+
+                    console.log(`[Import API] Verification Result:`, verification);
+
+                    if (!verification.isAuthentic) {
+                        return NextResponse.json(
+                            {
+                                error: 'Job fails authenticity verification.',
+                                details: verification.reasoning,
+                                action: 'authenticity_failed'
+                            },
+                            { status: 400 }
+                        );
+                    }
+                } catch (verifyError: any) {
+                    console.error('[Import API] Verification process errored out:', verifyError);
+                    // Decide if we block on error. Given strict security requirement, we should probably warn or block.
+                    // Let's block to force secure behavior, or at least log it.
+                    return NextResponse.json(
+                        { error: `Verification service failed: ${verifyError.message || 'Unknown error'}` },
+                        { status: 500 }
+                    );
+                }
+            }
+
             scrapeResult = {
-                title: 'Manually Imported Job',
-                company: 'Unknown Company',
-                location: 'Not specified',
-                source_url: 'manual-import',
-                source_host: 'manual',
+                title: title || 'Manually Imported Job',
+                company: company || 'Unknown Company',
+                location: location || 'Not specified',
+                source_url: url || 'manual-import',
+                source_host: url ? new URL(url).hostname : 'manual',
                 raw_description_html: description,
-                job_description_plain: description,
+                normalized_text: description,
+                extracted_skills: [],
+                extraction_confidence: 1.0,
+                job_description_plain: description, // Keep this for compatibility with existing code
                 date_posted_iso: new Date().toISOString(),
                 date_posted_display: 'Today',
                 date_posted_relative: false,
                 scraped_at: new Date().toISOString(),
-                confidence: {
-                    description: 1.0,
-                    date: 0,
-                    location: 0
-                }
             };
         } else {
             if (!url) {

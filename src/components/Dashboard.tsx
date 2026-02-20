@@ -17,6 +17,8 @@ import { TailoredResumeEditor } from '@/components/resume-editor/TailoredResumeE
 import { ResumeSelector } from '@/components/modals/ResumeSelector';
 import { LinkedInSelector } from '@/components/modals/LinkedInSelector';
 import { ImportJobModal } from '@/components/modals/ImportJobModal';
+import { ImportJobSelectionModal } from '@/components/modals/ImportJobSelectionModal';
+import { ManualImportModal } from '@/components/modals/ManualImportModal';
 import { FilterModal } from '@/components/modals/FilterModal';
 import { AuthModal } from '@/components/modals/AuthModal';
 import { useStore, useStoreActions } from '@/store/useStore';
@@ -1363,11 +1365,26 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                 onQueue={() => activeId && handleGenerateCoverLetter(activeId, true)}
             />
 
-            {/* Import Job Modal */}
-            {activeModal === 'import-job' && (
+            {/* Modals */}
+            {activeModal === 'import-job-selection' && (
+                <ImportJobSelectionModal
+                    onClose={() => setActiveModal(null)}
+                    onSelect={(flow) => {
+                        if (flow === 'manual') setActiveModal('import-job-manual');
+                        else setActiveModal('import-job-auto');
+                    }}
+                />
+            )}
+            {activeModal === 'import-job-manual' && (
+                <ManualImportModal
+                    onClose={() => setActiveModal(null)}
+                    onImportSuccess={() => loadJobs(true)}
+                />
+            )}
+            {activeModal === 'import-job-auto' && (
                 <ImportJobModal
                     onClose={() => setActiveModal(null)}
-                    onImportSuccess={() => loadJobs(false)}
+                    onImportSuccess={() => loadJobs(true)}
                 />
             )}
 

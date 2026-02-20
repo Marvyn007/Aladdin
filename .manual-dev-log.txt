@@ -1,0 +1,143 @@
+
+> job-hunt-vibe@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.1 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://150.201.89.51:3000
+- Environments: .env.local, .env
+
+✓ Starting...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 10.4s
+(node:20449) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ POST /api/import-job 401 in 3.9s (compile: 3.3s, proxy.ts: 413ms, render: 118ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 4.2s (compile: 2.9s, proxy.ts: 801ms, render: 417ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 82ms (compile: 9ms, proxy.ts: 29ms, render: 44ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 171ms (compile: 67ms, proxy.ts: 47ms, render: 57ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 872ms (compile: 140ms, proxy.ts: 254ms, render: 478ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 6.2s (compile: 2.1s, proxy.ts: 2.5s, render: 1666ms)
+○ Compiling / ...
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 3.4s (compile: 693ms, proxy.ts: 2.6s, render: 77ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 1804ms (compile: 691ms, proxy.ts: 985ms, render: 128ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 400ms (compile: 168ms, proxy.ts: 149ms, render: 84ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 311ms (compile: 140ms, proxy.ts: 45ms, render: 126ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 113ms (compile: 15ms, proxy.ts: 28ms, render: 71ms)
+ GET /api/vote-job?userId=user_39JoVaAPdSVSnEvhvrfChy48ULz 200 in 269ms (compile: 94ms, proxy.ts: 122ms, render: 53ms)
+✓ Finished writing to filesystem cache in 14.3s
+ GET /?sort_by=relevance 200 in 79s (compile: 17.8s, proxy.ts: 2.8s, render: 58s)
+ GET /landing-page 404 in 82s (compile: 33.4s, proxy.ts: 2.5s, render: 46s)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 20.6s (compile: 6.5s, proxy.ts: 699ms, render: 13.4s)
+ POST /?sort_by=relevance 200 in 20.7s (compile: 6.8s, proxy.ts: 633ms, render: 13.2s)
+ GET /api/vote-job?userId=user_38itFhqkfNHqA4P64Y6LZzTjUZT 200 in 20.6s (compile: 2.7s, proxy.ts: 8.8s, render: 9.1s)
+ GET /api/vote-job?userId=user_38itFhqkfNHqA4P64Y6LZzTjUZT 200 in 23.1s (compile: 6.0s, proxy.ts: 7.2s, render: 9.9s)
+ GET /api/vote-job?userId=user_38itFhqkfNHqA4P64Y6LZzTjUZT 200 in 20.8s (compile: 1989ms, proxy.ts: 9.6s, render: 9.2s)
+ GET /api/vote-job?userId=user_38itFhqkfNHqA4P64Y6LZzTjUZT 200 in 20.7s (compile: 2.0s, proxy.ts: 9.6s, render: 9.0s)
+ GET /api/vote-job?userId=user_38itFhqkfNHqA4P64Y6LZzTjUZT 200 in 10.0s (compile: 3.6s, proxy.ts: 2.8s, render: 3.6s)
+ GET /api/vote-job?userId=user_38itFhqkfNHqA4P64Y6LZzTjUZT 200 in 9.7s (compile: 3.5s, proxy.ts: 5.3s, render: 823ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 9.5s (compile: 3.4s, proxy.ts: 5.5s, render: 598ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 9.5s (compile: 3.2s, proxy.ts: 5.5s, render: 796ms)
+ GET /api/vote-job?userId=user_38itFhqkfNHqA4P64Y6LZzTjUZT 200 in 9.9s (compile: 4.2s, proxy.ts: 3.0s, render: 2.7s)
+ GET /?sort_by=relevance 200 in 34.3s (compile: 4.7s, proxy.ts: 13.9s, render: 15.7s)
+ GET /?sort_by=relevance 200 in 37.1s (compile: 5.0s, proxy.ts: 16.3s, render: 15.8s)
+ GET /?sort_by=relevance 200 in 34.4s (compile: 4.0s, proxy.ts: 13.5s, render: 16.9s)
+ GET /?sort_by=relevance 200 in 14.5s (compile: 2.7s, proxy.ts: 710ms, render: 11.1s)
+ GET /?sort_by=relevance 200 in 15.2s (compile: 4.3s, proxy.ts: 3.0s, render: 8.0s)
+ POST /?sort_by=relevance 200 in 8.9s (compile: 803ms, proxy.ts: 2.2s, render: 6.0s)
+ GET /api/application 200 in 11.2s (compile: 5.6s, proxy.ts: 2.4s, render: 3.2s)
+ GET /api/settings 200 in 10.2s (compile: 4.2s, proxy.ts: 1668ms, render: 4.3s)
+[DB] getAllPublicJobs: returned 6 rows (offset 0, limit 50)
+ GET /api/jobs?page=1&limit=50&sort_by=relevance&sort_dir=desc&status=fresh 200 in 16.8s (compile: 7.3s, proxy.ts: 6.2s, render: 3.4s)
+ GET /api/user/profile 200 in 18.2s (compile: 6.6s, proxy.ts: 7.3s, render: 4.3s)
+ GET /api/user/profile 200 in 1232ms (compile: 201ms, proxy.ts: 79ms, render: 953ms)
+[DB] getAllPublicJobs: returned 6 rows (offset 0, limit 50)
+ GET /api/jobs?page=1&limit=50&sort_by=relevance&sort_dir=desc&status=fresh 200 in 1478ms (compile: 229ms, proxy.ts: 737ms, render: 511ms)
+ POST /?sort_by=relevance 200 in 1152ms (compile: 323ms, proxy.ts: 616ms, render: 213ms)
+ GET /api/application 200 in 1595ms (compile: 132ms, proxy.ts: 824ms, render: 639ms)
+ GET /api/settings 200 in 1358ms (compile: 280ms, proxy.ts: 589ms, render: 489ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 760ms (compile: 127ms, proxy.ts: 168ms, render: 465ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 171ms (compile: 8ms, proxy.ts: 38ms, render: 125ms)
+ POST /?sort_by=relevance 200 in 1228ms (compile: 319ms, proxy.ts: 164ms, render: 745ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 1305ms (compile: 541ms, proxy.ts: 512ms, render: 252ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 242ms (compile: 34ms, proxy.ts: 133ms, render: 75ms)
+ GET /api/job/f578a9c8-fc6c-47d2-bbca-6f5c7d75e635 200 in 17.5s (compile: 16.8s, proxy.ts: 20ms, render: 625ms)
+ GET /api/job/8e1fab1d-49e7-44a1-a185-27ae5b98be6a 200 in 17.5s (compile: 16.8s, proxy.ts: 22ms, render: 640ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 109ms (compile: 13ms, proxy.ts: 13ms, render: 83ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 70ms (compile: 8ms, proxy.ts: 13ms, render: 49ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 1250ms (compile: 281ms, proxy.ts: 459ms, render: 510ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 108ms (compile: 14ms, proxy.ts: 33ms, render: 60ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 111ms (compile: 11ms, proxy.ts: 47ms, render: 54ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 146ms (compile: 9ms, proxy.ts: 72ms, render: 65ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 79ms (compile: 5ms, proxy.ts: 16ms, render: 58ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 211ms (compile: 5ms, proxy.ts: 156ms, render: 50ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 104ms (compile: 24ms, proxy.ts: 24ms, render: 56ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 1169ms (compile: 236ms, proxy.ts: 66ms, render: 866ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 220ms (compile: 10ms, proxy.ts: 23ms, render: 187ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 103ms (compile: 9ms, proxy.ts: 21ms, render: 73ms)
+[Import API] Running Authentic Verification for manual job: https://jobs.ashbyhq.com/ironcladhq/95ae3b0a-a061-4323-926a-7fa308b59387/
+[Ollama] Truncated scrapedText: 7150 → 2500 chars
+[Ollama] Truncated manualDesc: 4077 → 2500 chars
+[AI Router] OpenRouter ready (primary provider)
+[AI Router] Trying OpenRouter (google/gemini-2.0-flash-001) with PRIMARY key...
+[AI Router] Using provider: openrouter model: google/gemini-2.0-flash-001
+[OpenRouter] ✓ Generated 305 chars in 582ms using google/gemini-2.0-flash-001
+[verifyJobAuthenticity] Raw AI Response: ```json
+{
+  "isAuthentic": false,
+  "confidence": 0.95,
+  "reasoning": "The job description is a complete mismatch. The scraped data is for an Engineering Intern at Ironclad, while the user submitted a Frontend Software Engineer Intern role at Machina Labs. The URL provided does not match the job."
+}
+```
+[Import API] Verification Result: {
+  isAuthentic: false,
+  confidence: 0.95,
+  reasoning: 'The job description is a complete mismatch. The scraped data is for an Engineering Intern at Ironclad, while the user submitted a Frontend Software Engineer Intern role at Machina Labs. The URL provided does not match the job.'
+}
+ POST /api/import-job 400 in 2.6s (compile: 19ms, proxy.ts: 28ms, render: 2.6s)
+[Import API] Running Authentic Verification for manual job: https://jobs.ashbyhq.com/ironcladhq/95ae3b0a-a061-4323-926a-7fa308b59387/
+[Ollama] Truncated scrapedText: 7150 → 2500 chars
+[Ollama] Truncated manualDesc: 4077 → 2500 chars
+[AI Router] Trying OpenRouter (google/gemini-2.0-flash-001) with PRIMARY key...
+[AI Router] Using provider: openrouter model: google/gemini-2.0-flash-001
+[OpenRouter] ✓ Generated 288 chars in 846ms using google/gemini-2.0-flash-001
+[verifyJobAuthenticity] Raw AI Response: ```json
+{
+  "isAuthentic": false,
+  "confidence": 1.0,
+  "reasoning": "This is a complete mismatch. The scraped data is for an Engineering Intern position at Ironclad, while the user input describes a Frontend Software Engineer Intern role at Machina Labs. Role/Company fabricated."
+}
+```
+[Import API] Verification Result: {
+  isAuthentic: false,
+  confidence: 1,
+  reasoning: 'This is a complete mismatch. The scraped data is for an Engineering Intern position at Ironclad, while the user input describes a Frontend Software Engineer Intern role at Machina Labs. Role/Company fabricated.'
+}
+ POST /api/import-job 400 in 1704ms (compile: 12ms, proxy.ts: 48ms, render: 1645ms)
+ GET /api/vote-job?userId=user_38j3ExLyKDh3TjXNAGoawaMhJVt 200 in 507ms (compile: 32ms, proxy.ts: 110ms, render: 365ms)
+[Import API] Running Authentic Verification for manual job: https://jobs.ashbyhq.com/ironcladhq/95ae3b0a-a061-4323-926a-7fa308b59387/
+[Ollama] Truncated scrapedText: 7150 → 2500 chars
+[Ollama] Truncated manualDesc: 4077 → 2500 chars
+[AI Router] Trying OpenRouter (google/gemini-2.0-flash-001) with PRIMARY key...
+[AI Router] Using provider: openrouter model: google/gemini-2.0-flash-001
+[OpenRouter] ✓ Generated 268 chars in 681ms using google/gemini-2.0-flash-001
+[verifyJobAuthenticity] Raw AI Response: ```json
+{
+  "isAuthentic": false,
+  "confidence": 0.95,
+  "reasoning": "The job description provided by the user is for 'Machina Labs', while the scraped data is for 'Ironclad'. This is a clear mismatch of company and role; the user submission is not authentic."
+}
+```
+[Import API] Verification Result: {
+  isAuthentic: false,
+  confidence: 0.95,
+  reasoning: "The job description provided by the user is for 'Machina Labs', while the scraped data is for 'Ironclad'. This is a clear mismatch of company and role; the user submission is not authentic."
+}
+ POST /api/import-job 400 in 1572ms (compile: 17ms, proxy.ts: 65ms, render: 1490ms)

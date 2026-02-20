@@ -169,7 +169,7 @@ export function Sidebar({
                     <NavItem
                         icon={<img src="/icons/import-job.png" alt="Import" style={{ width: 22, height: 22, objectFit: 'contain' }} />}
                         label="Import Job"
-                        onClick={() => handleNavClick(onImportJob, true, "Sign in to import jobs.")}
+                        onClick={() => handleNavClick(() => useStore.getState().setActiveModal('import-job-selection'), true, "Sign in to import jobs.")}
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
                     />
