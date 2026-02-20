@@ -25,6 +25,16 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import type { Job, Application, ApplicationColumn } from '@/types';
 import {
+    getCachedJobs,
+    setCachedJobs,
+    appendCachedJobs,
+    invalidateJobsCache,
+    isJobsCacheStale,
+    getCachedApplications,
+    setCachedApplications,
+    isApplicationsCacheStale,
+} from '@/lib/job-cache';
+import {
     DndContext,
     DragOverlay,
     closestCenter,
@@ -520,17 +530,38 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
     const loadJobsRef = useRef<((rescore: boolean) => Promise<void>) | null>(null);
 
     const loadJobs = async (rescore: boolean = false) => {
+        const { page, limit } = useStore.getState().pagination;
+        const { by, dir } = useStore.getState().sorting;
+        const status = useStore.getState().jobStatus;
+
+        // Cache-first strategy: Show cached data instantly if available
+        const cached = getCachedJobs();
+        if (cached && !rescore && page === 1) {
+            // Show cached data immediately (no loading spinner)
+            setJobs(cached.jobs);
+            setPagination({
+                total: cached.meta.total,
+                totalPages: cached.meta.totalPages
+            });
+            if (cached.meta.lastUpdated) {
+                setLastUpdated(cached.meta.lastUpdated);
+            }
+
+            // If cache is stale, fetch fresh data in background (without loading state)
+            if (isJobsCacheStale(cached.meta)) {
+                fetchJobsInBackground(page, limit, by, dir, status);
+            }
+            return;
+        }
+
         setIsLoadingJobs(true);
         try {
-            const { page, limit } = useStore.getState().pagination;
-            const { by, dir } = useStore.getState().sorting;
-
             const params = new URLSearchParams({
                 page: page.toString(),
                 limit: limit.toString(),
                 sort_by: by,
                 sort_dir: dir,
-                status: useStore.getState().jobStatus
+                status: status
             });
 
             // Always fetch public jobs - all jobs are globally visible
@@ -540,6 +571,23 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                 setJobs(data.jobs || []);
                 setPagination({ total: data.total, totalPages: data.totalPages });
                 setLastUpdated(data.lastUpdated);
+
+                // Update cache
+                if (page === 1) {
+                    setCachedJobs(data.jobs || [], {
+                        page,
+                        limit,
+                        total: data.total,
+                        totalPages: data.totalPages
+                    }, data.lastUpdated);
+                } else {
+                    // Append to existing cache for pagination
+                    appendCachedJobs(data.jobs || [], page, {
+                        limit,
+                        total: data.total,
+                        totalPages: data.totalPages
+                    }, data.lastUpdated);
+                }
             } else {
                 console.error("Failed to fetch jobs");
             }
@@ -550,11 +598,74 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
         }
     };
 
+    // Background fetch without loading spinner (for stale cache refresh)
+    const fetchJobsInBackground = async (
+        page: number,
+        limit: number,
+        by: string,
+        dir: string,
+        status: string
+    ) => {
+        try {
+            const params = new URLSearchParams({
+                page: page.toString(),
+                limit: limit.toString(),
+                sort_by: by,
+                sort_dir: dir,
+                status: status
+            });
+
+            const res = await fetch(`/api/jobs?${params.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+                setJobs(data.jobs || []);
+                setPagination({ total: data.total, totalPages: data.totalPages });
+                setLastUpdated(data.lastUpdated);
+
+                // Update cache with fresh data
+                setCachedJobs(data.jobs || [], {
+                    page,
+                    limit,
+                    total: data.total,
+                    totalPages: data.totalPages
+                }, data.lastUpdated);
+            }
+        } catch (error) {
+            console.error('Background job refresh failed:', error);
+            // Silently fail - user still has cached data
+        }
+    };
+
     // Keep ref updated
     loadJobsRef.current = loadJobs;
 
     const loadApplications = async () => {
         if (!isSignedIn) return;
+
+        // Cache-first: Check if we have cached applications
+        const cached = getCachedApplications();
+        if (cached) {
+            // Show cached data immediately
+            const statusMap: Record<string, 'none' | 'applied' | 'loading'> = {};
+            cached.applications.forEach((app: any) => {
+                statusMap[app.job_id] = 'applied';
+            });
+            setApplicationStatus(statusMap);
+            setApplications(cached.applications);
+
+            // Refetch in background if stale
+            if (isApplicationsCacheStale(cached.meta)) {
+                fetchApplicationsInBackground();
+            }
+            return;
+        }
+
+        // No cache, fetch from server
+        await fetchApplicationsFromServer();
+    };
+
+    // Helper to fetch applications from server and update cache
+    const fetchApplicationsFromServer = async () => {
         try {
             const res = await fetch('/api/application');
             const data = await res.json();
@@ -575,14 +686,29 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
 
             setApplicationStatus(statusMap);
             setApplications(appsWithJobs);
+
+            // Update cache
+            setCachedApplications(appsWithJobs);
         } catch (error) {
             console.error('Error loading applications:', error);
+        }
+    };
+
+    // Background fetch for applications (no loading state)
+    const fetchApplicationsInBackground = async () => {
+        try {
+            await fetchApplicationsFromServer();
+        } catch (error) {
+            console.error('Background applications refresh failed:', error);
         }
     };
 
 
 
     const handleFindNow = useCallback(async () => {
+        // Invalidate cache to force fresh fetch
+        invalidateJobsCache();
+
         setIsLoadingJobs(true);
         try {
             if (isSignedIn) {

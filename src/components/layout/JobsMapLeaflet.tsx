@@ -8,6 +8,11 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
 import L from 'leaflet';
+import {
+    getCachedMapPins,
+    setCachedMapPins,
+    isMapPinsCacheStale,
+} from '@/lib/job-cache';
 
 interface JobGeo {
     type: 'Feature';
@@ -82,6 +87,21 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
     }, []);
 
     const fetchJobs = async (bounds?: L.LatLngBounds) => {
+        // Cache-first for initial load (no bounds specified)
+        if (!bounds) {
+            const cached = getCachedMapPins();
+            if (cached) {
+                // Show cached pins immediately
+                setJobs(cached.features);
+
+                // Refresh in background if stale
+                if (isMapPinsCacheStale(cached.meta)) {
+                    fetchMapPinsInBackground();
+                }
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             let url = '/api/jobs/geo';
@@ -99,6 +119,11 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
             const data = await res.json();
             if (data.features) {
                 setJobs(data.features);
+
+                // Cache global pins (no bounds filter) for instant load on next visit
+                if (!bounds) {
+                    setCachedMapPins(data.features);
+                }
             }
         } catch (e) {
             console.error("Failed to load map jobs", e);
@@ -107,8 +132,22 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
         }
     };
 
+    // Background fetch for pins (no loading indicator)
+    const fetchMapPinsInBackground = async () => {
+        try {
+            const res = await fetch('/api/jobs/geo');
+            const data = await res.json();
+            if (data.features) {
+                setJobs(data.features);
+                setCachedMapPins(data.features);
+            }
+        } catch (e) {
+            console.error("Background map pins refresh failed", e);
+        }
+    };
+
     useEffect(() => {
-        fetchJobs(); // Initial load
+        fetchJobs(); // Initial load (will use cache if available)
     }, []);
 
     return (

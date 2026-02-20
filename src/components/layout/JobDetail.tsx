@@ -7,6 +7,7 @@ import { useStore, useStoreActions } from '@/store/useStore';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { ImageWithRetry } from '@/components/common/ImageWithRetry';
 
 interface JobDetailProps {
     job: Job | null;
@@ -170,9 +171,10 @@ function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteContro
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                <img
+                <ImageWithRetry
                     src={targetUser.imageUrl || '/placeholder-user.jpg'}
                     alt={userName}
+                    className="job-detail-avatar"
                     style={{
                         width: '56px',
                         height: '56px',
@@ -181,7 +183,6 @@ function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteContro
                         border: '2px solid var(--surface)',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                     }}
-                    onError={(e) => { e.currentTarget.src = '/placeholder-user.jpg'; }}
                 />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
