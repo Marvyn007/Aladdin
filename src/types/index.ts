@@ -277,18 +277,13 @@ export interface ResumeSectionItem {
 
 export interface ResumeSection {
   id: string;
-  type: 'education' | 'experience' | 'projects' | 'community' | 'skills';
+  type: 'education' | 'experience' | 'projects' | 'community' | 'skills' | 'volunteer' | 'certifications';
   title: string;
   isCollapsed?: boolean;
   items: ResumeSectionItem[];
 }
 
-export interface ResumeSkillsSection {
-  languages: string[];
-  frameworks: string[];
-  tools: string[];
-  databases: string[];
-}
+export type ResumeSkillsSection = Record<string, string[]>;
 
 export interface ResumeDesign {
   template: 'classic' | 'modern';
@@ -314,6 +309,7 @@ export interface TailoredResumeData {
   updatedAt: string;
   jobId?: string;
   jobTitle?: string;
+  hiddenContext?: ResumeSection[];  // Suppressed sections for UI toggling
 }
 
 export interface KeywordAnalysis {
@@ -345,14 +341,13 @@ export interface ResumeDraft {
   updatedAt: string;
 }
 
-// Default contact info for Marvin
-export const DEFAULT_CONTACT_INFO: ResumeContactInfo = {
-  name: 'Marvin Chaudhary',
-  email: 'mchaudhary1s@semo.edu',
-  phone: '+1(573) 587-1035',
-  linkedin: 'linkedin.com/in/marvin-chaudhary',
-  github: ['github.com/Marvyn007', 'github.com/iammarvin7'],
-};
+// Leak check result — used to validate that generated resume contains
+// ONLY data originating from the user's resume, LinkedIn, or job description.
+export interface LeakCheckResult {
+  passed: boolean;
+  leaked_fields: string[];
+  details?: string;
+}
 
 export const DEFAULT_RESUME_DESIGN: ResumeDesign = {
   template: 'classic',
@@ -361,3 +356,142 @@ export const DEFAULT_RESUME_DESIGN: ResumeDesign = {
   accentColor: '#1a365d',
   margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
 };
+
+// ============================================================================
+// CANONICAL RESUME PARSER TYPES (with confidence scoring)
+// ============================================================================
+
+/** Generic wrapper that pairs a value with a confidence score (0–1). */
+export interface ConfidenceField<T> {
+  value: T;
+  confidence: number;
+  source?: 'resume' | 'linkedin';
+}
+
+export interface CanonicalContactLink {
+  label: string; // e.g. "linkedin", "github", "portfolio"
+  url: string;
+  confidence: number;
+}
+
+export interface CanonicalContacts {
+  email: ConfidenceField<string | null>;
+  phone: ConfidenceField<string | null>;
+  location: ConfidenceField<string | null>;
+  links: CanonicalContactLink[];
+}
+
+export interface CanonicalEducation {
+  institution: string;
+  degree: string;
+  start_date: string | null; // YYYY-MM
+  end_date: string | null;   // YYYY-MM or "present"
+  gpa: string | null;
+  coursework: string | null;
+  confidence: number;
+  source?: 'resume' | 'linkedin';
+}
+
+export interface CanonicalExperience {
+  company: string;
+  title: string;
+  start_date: string | null;
+  end_date: string | null;
+  location: string | null;
+  description: string;
+  skills: string[];
+  confidence: number;
+  source?: 'resume' | 'linkedin';
+}
+
+export interface CanonicalProject {
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+  description: string;
+  skills: string[];
+  confidence: number;
+  source?: 'resume' | 'linkedin';
+}
+
+export interface CanonicalVolunteer {
+  organization: string;
+  title?: string;
+  start_date: string | null;
+  end_date: string | null;
+  description: string;
+  skills: string[];
+  confidence: number;
+  source?: 'resume' | 'linkedin';
+}
+
+export interface CanonicalSkills {
+  explicit_list: string[];
+  inferred_from_text: string[];
+  confidence: number;
+}
+
+export interface CanonicalCertification {
+  name: string;
+  issuer: string | null;
+  date: string | null;
+  confidence: number;
+  source?: 'resume' | 'linkedin';
+}
+
+export interface CanonicalParsedResume {
+  name: ConfidenceField<string | null>;
+  contacts: CanonicalContacts;
+  summary: ConfidenceField<string | null>;
+  education: CanonicalEducation[];
+  experience: CanonicalExperience[];
+  projects: CanonicalProject[];
+  volunteer: CanonicalVolunteer[];
+  skills: CanonicalSkills;
+  certifications: CanonicalCertification[];
+  low_confidence_fields?: string[];
+  raw_text_snippets?: Record<string, string>;
+}
+
+/** A single section in the generated structured resume output. */
+export interface GeneratedResumeSection {
+  id: string;
+  title: string;
+  toggle_visible: boolean;
+  items: GeneratedResumeSectionItem[];
+}
+
+export interface GeneratedResumeSectionItem {
+  heading: string;
+  subheading?: string;
+  dates?: string;
+  location?: string;
+  bullets: string[];
+  skills?: string[];
+}
+
+export interface GeneratedResumeStructured {
+  summary: string;
+  sections: GeneratedResumeSection[];
+  skills_grouped: Record<string, string[]>;
+}
+
+export type ResumeParserStatus =
+  | 'OK'
+  | 'MISSING_RESUME'
+  | 'PARSE_FAILED'
+  | 'TOO_SHORT'
+  | 'USER_MISMATCH'
+  | 'RESUME_NOT_FOUND';
+
+export interface ResumeParserResponse {
+  status: ResumeParserStatus;
+  message?: string;
+  parsed_resume_json?: CanonicalParsedResume;
+  generated_resume_markdown?: string;
+  generated_resume_structured?: GeneratedResumeStructured;
+  section_order?: string[];
+  low_confidence_fields?: string[];
+  leak_check_passed?: boolean;
+  audit_event_id?: string;
+}

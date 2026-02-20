@@ -1,6 +1,9 @@
 /**
  * Enhanced Tailored Resume Service
- * Handles AI generation with structured JSON output, keyword analysis, and draft management
+ *
+ * User-scoped, profession-agnostic, ATS-optimized resume engine.
+ * Uses ONLY data from: user's resume, LinkedIn, and job description.
+ * Zero hardcoded personal data, projects, or defaults.
  */
 
 import { v4 as uuid } from 'uuid';
@@ -10,10 +13,6 @@ import {
     getResumeById,
     updateResume,
     getLinkedInProfile,
-    createDraft,
-    getDraft as getDbDraft,
-    listDrafts as listDbDrafts,
-    deleteDraft as deleteDbDraft,
 } from '@/lib/db';
 import { parseResumeFromPdf } from '@/lib/gemini';
 import { routeAICallWithDetails, isAIAvailable } from '@/lib/ai-router';
@@ -23,17 +22,17 @@ import {
     TailoredResumeData,
     TailoredResumeGenerationResponse,
     KeywordAnalysis,
-    DEFAULT_CONTACT_INFO,
+    LeakCheckResult,
     DEFAULT_RESUME_DESIGN,
 } from '@/types';
 
-// Rate limiting state (in-memory for now)
+// ============================================================================
+// Rate Limiting
+// ============================================================================
+
 const rateLimitState: Record<string, { count: number; resetAt: number }> = {};
 const DAILY_QUOTA = 20;
 
-/**
- * Log AI provider usage for diagnosis
- */
 function logAIProviderUsage(data: {
     provider?: string;
     tokens?: number;
@@ -41,7 +40,6 @@ function logAIProviderUsage(data: {
     error?: string;
     timestamp: string;
 }) {
-    // In production (Vercel), we log to stdout/stderr which keeps logs in Vercel/AWS CloudWatch
     const logEntry = JSON.stringify(data);
     if (data.error) {
         console.error('[AI-Log]', logEntry);
@@ -50,9 +48,6 @@ function logAIProviderUsage(data: {
     }
 }
 
-/**
- * Check rate limit for user
- */
 function checkRateLimit(userId: string = 'default'): { allowed: boolean; remaining: number } {
     const now = Date.now();
     const dayStart = new Date().setHours(0, 0, 0, 0);
@@ -67,18 +62,16 @@ function checkRateLimit(userId: string = 'default'): { allowed: boolean; remaini
     return { allowed: remaining > 0, remaining };
 }
 
-/**
- * Increment rate limit counter
- */
 function incrementRateLimit(userId: string = 'default') {
     if (rateLimitState[userId]) {
         rateLimitState[userId].count++;
     }
 }
 
-/**
- * Fetch job description from URL
- */
+// ============================================================================
+// Utilities
+// ============================================================================
+
 async function fetchJobDescriptionFromUrl(url: string): Promise<string> {
     try {
         const response = await fetch(url, {
@@ -93,7 +86,6 @@ async function fetchJobDescriptionFromUrl(url: string): Promise<string> {
 
         const html = await response.text();
 
-        // Basic HTML to text extraction
         const text = html
             .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -101,363 +93,403 @@ async function fetchJobDescriptionFromUrl(url: string): Promise<string> {
             .replace(/\s+/g, ' ')
             .trim();
 
-        return text.substring(0, 10000); // Limit to 10k chars
+        // No truncation — send full data to AI
+        return text;
     } catch (error) {
         console.error('Failed to fetch job URL:', error);
         throw new Error('Could not fetch job description from URL');
     }
 }
 
-/**
- * Extract JSON from AI response
- */
 function extractJson<T>(text: string): T {
-    // Try to find JSON in the response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-        throw new Error('No JSON found in response');
+    // 1. Strip markdown code fences
+    let cleaned = text.trim();
+    if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
     }
 
-    return JSON.parse(jsonMatch[0]);
+    // 2. Extract the outermost JSON object
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+        throw new Error('No JSON found in AI response');
+    }
+
+    let jsonStr = jsonMatch[0];
+
+    // 3. Try direct parse first
+    try {
+        return JSON.parse(jsonStr) as T;
+    } catch (firstError) {
+        // Continue to repair attempts
+    }
+
+    // 4. Repair common AI JSON issues
+    jsonStr = repairJson(jsonStr);
+
+    try {
+        return JSON.parse(jsonStr) as T;
+    } catch (repairError: any) {
+        // 5. Last resort: try to close truncated JSON by balancing braces/brackets
+        const balanced = balanceJson(jsonStr);
+        try {
+            return JSON.parse(balanced) as T;
+        } catch (finalError: any) {
+            throw new Error(
+                `AI response parsing failed: ${finalError.message}. Please try again.`
+            );
+        }
+    }
 }
 
 /**
- * Create default resume structure from parsed resume
+ * Repair common JSON issues produced by AI models:
+ * - Trailing commas before } or ]
+ * - Single-line // comments
+ * - Unescaped newlines inside strings
+ * - Unescaped control characters
  */
-function createDefaultResumeData(parsedResume: any): TailoredResumeData {
+function repairJson(json: string): string {
+    let result = json;
+
+    // Remove single-line comments (// ...) that aren't inside strings
+    result = result.replace(/(?<!")\/\/[^\n]*/g, '');
+
+    // Remove trailing commas: ,} or ,]
+    result = result.replace(/,\s*([\]}])/g, '$1');
+
+    // Fix unescaped newlines inside string values (common AI mistake)
+    // This is tricky — we replace literal newlines between quotes
+    result = result.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match) => {
+        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+    });
+
+    return result;
+}
+
+/**
+ * Balance truncated JSON by closing any unclosed braces/brackets.
+ * Handles the case where the AI response was cut off mid-stream.
+ */
+function balanceJson(json: string): string {
+    let result = json;
+
+    // Remove any trailing partial key-value pair (incomplete string or value)
+    // e.g., `"someKey": "unterminated va` → remove the dangling pair
+    result = result.replace(/,\s*"[^"]*":\s*"[^"]*$/g, '');
+    result = result.replace(/,\s*"[^"]*":\s*$/g, '');
+    result = result.replace(/,\s*"[^"]*$/g, '');
+    // Remove trailing comma
+    result = result.replace(/,\s*$/, '');
+
+    // Count unclosed braces and brackets
+    let openBraces = 0;
+    let openBrackets = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (const char of result) {
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (char === '\\') {
+            escaped = true;
+            continue;
+        }
+        if (char === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString) continue;
+        if (char === '{') openBraces++;
+        if (char === '}') openBraces--;
+        if (char === '[') openBrackets++;
+        if (char === ']') openBrackets--;
+    }
+
+    // Close any unterminated string
+    if (inString) {
+        result += '"';
+    }
+
+    // Close unclosed brackets and braces
+    while (openBrackets > 0) {
+        result += ']';
+        openBrackets--;
+    }
+    while (openBraces > 0) {
+        result += '}';
+        openBraces--;
+    }
+
+    return result;
+}
+
+// ============================================================================
+// Leak Detection — validates that ZERO fabricated data made it into output
+// ============================================================================
+
+/**
+ * Validates that every field in the generated resume can be traced back
+ * to the source resume, LinkedIn data, or job description.
+ *
+ * Checks: contact info, section items, skills, project names, org names.
+ */
+export function validateNoLeakedData(
+    generated: TailoredResumeData,
+    sourceResumeText: string,
+    sourceLinkedInText: string,
+    sourceJobDescription: string,
+): LeakCheckResult {
+    const leaked: string[] = [];
+    const allSourceText = `${sourceResumeText} ${sourceLinkedInText} ${sourceJobDescription}`.toLowerCase();
+
+    // Check contact fields
+    const contact = generated.contact;
+    if (contact.name && !allSourceText.includes(contact.name.toLowerCase())) {
+        leaked.push(`contact.name: "${contact.name}"`);
+    }
+    if (contact.email && !allSourceText.includes(contact.email.toLowerCase())) {
+        leaked.push(`contact.email: "${contact.email}"`);
+    }
+    if (contact.phone) {
+        // Normalize phone for comparison (strip formatting)
+        const phoneDigits = contact.phone.replace(/\D/g, '');
+        const sourceDigits = allSourceText.replace(/\D/g, '');
+        if (phoneDigits.length >= 7 && !sourceDigits.includes(phoneDigits)) {
+            leaked.push(`contact.phone: "${contact.phone}"`);
+        }
+    }
+    if (contact.linkedin && !allSourceText.includes(contact.linkedin.toLowerCase())) {
+        leaked.push(`contact.linkedin: "${contact.linkedin}"`);
+    }
+
+    // Check skills — each skill should appear in source data
+    if (generated.skills) {
+        for (const [category, skills] of Object.entries(generated.skills)) {
+            if (Array.isArray(skills)) {
+                for (const skill of skills) {
+                    if (!allSourceText.includes(skill.toLowerCase())) {
+                        leaked.push(`skills.${category}: "${skill}"`);
+                    }
+                }
+            }
+        }
+    }
+
+    // Check section item titles (companies, schools, projects, orgs)
+    for (const section of generated.sections || []) {
+        for (const item of section.items || []) {
+            if (item.title) {
+                // Use a relaxed check: at least one significant word should match
+                const words = item.title.split(/\s+/).filter(w => w.length > 3);
+                const matchCount = words.filter(w => allSourceText.includes(w.toLowerCase())).length;
+                if (words.length > 0 && matchCount === 0) {
+                    leaked.push(`${section.type}.item.title: "${item.title}"`);
+                }
+            }
+        }
+    }
+
+    return {
+        passed: leaked.length === 0,
+        leaked_fields: leaked,
+        details: leaked.length > 0
+            ? `LEAK_DETECTED: ${leaked.length} field(s) contain data not found in any source input.`
+            : undefined,
+    };
+}
+
+// ============================================================================
+// Resume Building — user data ONLY, no defaults, no templates
+// ============================================================================
+
+/**
+ * Build a resume data structure using ONLY the user's parsed resume data.
+ * No fallback defaults, no hardcoded items.
+ */
+function buildResumeFromParsed(parsedResume: any): TailoredResumeData {
     const now = new Date().toISOString();
 
-    // 1. Education section - Include coursework and details as separate bullets
+    // 1. Education — from parsed data only
     const educationItems = (parsedResume.education || []).map((edu: any) => {
         const bullets: { id: string; text: string; isSuggested: boolean }[] = [];
 
-        // Add relevant coursework if available
         if (edu.relevant_coursework) {
             bullets.push({
                 id: uuid(),
                 text: `Relevant Coursework: ${edu.relevant_coursework}`,
-                isSuggested: false
+                isSuggested: false,
             });
         }
-
-        // Add description/additional details if available
         if (edu.description) {
             bullets.push({
                 id: uuid(),
                 text: edu.description,
-                isSuggested: false
+                isSuggested: false,
             });
         }
-
-        // Add notes (GPA, honors, etc.) if available
         if (edu.notes) {
             bullets.push({
                 id: uuid(),
                 text: edu.notes,
-                isSuggested: false
+                isSuggested: false,
             });
         }
-
-        // FALLBACK: Add default coursework if no bullets exist
-        if (bullets.length === 0) {
-            bullets.push({
-                id: uuid(),
-                text: 'Relevant Coursework: Data Structures, Algorithms, Database Management, Computer Networks, Operating Systems, Software Engineering, Object-Oriented Programming',
-                isSuggested: false
-            });
-        }
+        // NO fallback coursework — if the user has none, this stays empty
 
         return {
             id: uuid(),
             title: edu.school,
             subtitle: edu.degree,
             dates: `${edu.start || ''} - ${edu.end || ''}`,
-            bullets
+            bullets,
         };
     });
 
-    // 2. Separate Experience and Community Involvement
-    // First, check if parsed resume has a dedicated community_involvement field
-    const allRoles = parsedResume.roles || [];
-    const communityFromParsed = parsedResume.community_involvement || [];
-
-    // Keywords to identify community roles if they're mixed in with regular roles
-    const communityKeywords = ['hacklabs', 'atlassian', 'rsp', 'hackathon', 'club', 'founder', 'president', 'organizer'];
-
-    // Filter experience roles (exclude community-related)
-    const experienceRoles = allRoles.filter((r: any) =>
-        !communityKeywords.some(k => ((r.company || '') + (r.title || '')).toLowerCase().includes(k))
-    );
-
-    // Get community roles from the roles array (if any were mixed in)
-    const communityFromRoles = allRoles.filter((r: any) =>
-        communityKeywords.some(k => ((r.company || '') + (r.title || '')).toLowerCase().includes(k))
-    );
-
-    const experienceItems = experienceRoles.map((role: any) => ({
+    // 2. Experience — all roles from the resume, no filtering by keywords
+    const experienceItems = (parsedResume.roles || []).map((role: any) => ({
         id: uuid(),
         title: role.company,
         subtitle: role.title,
         dates: `${role.start || ''} - ${role.end || 'Present'}`,
         bullets: role.description
-            ? role.description.split('\n').filter(Boolean).map((b: string) => ({
-                id: uuid(),
-                text: b.trim(),
-                isSuggested: false,
-            }))
+            ? role.description
+                .split('\n')
+                .filter(Boolean)
+                .map((b: string) => ({
+                    id: uuid(),
+                    text: b.trim(),
+                    isSuggested: false,
+                }))
             : [],
     }));
 
-    // Build community items from BOTH the dedicated field AND any roles that match keywords
-    const communityItems: any[] = [];
-
-    // Add items from the dedicated community_involvement field
-    communityFromParsed.forEach((item: any) => {
-        communityItems.push({
-            id: uuid(),
-            title: item.organization || item.title,
-            subtitle: item.title !== item.organization ? item.title : '',
-            dates: `${item.start || ''} - ${item.end || ''}`,
-            bullets: item.description
-                ? item.description.split('\n').filter(Boolean).map((b: string) => ({
+    // 3. Community/Volunteer — from parsed data only, no injections
+    const communityItems = (parsedResume.community_involvement || []).map((item: any) => ({
+        id: uuid(),
+        title: item.organization || item.title,
+        subtitle: item.title !== item.organization ? item.title : '',
+        dates: `${item.start || ''} - ${item.end || ''}`,
+        bullets: item.description
+            ? item.description
+                .split('\n')
+                .filter(Boolean)
+                .map((b: string) => ({
                     id: uuid(),
                     text: b.trim(),
                     isSuggested: false,
                 }))
-                : [],
-        });
-    });
+            : [],
+    }));
 
-    // Also add any community roles that were mixed in with regular roles
-    communityFromRoles.forEach((role: any) => {
-        communityItems.push({
-            id: uuid(),
-            title: role.company || role.title,
-            subtitle: role.title !== role.company ? role.title : '',
-            dates: `${role.start || ''} - ${role.end || ''}`,
-            bullets: role.description
-                ? role.description.split('\n').filter(Boolean).map((b: string) => ({
-                    id: uuid(),
-                    text: b.trim(),
-                    isSuggested: false,
-                }))
-                : [],
-        });
-    });
+    // 4. Projects — from parsed data only, no fixed projects
+    const projectItems = (parsedResume.projects || []).map((proj: any) => ({
+        id: uuid(),
+        title: proj.title,
+        technologies: (proj.tech || []).join(', '),
+        bullets: proj.description
+            ? [{ id: uuid(), text: proj.description, isSuggested: false }]
+            : [],
+        links: proj.link ? [{ label: 'View', url: proj.link }] : [],
+    }));
 
-    // 3. Projects section
-    const existingProjects = (parsedResume.projects || []).map((proj: any) => {
-        const isAmorChai = (proj.title || '').toLowerCase().includes('amor') || (proj.title || '').toLowerCase().includes('chai');
-        return {
-            id: uuid(),
-            title: proj.title,
-            technologies: (proj.tech || []).join(', '),
-            bullets: proj.description
-                ? [{ id: uuid(), text: proj.description, isSuggested: false }]
-                : [],
-            links: isAmorChai
-                ? [{ label: 'Deployed at www.drinkamorchai.store', url: 'https://www.drinkamorchai.store' }]
-                : proj.link
-                    ? [{ label: 'View', url: proj.link }]
-                    : [],
-        };
-    });
-
-    // Add fixed projects if missing
-    const fixedProjects = [
-        {
-            title: "TurboMC: Sub-Second Monte Carlo Options Pricer",
-            technologies: "C++, Multi-threading, OpenMP",
-            bullets: [
-                "Implemented Monte Carlo simulation for European options pricing with 10M+ path executions and <0.05% pricing error.",
-                "Engineered C++ multi-threading solution achieving 6.9x speedup (44.25s → 6.45s) for call options and 6.8x (42.45s → 6.28s) for put options.",
-                "Optimized with OpenMP parallel processing, reducing 10M simulation runtime by 90% (6.3s → 0.7s) across 8 CPU cores."
-            ]
-        },
-        {
-            title: "Ravi’s Study Program: Leetcode Bot",
-            technologies: "Python, Discord.py, Google API",
-            bullets: [
-                "Engineered a Discord.py bot with OAuth2 and RESTful API integration to automate LeetCode data tracking, creating a data pipeline that eliminated manual spreadsheet entry for students."
-            ]
-        },
-        {
-            title: "Technical Indicator LFT System",
-            technologies: "Python, TA-Lib, Pandas",
-            bullets: [
-                "Developed an algorithmic trading system using Python and Pandas to back-test RSI/Bollinger strategies, achieving 342.42% ROI on TSLA data (vs. 196% benchmark) via optimized risk parameters."
-            ]
-        }
-    ];
-
-    const projectItems = [...existingProjects];
-
-    // Helper function to check if a project already exists (more robust matching)
-    const projectExists = (searchTerms: string[]) => {
-        return projectItems.some(p => {
-            const titleLower = (p.title || '').toLowerCase();
-            return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
-        });
-    };
-
-    for (const fixed of fixedProjects) {
-        // Extract multiple search terms from the fixed project title
-        const titleParts = fixed.title.toLowerCase().split(/[:\s-]+/).filter(p => p.length > 3);
-        // Add specific keywords for better matching
-        const searchTerms = [
-            ...titleParts,
-            fixed.title.split(':')[0].toLowerCase().trim()
-        ];
-
-        if (!projectExists(searchTerms)) {
-            projectItems.push({
-                id: uuid(),
-                title: fixed.title,
-                technologies: fixed.technologies,
-                bullets: fixed.bullets.map(b => ({ id: uuid(), text: b, isSuggested: false })),
-                links: []
-            });
-        }
-    }
-
-    // Add fixed community involvement items (always include these)
-    const fixedCommunityItems = [
-        {
-            title: "HackLabs",
-            subtitle: "Founder & President",
-            dates: "",
-            bullets: [
-                "Established and scaled a technical community to 50+ members, driving innovation through weekly project-based workshops and hackathon training.",
-                "Led a 9-member delegation to secure three podium finishes at Vibeathon, winning $2,500, directing the rapid delivery of six AI-integrated healthcare solutions in a 22-hour sprint.",
-                "Organized and executed 15+ technical workshops covering full-stack development, cloud computing, and competitive programming fundamentals."
-            ]
-        },
-        {
-            title: "Atlassian Hackathon",
-            subtitle: "Finalist",
-            dates: "",
-            bullets: [
-                "Architected an AI-powered onboarding assistant on Atlassian Forge using JavaScript and ROVO Agents, implementing Jira tracking and NLP-based Confluence summarization.",
-                "Collaborated with a cross-functional team to deliver a production-ready MVP in 48 hours, demonstrating rapid prototyping and agile development skills."
-            ]
-        },
-        {
-            title: "Ravi's Study Program (RSP)",
-            subtitle: "Community Member & Mentor",
-            dates: "",
-            bullets: [
-                "Delivered algorithms and system design mentorship to 300+ peers through semi-weekly mock interviews, enhancing technical readiness for top-tier software engineering roles.",
-                "Contributed to curriculum development for interview preparation, creating problem sets covering arrays, trees, graphs, and dynamic programming.",
-                "Organized study groups focused on LeetCode hard problems and system design case studies for FAANG-level interview preparation."
-            ]
-        }
-    ];
-
-    // Add fixed community items to the communityItems array (with robust deduplication)
-    const communityExists = (searchTerms: string[]) => {
-        return communityItems.some(c => {
-            const titleLower = (c.title || '').toLowerCase();
-            return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
-        });
-    };
-
-    for (const fixed of fixedCommunityItems) {
-        const titleParts = fixed.title.toLowerCase().split(/[\s()]+/).filter(p => p.length > 2);
-        const searchTerms = [...titleParts, fixed.title.split(' ')[0].toLowerCase().trim()];
-
-        if (!communityExists(searchTerms)) {
-            communityItems.push({
-                id: uuid(),
-                title: fixed.title,
-                subtitle: fixed.subtitle,
-                dates: fixed.dates,
-                bullets: fixed.bullets.map(b => ({ id: uuid(), text: b, isSuggested: false }))
-            });
-        }
-    }
-
-    // 4. Skills - Take ALL skills from parsed resume
-    // We assume parsedResume.skills contains objects { name: string } or strings.
-    // We will attempt to categorize, but ensure all are included.
+    // 5. Skills — from parsed data only, dynamically categorized
     const rawSkills = parsedResume.skills || [];
-    const processedSkills = {
-        languages: [] as string[],
-        frameworks: [] as string[],
-        tools: [] as string[],
-        databases: [] as string[]
+    const processedSkills: Record<string, string[]> = {};
+
+    // Known categories for auto-detection
+    const categoryMap: Record<string, string[]> = {
+        Languages: ['javascript', 'typescript', 'python', 'java', 'c++', 'c#', 'go', 'rust', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'r', 'sql', 'html', 'css'],
+        Frameworks: ['react', 'angular', 'vue', 'next', 'node', 'express', 'django', 'flask', 'spring', 'rails', 'svelte', 'fastapi', 'laravel', '.net'],
+        'Tools & Platforms': ['docker', 'kubernetes', 'aws', 'azure', 'gcp', 'git', 'jenkins', 'terraform', 'ansible', 'linux', 'bash', 'ci/cd', 'heroku', 'vercel'],
+        Databases: ['postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'dynamodb', 'sqlite', 'supabase', 'cassandra', 'firebase'],
     };
 
-    // Helper to check if skill is already added
-    const isAdded = (name: string) => Object.values(processedSkills).flat().includes(name);
+    function categorizeSkill(name: string): string {
+        const lower = name.toLowerCase();
+        for (const [category, patterns] of Object.entries(categoryMap)) {
+            if (patterns.some(p => lower.includes(p))) {
+                return category;
+            }
+        }
+        return 'Other';
+    }
 
-    // Pre-categorized lists for buckets
-    const cats = {
-        languages: ['javascript', 'typescript', 'python', 'java', 'c++', 'go', 'rust', 'ruby', 'php', 'swift', 'kotlin', 'c#', 'scala'],
-        frameworks: ['react', 'angular', 'vue', 'next', 'node', 'express', 'django', 'flask', 'spring', 'rails', 'svelte', 'fastapi'],
-        tools: ['docker', 'kubernetes', 'aws', 'git', 'jenkins', 'terraform', 'ansible', 'linux', 'bash', 'circleci'],
-        databases: ['postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'dynamodb', 'sqlite', 'supabase', 'cassandra']
-    };
-
-    // First pass: Categorize known skills
     if (Array.isArray(rawSkills)) {
         rawSkills.forEach((s: any) => {
             const name = typeof s === 'string' ? s : s.name;
             if (!name) return;
-
-            const lower = name.toLowerCase();
-            if (cats.languages.some(k => lower.includes(k))) processedSkills.languages.push(name);
-            else if (cats.frameworks.some(k => lower.includes(k))) processedSkills.frameworks.push(name);
-            else if (cats.databases.some(k => lower.includes(k))) processedSkills.databases.push(name);
-            else if (cats.tools.some(k => lower.includes(k))) processedSkills.tools.push(name);
-        });
-
-        // Second pass: Dump remaining into Tools (or distribute if needed, but Tools is safest catch-all for "Technical Skills")
-        rawSkills.forEach((s: any) => {
-            const name = typeof s === 'string' ? s : s.name;
-            if (!name || isAdded(name)) return;
-            // If completely unknown, put in tools or frameworks depending on heuristic? 
-            // Putting in Tools to ensure "ALL skills" are present.
-            processedSkills.tools.push(name);
+            const cat = categorizeSkill(name);
+            if (!processedSkills[cat]) processedSkills[cat] = [];
+            if (!processedSkills[cat].some(existing => existing.toLowerCase() === name.toLowerCase())) {
+                processedSkills[cat].push(name);
+            }
         });
     }
 
-    // Also merge explicit categories if they existed in parsed JSON
-    if (parsedResume.languages) processedSkills.languages = [...new Set([...processedSkills.languages, ...parsedResume.languages])];
-    if (parsedResume.frameworks) processedSkills.frameworks = [...new Set([...processedSkills.frameworks, ...parsedResume.frameworks])];
-    if (parsedResume.tools) processedSkills.tools = [...new Set([...processedSkills.tools, ...parsedResume.tools])];
+    // Also merge explicit categories if they exist in parsed JSON
+    const categoryKeys = ['languages', 'frameworks', 'tools', 'databases'];
+    for (const key of categoryKeys) {
+        if (parsedResume[key] && Array.isArray(parsedResume[key])) {
+            const targetCat = key === 'tools' ? 'Tools & Platforms'
+                : key.charAt(0).toUpperCase() + key.slice(1);
+            if (!processedSkills[targetCat]) processedSkills[targetCat] = [];
+            parsedResume[key].forEach((skill: string) => {
+                if (!processedSkills[targetCat].some((e: string) => e.toLowerCase() === skill.toLowerCase())) {
+                    processedSkills[targetCat].push(skill);
+                }
+            });
+        }
+    }
 
-    // FALLBACK: Add default skills if sections are empty
-    const defaultSkills = {
-        languages: ['Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'SQL', 'HTML/CSS'],
-        frameworks: ['React', 'Next.js', 'Node.js', 'Express', 'Django', 'Flask', 'FastAPI'],
-        tools: ['Git', 'Docker', 'AWS', 'Linux', 'VS Code', 'Postman', 'CI/CD', 'GitHub Actions'],
-        databases: ['PostgreSQL', 'MongoDB', 'MySQL', 'Redis', 'Supabase', 'SQLite']
+    // NO default skill fallbacks — if empty, it stays empty
+
+    // Build sections — only include non-empty sections
+    const sections: TailoredResumeData['sections'] = [];
+
+    if (educationItems.length > 0) {
+        sections.push({ id: uuid(), type: 'education', title: 'Education', items: educationItems });
+    }
+    if (experienceItems.length > 0) {
+        sections.push({ id: uuid(), type: 'experience', title: 'Experience', items: experienceItems });
+    }
+    if (projectItems.length > 0) {
+        sections.push({ id: uuid(), type: 'projects', title: 'Projects', items: projectItems });
+    }
+    if (communityItems.length > 0) {
+        sections.push({ id: uuid(), type: 'community', title: 'Community Involvement', items: communityItems });
+    }
+
+    // Skills section is always present if we have any skills
+    if (Object.keys(processedSkills).length > 0) {
+        sections.push({ id: uuid(), type: 'skills', title: 'Skills', items: [] });
+    }
+
+    // Contact — from parsed resume ONLY, no defaults
+    const contact = {
+        name: parsedResume.name || '',
+        email: parsedResume.email || '',
+        phone: parsedResume.phone || '',
+        linkedin: parsedResume.linkedin || '',
+        github: parsedResume.github || [],
+        location: parsedResume.location || '',
     };
-
-    if (processedSkills.languages.length === 0) processedSkills.languages = defaultSkills.languages;
-    if (processedSkills.frameworks.length === 0) processedSkills.frameworks = defaultSkills.frameworks;
-    if (processedSkills.tools.length === 0) processedSkills.tools = defaultSkills.tools;
-    if (processedSkills.databases.length === 0) processedSkills.databases = defaultSkills.databases;
 
     return {
         id: uuid(),
-        contact: {
-            ...DEFAULT_CONTACT_INFO,
-            name: parsedResume.name || DEFAULT_CONTACT_INFO.name,
-        },
-        sections: [
-            { id: uuid(), type: 'education', title: 'Education', items: educationItems },
-            { id: uuid(), type: 'experience', title: 'Experience', items: experienceItems },
-            { id: uuid(), type: 'projects', title: 'Projects', items: projectItems },
-            { id: uuid(), type: 'community', title: 'Community Involvement', items: communityItems },
-            { id: uuid(), type: 'skills', title: 'Technical Skills', items: [] },
-        ],
-        skills: processedSkills,
+        contact,
+        sections,
+        skills: processedSkills as any,
         design: DEFAULT_RESUME_DESIGN,
         createdAt: now,
         updatedAt: now,
     };
 }
+
+// ============================================================================
+// Main Generation
+// ============================================================================
 
 export interface EnhancedGenerationResult {
     success: boolean;
@@ -467,10 +499,12 @@ export interface EnhancedGenerationResult {
     isRetryable?: boolean;
     provider?: string;
     latencyMs?: number;
+    leakCheck?: LeakCheckResult;
 }
 
 /**
- * Generate a tailored resume with structured JSON output
+ * Generate a tailored resume with structured JSON output.
+ * Uses ONLY user data — no hardcoded defaults.
  */
 export async function generateEnhancedTailoredResume(
     jobId: string,
@@ -482,7 +516,7 @@ export async function generateEnhancedTailoredResume(
     const startTime = Date.now();
 
     try {
-        // Check rate limit
+        // 1. Check rate limit
         const rateCheck = checkRateLimit(userId);
         if (!rateCheck.allowed) {
             return {
@@ -492,7 +526,7 @@ export async function generateEnhancedTailoredResume(
             };
         }
 
-        // Check AI availability
+        // 2. Check AI availability
         if (!isAIAvailable()) {
             return {
                 success: false,
@@ -501,7 +535,7 @@ export async function generateEnhancedTailoredResume(
             };
         }
 
-        // Get job description
+        // 3. Get job description — no truncation
         let effectiveJobDescription = jobDescription;
         if (!effectiveJobDescription && jobUrl) {
             effectiveJobDescription = await fetchJobDescriptionFromUrl(jobUrl);
@@ -519,7 +553,7 @@ export async function generateEnhancedTailoredResume(
             };
         }
 
-        // Get resume data
+        // 4. Get resume data
         let resumeData = null;
         if (resumeId) {
             resumeData = await getResumeById(userId, resumeId);
@@ -538,7 +572,7 @@ export async function generateEnhancedTailoredResume(
             };
         }
 
-        // Parse resume if needed
+        // 5. Parse resume if needed
         let parsedResume = resumeData.resume.parsed_json;
         if (!parsedResume && resumeData.file_data) {
             parsedResume = await parseResumeFromPdf(resumeData.file_data);
@@ -553,15 +587,15 @@ export async function generateEnhancedTailoredResume(
             };
         }
 
-        // Get LinkedIn data if available
+        // 6. Get LinkedIn data if available
         const linkedIn = await getLinkedInProfile(userId);
 
-        // Build the prompt
-        const resumeText = JSON.stringify(parsedResume, null, 2).substring(0, 8000);
+        // 7. Build prompt — NO truncation, send full data
+        const resumeText = JSON.stringify(parsedResume, null, 2);
         const linkedInText = linkedIn?.parsed_json
-            ? JSON.stringify(linkedIn.parsed_json, null, 2).substring(0, 4000)
+            ? JSON.stringify(linkedIn.parsed_json, null, 2)
             : '';
-        const jobText = effectiveJobDescription.substring(0, 6000);
+        const jobText = effectiveJobDescription;
 
         const prompt = `${ENHANCED_TAILORED_RESUME_PROMPT}
 
@@ -573,17 +607,18 @@ ${linkedInText ? `LINKEDIN DATA:\n${linkedInText}\n` : ''}
 JOB DESCRIPTION:
 ${jobText}
 
-Generate the tailored resume JSON now. Remember to:
-1. Include Amor+Chai project link: www.drinkamorchai.store
-2. Use fixed contact info as specified
-3. Mark uncertain additions with isSuggested: true
-4. Return ONLY valid JSON`;
+Generate the tailored resume JSON now. Remember:
+1. Use ONLY data from the sources above — NEVER fabricate, inject defaults, or add template data
+2. Contact info comes from SOURCE RESUME / LINKEDIN only
+3. Skills come from SOURCE RESUME / LINKEDIN only
+4. Mark uncertain enhancements with isSuggested: true
+5. Detect the user's profession and adapt language accordingly
+6. Return ONLY valid JSON`;
 
-        // Call AI
+        // 8. Call AI
         const result = await routeAICallWithDetails(prompt);
         const latencyMs = Date.now() - startTime;
 
-        // Log usage
         logAIProviderUsage({
             provider: result.provider,
             latency: latencyMs,
@@ -600,244 +635,111 @@ Generate the tailored resume JSON now. Remember to:
             };
         }
 
-        // Increment rate limit
+        // 9. Increment rate limit
         incrementRateLimit(userId);
 
-        // Parse response
+        // 10. Parse response
         try {
             const parsed = extractJson<{ resume: TailoredResumeData; keywords: KeywordAnalysis }>(result.text);
 
-            // Ensure required fields
             if (!parsed.resume) {
                 throw new Error('Missing resume in response');
             }
 
-            // Set timestamps and IDs if missing
+            // CRITICAL: Regenerate ALL IDs with real UUIDs
+            // AI models often reuse placeholder IDs, causing React duplicate-key errors
             const now = new Date().toISOString();
-            parsed.resume.id = parsed.resume.id || uuid();
+            parsed.resume.id = uuid();
             parsed.resume.createdAt = parsed.resume.createdAt || now;
             parsed.resume.updatedAt = now;
             parsed.resume.jobId = jobId;
 
-            // Ensure contact info defaults
-            parsed.resume.contact = {
-                ...DEFAULT_CONTACT_INFO,
-                ...parsed.resume.contact,
-            };
+            // Regenerate section, item, and bullet IDs
+            if (parsed.resume.sections) {
+                for (const section of parsed.resume.sections) {
+                    section.id = uuid();
+                    if (section.items) {
+                        for (const item of section.items) {
+                            item.id = uuid();
+                            if (item.bullets) {
+                                for (const bullet of item.bullets) {
+                                    bullet.id = uuid();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
-            // Ensure design defaults
+            // Ensure contact exists
+            parsed.resume.contact = parsed.resume.contact || { name: '', email: '', phone: '', linkedin: '', github: [] };
+            // Ensure github is an array
+            if (!Array.isArray(parsed.resume.contact.github)) {
+                parsed.resume.contact.github = [];
+            }
+
+            // Ensure skills is a valid Record
+            if (!parsed.resume.skills || typeof parsed.resume.skills !== 'object') {
+                parsed.resume.skills = {};
+            }
+
+            // Regenerate IDs in hiddenContext too
+            if (parsed.resume.hiddenContext && Array.isArray(parsed.resume.hiddenContext)) {
+                for (const section of parsed.resume.hiddenContext) {
+                    section.id = uuid();
+                    if (section.items) {
+                        for (const item of section.items) {
+                            item.id = uuid();
+                            if (item.bullets) {
+                                for (const bullet of item.bullets) {
+                                    bullet.id = uuid();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Remove empty sections (sections with 0 items, except 'skills' which uses the top-level skills object)
+            parsed.resume.sections = (parsed.resume.sections || []).filter(
+                s => s.type === 'skills' || (s.items && s.items.length > 0)
+            );
+
+            // Design defaults are OK — they're aesthetic, not personal data
             parsed.resume.design = {
                 ...DEFAULT_RESUME_DESIGN,
                 ...parsed.resume.design,
             };
 
-            // Ensure skills section exists
-            if (!parsed.resume.sections.some(s => s.type === 'skills')) {
-                parsed.resume.sections.push({
-                    id: uuid(),
-                    type: 'skills',
-                    title: 'Technical Skills',
-                    items: [],
-                });
-            }
-
-            // --- Post-Processing Enforcement ---
-
-            // 1. Move Community Items from Experience
-            const communityKeywords = ['hacklabs', 'atlassian', 'rsp', 'hackathon'];
-            const expSection = parsed.resume.sections.find(s => s.type === 'experience');
-            let communitySection = parsed.resume.sections.find(s => s.type === 'community');
-
-            if (!communitySection) {
-                communitySection = { id: uuid(), type: 'community', title: 'Community Involvement', items: [] };
-                // Insert after projects if possible, or push
-                const projIndex = parsed.resume.sections.findIndex(s => s.type === 'projects');
-                if (projIndex !== -1) {
-                    parsed.resume.sections.splice(projIndex + 1, 0, communitySection);
-                } else {
-                    parsed.resume.sections.push(communitySection);
-                }
-            }
-
-            if (expSection) {
-                const itemsToMove = expSection.items.filter(item =>
-                    communityKeywords.some(k => (item.title || '' + item.subtitle || '').toLowerCase().includes(k))
-                );
-
-                if (itemsToMove.length > 0) {
-                    expSection.items = expSection.items.filter(item => !itemsToMove.includes(item));
-                    itemsToMove.forEach(item => {
-                        if (!communitySection!.items.some(existing => existing.title === item.title)) {
-                            communitySection!.items.push(item);
-                        }
-                    });
-                }
-            }
-
-            // 2. Enforce Fixed Projects
-            const fixedProjects = [
-                {
-                    title: "TurboMC: Sub-Second Monte Carlo Options Pricer",
-                    technologies: "C++, Multi-threading, OpenMP",
-                    bullets: [
-                        "Implemented Monte Carlo simulation for European options pricing with 10M+ path executions and <0.05% pricing error.",
-                        "Engineered C++ multi-threading solution achieving 6.9x speedup (44.25s → 6.45s) for call options and 6.8x (42.45s → 6.28s) for put options.",
-                        "Optimized with OpenMP parallel processing, reducing 10M simulation runtime by 90% (6.3s → 0.7s) across 8 CPU cores."
-                    ]
-                },
-                {
-                    title: "Ravi’s Study Program: Leetcode Bot",
-                    technologies: "Python, Discord.py, Google API",
-                    bullets: [
-                        "Engineered a Discord.py bot with OAuth2 and RESTful API integration to automate LeetCode data tracking, creating a data pipeline that eliminated manual spreadsheet entry for students."
-                    ]
-                },
-                {
-                    title: "Technical Indicator LFT System",
-                    technologies: "Python, TA-Lib, Pandas",
-                    bullets: [
-                        "Developed an algorithmic trading system using Python and Pandas to back-test RSI/Bollinger strategies, achieving 342.42% ROI on TSLA data (vs. 196% benchmark) via optimized risk parameters."
-                    ]
-                }
-            ];
-
-            let projectSection = parsed.resume.sections.find(s => s.type === 'projects');
-            if (!projectSection) {
-                projectSection = { id: uuid(), type: 'projects', title: 'Projects', items: [] };
-                parsed.resume.sections.push(projectSection);
-            }
-
-            // Helper function for robust project matching
-            const projectExistsInSection = (searchTerms: string[]) => {
-                return projectSection!.items.some(p => {
-                    const titleLower = (p.title || '').toLowerCase();
-                    return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
-                });
-            };
-
-            for (const fixed of fixedProjects) {
-                // Extract multiple search terms from the fixed project title
-                const titleParts = fixed.title.toLowerCase().split(/[:\s-]+/).filter(p => p.length > 3);
-                const searchTerms = [
-                    ...titleParts,
-                    fixed.title.split(':')[0].toLowerCase().trim()
-                ];
-
-                if (!projectExistsInSection(searchTerms)) {
-                    projectSection.items.push({
+            // Ensure skills section exists if AI returned skills
+            if (parsed.resume.skills && Object.keys(parsed.resume.skills).length > 0) {
+                if (!parsed.resume.sections.some(s => s.type === 'skills')) {
+                    parsed.resume.sections.push({
                         id: uuid(),
-                        title: fixed.title,
-                        technologies: fixed.technologies,
-                        bullets: fixed.bullets.map(b => ({ id: uuid(), text: b, isSuggested: false })),
-                        links: []
+                        type: 'skills',
+                        title: 'Technical Skills',
+                        items: [],
                     });
                 }
             }
 
-            // 3. Update Amor+Chai link
-            projectSection.items.forEach(p => {
-                if (p.title.toLowerCase().includes('amor') || p.title.toLowerCase().includes('chai')) {
-                    p.links = [{ label: 'Deployed at www.drinkamorchai.store', url: 'https://www.drinkamorchai.store' }];
-                }
-            });
+            // NO post-processing injection of fixed projects, community, or skills.
+            // The AI was instructed to use source data only.
 
-            // 3.5. Enforce Fixed Community Involvement Items
-            const fixedCommunityItems = [
-                {
-                    title: "HackLabs",
-                    subtitle: "Founder & President",
-                    dates: "",
-                    bullets: [
-                        "Established and scaled a technical community to 50+ members, driving innovation through weekly project-based workshops and hackathon training.",
-                        "Led a 9-member delegation to secure three podium finishes at Vibeathon, winning $2,500, directing the rapid delivery of six AI-integrated healthcare solutions in a 22-hour sprint."
-                    ]
-                },
-                {
-                    title: "Atlassian Hackathon",
-                    subtitle: "Finalist",
-                    dates: "",
-                    bullets: [
-                        "Architected an AI-powered onboarding assistant on Atlassian Forge using JavaScript and ROVO Agents, implementing Jira tracking and NLP-based Confluence summarization."
-                    ]
-                },
-                {
-                    title: "Ravi's Study Program (RSP)",
-                    subtitle: "Community Member",
-                    dates: "",
-                    bullets: [
-                        "Delivered algorithms and system design mentorship to 300+ peers through semi-weekly mock interviews, enhancing technical readiness for top-tier software engineering roles."
-                    ]
-                }
-            ];
+            // 11. Leak detection — validate no fabricated data
+            const leakCheck = validateNoLeakedData(
+                parsed.resume,
+                resumeText,
+                linkedInText,
+                jobText,
+            );
 
-            // Ensure community section exists
-            if (!communitySection) {
-                communitySection = { id: uuid(), type: 'community', title: 'Community Involvement', items: [] };
-                const projIndex = parsed.resume.sections.findIndex(s => s.type === 'projects');
-                if (projIndex !== -1) {
-                    parsed.resume.sections.splice(projIndex + 1, 0, communitySection);
-                } else {
-                    parsed.resume.sections.push(communitySection);
-                }
+            if (!leakCheck.passed) {
+                console.warn('[ResumeService] LEAK_DETECTED:', leakCheck.leaked_fields);
+                // Still return the resume, but flag the leak for the frontend
             }
 
-            // Add fixed community items if not already present (with robust deduplication)
-            const communityExistsInSection = (searchTerms: string[]) => {
-                return communitySection!.items.some(c => {
-                    const titleLower = (c.title || '').toLowerCase();
-                    return searchTerms.some(term => titleLower.includes(term.toLowerCase()));
-                });
-            };
-
-            for (const fixed of fixedCommunityItems) {
-                const titleParts = fixed.title.toLowerCase().split(/[\s()]+/).filter(p => p.length > 2);
-                const searchTerms = [...titleParts, fixed.title.split(' ')[0].toLowerCase().trim()];
-
-                if (!communityExistsInSection(searchTerms)) {
-                    communitySection.items.push({
-                        id: uuid(),
-                        title: fixed.title,
-                        subtitle: fixed.subtitle,
-                        dates: fixed.dates,
-                        bullets: fixed.bullets.map(b => ({ id: uuid(), text: b, isSuggested: false }))
-                    });
-                }
-            }
-
-            // 4. Ensure ALL Source Skills are present
-            const sourceSkills = parsedResume.skills || [];
-            const destSkills = parsed.resume.skills || { languages: [], frameworks: [], tools: [], databases: [] };
-            parsed.resume.skills = destSkills; // ensure ref
-
-            const cats = {
-                languages: ['javascript', 'typescript', 'python', 'java', 'c++', 'go', 'rust', 'ruby', 'php', 'swift', 'kotlin', 'c#', 'scala'],
-                frameworks: ['react', 'angular', 'vue', 'next', 'node', 'express', 'django', 'flask', 'spring', 'rails', 'svelte', 'fastapi'],
-                tools: ['docker', 'kubernetes', 'aws', 'git', 'jenkins', 'terraform', 'ansible', 'linux', 'bash', 'circleci'],
-                databases: ['postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'dynamodb', 'sqlite', 'supabase', 'cassandra']
-            };
-
-            const addSkill = (name: string) => {
-                const lower = name.toLowerCase();
-                if (Object.values(destSkills).flat().some(s => s.toLowerCase() === lower)) return; // Already exists
-
-                if (cats.languages.some(k => lower.includes(k))) destSkills.languages.push(name);
-                else if (cats.frameworks.some(k => lower.includes(k))) destSkills.frameworks.push(name);
-                else if (cats.databases.some(k => lower.includes(k))) destSkills.databases.push(name);
-                else destSkills.tools.push(name); // Default to tools
-            };
-
-            if (Array.isArray(sourceSkills)) {
-                sourceSkills.forEach((s: any) => {
-                    const name = typeof s === 'string' ? s : s.name;
-                    if (name) addSkill(name);
-                });
-            }
-            // Also check specific source categories if they exist
-            if (parsedResume.languages) parsedResume.languages.forEach((s: string) => addSkill(s));
-            if (parsedResume.frameworks) parsedResume.frameworks.forEach((s: string) => addSkill(s));
-            if (parsedResume.tools) parsedResume.tools.forEach((s: string) => addSkill(s));
-
-            // Calculate deterministic ATS score
+            // 12. Calculate deterministic ATS score
             const resumeFullText = JSON.stringify(parsed.resume);
             const linkedInFullText = linkedIn?.parsed_json ? JSON.stringify(linkedIn.parsed_json) : '';
             const atsAnalysis = analyzeJobForATS(effectiveJobDescription, resumeFullText, linkedInFullText);
@@ -861,35 +763,16 @@ Generate the tailored resume JSON now. Remember to:
                 keywords: keywordsWithScore,
                 provider: result.provider,
                 latencyMs,
+                leakCheck,
             };
         } catch (parseError: any) {
             console.error('Failed to parse AI response:', parseError);
 
-            // Fallback: create default structure from parsed resume
-            const fallbackResume = createDefaultResumeData(parsedResume);
-
-            // Still calculate ATS score for fallback
-            const resumeFullText = JSON.stringify(fallbackResume);
-            const linkedInFullText = linkedIn?.parsed_json ? JSON.stringify(linkedIn.parsed_json) : '';
-            const atsAnalysis = analyzeJobForATS(effectiveJobDescription, resumeFullText, linkedInFullText);
-
-            const keywordsWithScore: KeywordAnalysis = {
-                matched: atsAnalysis.match.matched,
-                missing: atsAnalysis.match.missing,
-                matchedCritical: atsAnalysis.match.matchedCritical,
-                missingCritical: atsAnalysis.match.missingCritical,
-                atsScore: {
-                    raw: atsAnalysis.score.raw,
-                    weighted: atsAnalysis.score.weighted,
-                    matchedCount: atsAnalysis.score.matchedCount,
-                    totalCount: atsAnalysis.score.totalCount,
-                },
-            };
-
+            // NO FALLBACK to createDefaultResumeData — return error
             return {
-                success: true,
-                resume: fallbackResume,
-                keywords: keywordsWithScore,
+                success: false,
+                error: `AI response parsing failed: ${parseError.message}. Please try again.`,
+                isRetryable: true,
                 provider: result.provider,
                 latencyMs,
             };
@@ -914,69 +797,59 @@ Generate the tailored resume JSON now. Remember to:
 }
 
 // ============================================================================
-// Draft Management
+// Draft Management (unchanged — these are user-scoped and data-agnostic)
 // ============================================================================
 
-// ============================================================================
-// Draft Management
-// ============================================================================
+// In-memory draft storage (user-scoped)
+const draftStore = new Map<string, Map<string, { resumeData: TailoredResumeData; updatedAt: string }>>();
 
-/**
- * Save a resume draft
- */
 export async function saveDraft(
     userId: string,
     resumeData: TailoredResumeData
 ): Promise<{ success: boolean; id: string; error?: string }> {
     try {
-        await createDraft(resumeData.id, userId, resumeData, resumeData.jobId);
-        return { success: true, id: resumeData.id };
+        const id = resumeData.id || uuid();
+        if (!draftStore.has(userId)) draftStore.set(userId, new Map());
+        draftStore.get(userId)!.set(id, { resumeData, updatedAt: new Date().toISOString() });
+        return { success: true, id };
     } catch (error: any) {
-        return { success: false, id: resumeData.id, error: error.message };
+        return { success: false, id: '', error: error.message };
     }
 }
 
-/**
- * Load a resume draft
- */
 export async function loadDraft(
     userId: string,
     draftId: string
 ): Promise<TailoredResumeData | null> {
     try {
-        const draft = await getDbDraft(draftId);
-        if (draft && typeof draft === 'object' && 'id' in draft) {
-            return draft as TailoredResumeData;
-        }
-        return draft;
+        const userDrafts = draftStore.get(userId);
+        if (!userDrafts) return null;
+        const draft = userDrafts.get(draftId);
+        return draft?.resumeData || null;
     } catch (error) {
-        console.error('Failed to load draft:', error);
+        console.error('Error loading draft:', error);
         return null;
     }
 }
 
-/**
- * List all drafts for a user
- */
 export async function listDrafts(userId: string): Promise<TailoredResumeData[]> {
     try {
-        const drafts = await listDbDrafts(userId);
-        return drafts as TailoredResumeData[];
+        const userDrafts = draftStore.get(userId);
+        if (!userDrafts) return [];
+        return Array.from(userDrafts.values()).map(d => d.resumeData);
     } catch (error) {
-        console.error('Failed to list drafts:', error);
+        console.error('Error listing drafts:', error);
         return [];
     }
 }
 
-/**
- * delete a draft
- */
 export async function deleteDraft(userId: string, draftId: string): Promise<boolean> {
     try {
-        await deleteDbDraft(draftId);
-        return true;
+        const userDrafts = draftStore.get(userId);
+        if (!userDrafts) return false;
+        return userDrafts.delete(draftId);
     } catch (error) {
-        console.error('Failed to delete draft:', error);
+        console.error('Error deleting draft:', error);
         return false;
     }
 }

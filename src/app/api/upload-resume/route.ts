@@ -7,6 +7,7 @@ import {
     setDefaultResume
 } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
+import { invalidateForUser } from '@/lib/resume-cache';
 
 export const runtime = 'nodejs';
 
@@ -114,6 +115,8 @@ export async function DELETE(request: NextRequest) {
         }
 
         await deleteResume(userId, id);
+        // Invalidate any cached parsed resume data for this user
+        invalidateForUser(userId);
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error deleting resume:', error);

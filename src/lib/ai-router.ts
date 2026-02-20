@@ -57,12 +57,11 @@ export interface AIRouterState {
 
 const OPENROUTER_TIMEOUT_MS = 30000; // 30s for cloud
 const OLLAMA_TIMEOUT_MS = 90000;     // 90s for local
-const MAX_PROMPT_SIZE = 6000;        // Hard limit
 
 const OPENROUTER_DAILY_LIMIT = parseInt(process.env.OPENROUTER_MAX_CALLS_PER_DAY || '100');
 
-// OpenRouter models - Gemini 2.0 Flash as primary, Claude Haiku as fallback
-const OPENROUTER_PRIMARY_MODEL = 'google/gemini-2.0-flash-001';
+// OpenRouter models — configurable via env; defaults to Gemini 2.0 Flash
+const OPENROUTER_PRIMARY_MODEL = process.env.PREFERRED_AI_MODEL || 'google/gemini-2.0-flash-001';
 const OPENROUTER_SECONDARY_MODEL = 'anthropic/claude-3-haiku';
 
 const BILLING_ERROR_PATTERNS = ['insufficient credits', 'payment required', 'billing', 'no credits', '402'];
@@ -164,7 +163,7 @@ async function callOpenRouterModel(prompt: string, model: string, apiKey?: strin
             body: JSON.stringify({
                 model,
                 messages: [{ role: 'user', content: prompt }],
-                max_tokens: 2000
+                max_tokens: 8192
             }),
             signal: controller.signal
         });
@@ -204,6 +203,7 @@ async function callOpenRouterModel(prompt: string, model: string, apiKey?: strin
             };
         }
 
+        console.log(`[AI Router] Using provider: openrouter model: ${model}`);
         console.log(`[OpenRouter] ✓ Generated ${content.length} chars in ${elapsed_ms}ms using ${model}`);
         return {
             success: true,
@@ -275,15 +275,6 @@ async function handleOpenRouterError(errorType: string): Promise<void> {
 // ============================================================================
 
 /**
- * Truncate prompt to max size
- */
-function truncatePrompt(prompt: string): string {
-    if (prompt.length <= MAX_PROMPT_SIZE) return prompt;
-    console.log(`[AI Router] Truncating prompt: ${prompt.length} → ${MAX_PROMPT_SIZE} chars`);
-    return prompt.slice(0, MAX_PROMPT_SIZE);
-}
-
-/**
  * Route AI call to best available provider
  * 
  * Priority: OpenRouter Primary → OpenRouter Fallback → Ollama
@@ -304,13 +295,10 @@ export async function routeAICall(prompt: string): Promise<string> {
 export async function routeAICallWithDetails(prompt: string): Promise<AIGenerateResult> {
     await initialize();
 
-    // Truncate prompt if too long
-    const truncatedPrompt = truncatePrompt(prompt);
-
     // 1. Try OpenRouter with PRIMARY KEY
     if (isOpenRouterAvailable()) {
         // Try Gemini 2.0 Flash with primary key
-        const geminiResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_PRIMARY_MODEL);
+        const geminiResult = await callOpenRouterModel(prompt, OPENROUTER_PRIMARY_MODEL);
 
         if (geminiResult.success) {
             await handleOpenRouterSuccess();
@@ -321,7 +309,7 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
 
         // Gemini failed - always try Claude Haiku with primary key
         console.log(`[AI Router] Gemini 2.0 Flash failed (${geminiResult.error}), trying Claude Haiku...`);
-        const haikuResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_SECONDARY_MODEL);
+        const haikuResult = await callOpenRouterModel(prompt, OPENROUTER_SECONDARY_MODEL);
 
         if (haikuResult.success) {
             await handleOpenRouterSuccess();
@@ -340,7 +328,7 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
         console.log('[AI Router] Trying with FALLBACK API key...');
 
         // Try Gemini 2.0 Flash with fallback key
-        const geminiResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_PRIMARY_MODEL, fallbackKey);
+        const geminiResult = await callOpenRouterModel(prompt, OPENROUTER_PRIMARY_MODEL, fallbackKey);
 
         if (geminiResult.success) {
             routerState.activeProvider = 'openrouter-fallback';
@@ -350,7 +338,7 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
 
         // Gemini failed - always try Claude Haiku with fallback key
         console.log(`[AI Router] Gemini 2.0 Flash failed with fallback key (${geminiResult.error}), trying Claude Haiku...`);
-        const haikuResult = await callOpenRouterModel(truncatedPrompt, OPENROUTER_SECONDARY_MODEL, fallbackKey);
+        const haikuResult = await callOpenRouterModel(prompt, OPENROUTER_SECONDARY_MODEL, fallbackKey);
 
         if (haikuResult.success) {
             routerState.activeProvider = 'openrouter-fallback';
@@ -375,8 +363,8 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: truncatedPrompt }] }],
-                        generationConfig: { maxOutputTokens: 2000 }
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { maxOutputTokens: 8192 }
                     })
                 }
             );
@@ -386,6 +374,7 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
                 const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (text) {
                     const elapsed_ms = Date.now() - start;
+                    console.log(`[AI Router] Using provider: gemini-direct model: gemini-2.0-flash`);
                     console.log(`[Gemini Direct] ✓ Generated ${text.length} chars in ${elapsed_ms}ms`);
                     routerState.activeProvider = 'gemini-direct';
                     routerState.lastSuccessfulProvider = 'gemini-direct';
@@ -416,7 +405,7 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
     if (ollamaHealth.available) {
         try {
             const start = Date.now();
-            const text = await callOllama(truncatedPrompt);
+            const text = await callOllama(prompt);
             const elapsed_ms = Date.now() - start;
 
             routerState.activeProvider = 'ollama';

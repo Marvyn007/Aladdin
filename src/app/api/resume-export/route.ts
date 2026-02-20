@@ -2,18 +2,16 @@
  * Resume PDF Export API Route
  * POST /api/resume-export
  *
- * Exports resume to PDF using the exact content from the editor
- * Returns application/pdf with filename marvin_chaudhary_resume.pdf
+ * Exports resume to PDF using the exact content from the editor.
+ * Returns application/pdf with dynamic filename.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { renderResumeHtml } from '@/lib/resume-templates';
+import { generatePdfBuffer, buildResumeFilename } from '@/lib/pdf-renderer';
 import type { TailoredResumeData } from '@/types';
-import puppeteer from 'puppeteer';
+import { auth } from '@clerk/nextjs/server';
 
 export const runtime = 'nodejs';
-
-import { auth } from '@clerk/nextjs/server';
 
 export async function POST(request: NextRequest) {
     try {
@@ -21,8 +19,9 @@ export async function POST(request: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
         const body = await request.json();
-        const { resume } = body as { resume: TailoredResumeData };
+        const { resume, jobTitle } = body as { resume: TailoredResumeData; jobTitle?: string };
 
         if (!resume) {
             return NextResponse.json(
@@ -31,41 +30,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Generate full HTML document
-        const html = renderResumeHtml(resume);
+        const pdfBuffer = await generatePdfBuffer(resume);
+        const filename = buildResumeFilename(resume.contact?.name, jobTitle);
 
-        // Launch Puppeteer
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
-
-        const page = await browser.newPage();
-
-        // Set content and wait for network idle (fonts, images)
-        await page.setContent(html, {
-            waitUntil: 'networkidle0',
-        });
-
-        // Generate PDF
-        const pdfBuffer = await page.pdf({
-            format: 'Letter',
-            printBackground: true,
-            margin: {
-                top: '0in',
-                right: '0in',
-                bottom: '0in',
-                left: '0in',
-            },
-        });
-
-        await browser.close();
-
-        // Return PDF
-        return new NextResponse(Buffer.from(pdfBuffer), {
+        return new NextResponse(pdfBuffer as any, {
             headers: {
                 'Content-Type': 'application/pdf',
-                'Content-Disposition': 'attachment; filename="marvin_chaudhary_resume.pdf"',
+                'Content-Disposition': `attachment; filename="${filename}"`,
             },
         });
 

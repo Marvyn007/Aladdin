@@ -292,7 +292,7 @@ function formatDate(dateString: string): string {
 }
 
 function renderEntry(item: ResumeSectionItem, template: 'classic' | 'modern'): string {
-  const bulletsHtml = item.bullets.map(b =>
+  const bulletsHtml = (item.bullets ?? []).map(b =>
     `<li class="${b.isSuggested ? 'suggested-bullet' : ''}">${b.isSuggested ? '⚠️ ' : ''}${b.text}</li>`
   ).join('');
 
@@ -327,17 +327,21 @@ function renderEntry(item: ResumeSectionItem, template: 'classic' | 'modern'): s
 }
 
 function renderSkillsSection(skills: TailoredResumeData['skills'], template: 'classic' | 'modern'): string {
-  // Flatten all unique skills
-  const allSkills = [
-    ...skills.languages,
-    ...skills.frameworks,
-    ...skills.tools,
-    ...skills.databases
-  ];
+  // Flatten all unique skills from dynamic categories
+  const allSkills: string[] = [];
+  if (skills && typeof skills === 'object') {
+    for (const [, values] of Object.entries(skills)) {
+      if (Array.isArray(values)) {
+        allSkills.push(...values);
+      }
+    }
+  }
 
   // Dedup just in case
   const uniqueSkills = [...new Set(allSkills)];
   const skillsString = uniqueSkills.join(', ');
+
+  if (!skillsString) return '';
 
   if (template === 'modern') {
     return `
@@ -391,7 +395,7 @@ export function renderClassicTemplate(data: TailoredResumeData): string {
       <span>|</span>
       <a href="mailto:${contact.email}">${contact.email}</a>
       <span>|</span>
-      ${contact.github.map(g => `<a href="https://${g}" target="_blank">${g}</a>`).join(' | ')}
+      ${(contact.github || []).map(g => `<a href="https://${g}" target="_blank">${g}</a>`).join(' | ')}
       <span>|</span>
       <a href="https://${contact.linkedin}" target="_blank">${contact.linkedin}</a>
     </div>
@@ -429,7 +433,7 @@ export function renderModernTemplate(data: TailoredResumeData): string {
     <div class="contact">
       <span>📞 ${contact.phone}</span>
       <a href="mailto:${contact.email}">✉️ ${contact.email}</a>
-      ${contact.github.map(g => `<a href="https://${g}" target="_blank">🔗 ${g}</a>`).join('')}
+      ${(contact.github || []).map(g => `<a href="https://${g}" target="_blank">🔗 ${g}</a>`).join('')}
       <a href="https://${contact.linkedin}" target="_blank">💼 LinkedIn</a>
     </div>
   </header>
@@ -445,6 +449,8 @@ function renderSection(section: ResumeSection, template: 'classic' | 'modern'): 
     projects: 'PROJECTS',
     community: 'COMMUNITY INVOLVEMENT',
     skills: 'TECHNICAL SKILLS',
+    volunteer: 'VOLUNTEER ACTIVITIES',
+    certifications: 'CERTIFICATIONS',
   };
 
   const entriesHtml = section.items.map(item => renderEntry(item, template)).join('');

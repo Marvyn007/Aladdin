@@ -234,7 +234,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                         />
                         <input
                             type="text"
-                            value={resume.contact.github.join(', ')}
+                            value={(resume.contact.github || []).join(', ')}
                             onChange={(e) => updateContact('github', e.target.value.split(',').map(s => s.trim()))}
                             placeholder="GitHub URLs (comma-separated)"
                             className="input"
@@ -297,7 +297,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                         <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Languages</label>
                                         <input
                                             type="text"
-                                            value={resume.skills.languages.join(', ')}
+                                            value={(resume.skills.languages || []).join(', ')}
                                             onChange={(e) => updateSkills('languages', e.target.value)}
                                             className="input"
                                             style={{ fontSize: '12px' }}
@@ -307,7 +307,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                         <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Frameworks</label>
                                         <input
                                             type="text"
-                                            value={resume.skills.frameworks.join(', ')}
+                                            value={(resume.skills.frameworks || []).join(', ')}
                                             onChange={(e) => updateSkills('frameworks', e.target.value)}
                                             className="input"
                                             style={{ fontSize: '12px' }}
@@ -317,7 +317,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                         <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Tools</label>
                                         <input
                                             type="text"
-                                            value={resume.skills.tools.join(', ')}
+                                            value={(resume.skills.tools || []).join(', ')}
                                             onChange={(e) => updateSkills('tools', e.target.value)}
                                             className="input"
                                             style={{ fontSize: '12px' }}
@@ -327,7 +327,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                         <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Databases</label>
                                         <input
                                             type="text"
-                                            value={resume.skills.databases.join(', ')}
+                                            value={(resume.skills.databases || []).join(', ')}
                                             onChange={(e) => updateSkills('databases', e.target.value)}
                                             className="input"
                                             style={{ fontSize: '12px' }}

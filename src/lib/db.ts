@@ -146,10 +146,10 @@ export async function getAllPublicJobs(
 
     // Mapping
     const sortColumn = {
-        'time': 'created_at',
+        'time': 'fetched_at',
         'imported': 'scraped_at',
         'score': 'created_at' // Public jobs don't have match_score usually
-    }[sortBy] || 'created_at';
+    }[sortBy] || 'fetched_at';
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
@@ -409,23 +409,23 @@ export async function getLastJobIngestionTime(): Promise<string | null> {
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
-        // Check scraped_at first, fallback to created_at
-        const res = await pool.query('SELECT MAX(scraped_at) as last_updated FROM jobs');
+        // Check fetched_at (indexed) instead of unscraped_at (unindexed)
+        const res = await pool.query('SELECT MAX(fetched_at) as last_updated FROM jobs');
         return res.rows[0]?.last_updated ? new Date(res.rows[0].last_updated).toISOString() : null;
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
         const { data, error } = await client
             .from('jobs')
-            .select('scraped_at')
-            .order('scraped_at', { ascending: false })
+            .select('fetched_at')
+            .order('fetched_at', { ascending: false })
             .limit(1)
             .single();
 
         if (error) return null; // Safe fail
-        return data?.scraped_at || null;
+        return data?.fetched_at || null;
     } else {
         const db = getSQLiteDB();
-        const result = db.prepare('SELECT MAX(scraped_at) as last_updated FROM jobs').get() as { last_updated: string };
+        const result = db.prepare('SELECT MAX(fetched_at) as last_updated FROM jobs').get() as { last_updated: string };
         return result?.last_updated || null;
     }
 }
@@ -2207,9 +2207,8 @@ export async function getProviderStats(providerName: string): Promise<AIProvider
                 }
                 return res.rows[0] as AIProviderStats;
             } catch (error: any) {
-                // Return null if table missing or other DB error
-                // This ensures the main app flow continues even if stats are broken
-                console.warn(`[DB] Failed to get stats for ${providerName}(non - fatal): `, error.message);
+                // Silently return null if table missing — this is expected
+                // when the migration hasn't been run yet
                 return null;
             }
         } else if (dbType === 'supabase') {

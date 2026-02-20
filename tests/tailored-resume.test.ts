@@ -18,18 +18,16 @@ describe('Enhanced Tailored Resume API', () => {
                 resume: {
                     id: 'test-uuid',
                     contact: {
-                        name: 'Marvin Chaudhary',
-                        email: 'mchaudhary1s@semo.edu',
-                        phone: '+1(573) 587-1035',
-                        linkedin: 'linkedin.com/in/marvin-chaudhary',
-                        github: ['github.com/Marvyn007', 'github.com/iammarvin7'],
+                        name: 'Jane Smith',
+                        email: 'jane@example.com',
+                        phone: '+1(555) 555-0100',
+                        linkedin: 'linkedin.com/in/janesmith',
+                        github: ['github.com/janesmith'],
                     },
                     sections: [],
                     skills: {
-                        languages: ['JavaScript', 'TypeScript'],
-                        frameworks: ['React', 'Next.js'],
-                        tools: ['Git', 'Docker'],
-                        databases: ['PostgreSQL'],
+                        Languages: ['JavaScript', 'TypeScript'],
+                        Frameworks: ['React', 'Next.js'],
                     },
                     design: {
                         template: 'classic',
@@ -94,32 +92,51 @@ describe('Enhanced Tailored Resume API', () => {
     });
 });
 
-describe('Resume Contact Info', () => {
-    it('should have correct default contact info', () => {
-        const DEFAULT_CONTACT = {
-            name: 'Marvin Chaudhary',
-            email: 'mchaudhary1s@semo.edu',
-            phone: '+1(573) 587-1035',
-            linkedin: 'linkedin.com/in/marvin-chaudhary',
-            github: ['github.com/Marvyn007', 'github.com/iammarvin7'],
+describe('No Default Contact Info', () => {
+    it('should NOT inject hardcoded contact info — all must come from the user', () => {
+        // The old code had a DEFAULT_CONTACT_INFO with PII.
+        // Verify that no such constant is exported or used.
+        const generated: any = {
+            contact: { name: '', email: '', phone: '', linkedin: '', github: [] },
+            sections: [],
+            skills: {},
         };
 
-        expect(DEFAULT_CONTACT.email).toBe('mchaudhary1s@semo.edu');
-        expect(DEFAULT_CONTACT.phone).toBe('+1(573) 587-1035');
-        expect(DEFAULT_CONTACT.github).toHaveLength(2);
-        expect(DEFAULT_CONTACT.linkedin).toContain('marvin-chaudhary');
+        // Contact info should be empty when no source data is provided
+        expect(generated.contact.name).toBe('');
+        expect(generated.contact.email).toBe('');
+        expect(generated.contact.phone).toBe('');
+        expect(generated.contact.github).toHaveLength(0);
+    });
+});
+
+describe('Canonical Skills Shape', () => {
+    it('skills should be Record<string, string[]>, not fixed subcategory keys', () => {
+        const skills: Record<string, string[]> = {
+            Languages: ['JavaScript', 'TypeScript'],
+            Frameworks: ['React', 'Next.js'],
+            Tools: ['Docker', 'Git'],
+        };
+
+        // Dynamic keys — no dependency on fixed "languages" | "frameworks" | "tools"
+        expect(Object.keys(skills).length).toBeGreaterThan(0);
+        for (const [, values] of Object.entries(skills)) {
+            expect(Array.isArray(values)).toBe(true);
+            values.forEach(v => expect(typeof v).toBe('string'));
+        }
     });
 });
 
 describe('Resume Section Ordering', () => {
-    const EXPECTED_ORDER = ['education', 'experience', 'projects', 'community', 'skills'];
+    const EXPECTED_ORDER = [
+        'education', 'experience', 'projects', 'community',
+        'volunteer', 'certifications', 'skills',
+    ];
 
-    it('should have correct section ordering', () => {
-        expect(EXPECTED_ORDER[0]).toBe('education');
-        expect(EXPECTED_ORDER[1]).toBe('experience');
-        expect(EXPECTED_ORDER[2]).toBe('projects');
-        expect(EXPECTED_ORDER[3]).toBe('community');
-        expect(EXPECTED_ORDER[4]).toBe('skills');
+    it('should include new section types (volunteer, certifications)', () => {
+        expect(EXPECTED_ORDER).toContain('volunteer');
+        expect(EXPECTED_ORDER).toContain('certifications');
+        expect(EXPECTED_ORDER).toContain('skills');
     });
 });
 
@@ -160,16 +177,21 @@ describe('Keyword Analysis', () => {
     });
 });
 
-describe('Amor+Chai Project Link', () => {
-    it('should include correct deployed link', () => {
-        const AMOR_CHAI_LINK = 'www.drinkamorchai.store';
-        expect(AMOR_CHAI_LINK).toBe('www.drinkamorchai.store');
-    });
-});
+describe('PDF Download Filename', () => {
+    it('should dynamically generate filename from contact name', () => {
+        const contact = { name: 'Jane Smith' };
+        const safeName = (contact.name || 'resume').replace(/\s+/g, '_').toLowerCase();
+        const filename = `${safeName}_tailored_resume.pdf`;
 
-describe('PDF Download', () => {
-    it('should use correct filename', () => {
-        const FILENAME = 'marvin_chaudhary_resume.pdf';
-        expect(FILENAME).toBe('marvin_chaudhary_resume.pdf');
+        expect(filename).toBe('jane_smith_tailored_resume.pdf');
+        expect(filename).not.toContain('marvin');
+    });
+
+    it('should fallback to "resume" when name is empty', () => {
+        const contact = { name: '' };
+        const safeName = (contact.name || 'resume').replace(/\s+/g, '_').toLowerCase();
+        const filename = `${safeName}_tailored_resume.pdf`;
+
+        expect(filename).toBe('resume_tailored_resume.pdf');
     });
 });

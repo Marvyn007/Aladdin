@@ -41,6 +41,7 @@ export function TailoredResumeEditor({
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasGenerated, setHasGenerated] = useState(false);
+    const [generationStep, setGenerationStep] = useState<string>('');
 
     const previewRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +67,7 @@ export function TailoredResumeEditor({
 
         setIsGenerating(true);
         setError(null);
+        setGenerationStep('Starting…');
 
         try {
             const response = await fetch('/api/generate-tailored-resume', {
@@ -77,20 +79,66 @@ export function TailoredResumeEditor({
                 }),
             });
 
-            const data = await response.json();
-
-            if (data.success && data.resume) {
-                setResume(data.resume);
-                setKeywords(data.keywords || { matched: [], missing: [] });
-                setHasGenerated(true);
-            } else {
+            // If a non-SSE error response (auth, bad request), handle it
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('text/event-stream')) {
+                const data = await response.json();
                 setError(data.error || 'Failed to generate tailored resume');
+                setIsGenerating(false);
+                setGenerationStep('');
+                return;
+            }
+
+            // Read SSE stream
+            const reader = response.body?.getReader();
+            if (!reader) {
+                setError('Failed to start stream');
+                setIsGenerating(false);
+                return;
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Parse SSE events from the buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                let eventType = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        eventType = line.slice(7).trim();
+                    } else if (line.startsWith('data: ') && eventType) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (eventType === 'progress' && data.detail) {
+                                setGenerationStep(data.detail);
+                            } else if (eventType === 'complete' && data.success && data.resume) {
+                                setResume(data.resume);
+                                setKeywords(data.keywords || { matched: [], missing: [] });
+                                setHasGenerated(true);
+                            } else if (eventType === 'error') {
+                                setError(data.error || 'Generation failed');
+                            }
+                        } catch {
+                            // skip malformed SSE data
+                        }
+                        eventType = '';
+                    }
+                }
             }
         } catch (err: any) {
             console.error('Generation error:', err);
             setError('Network error. Please try again.');
         } finally {
             setIsGenerating(false);
+            setGenerationStep('');
         }
     };
 
@@ -119,7 +167,8 @@ export function TailoredResumeEditor({
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'marvin_chaudhary_resume.pdf';
+            const safeName = (resume.contact?.name || 'resume').replace(/\s+/g, '_').toLowerCase();
+            a.download = `${safeName}_tailored_resume.pdf`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -133,38 +182,43 @@ export function TailoredResumeEditor({
         }
     };
 
-    const handleSaveDraft = async () => {
+    const handleSaveToDocuments = async () => {
         if (!resume) return;
 
         setIsSaving(true);
+        const btn = document.getElementById('save-documents-btn');
+        if (btn) btn.textContent = 'Saving...';
 
         try {
-            const response = await fetch(`/api/resume-draft/${resume.id}`, {
-                method: 'PUT',
+            const response = await fetch('/api/save-tailored-resume', {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-user-id': 'default',
                 },
-                body: JSON.stringify({ resume }),
+                body: JSON.stringify({
+                    resume,
+                    jobTitle: jobTitle
+                }),
             });
 
             const data = await response.json();
 
-            if (data.success) {
+            if (response.ok && data.success) {
                 // Show brief success feedback
-                const btn = document.getElementById('save-draft-btn');
                 if (btn) {
                     btn.textContent = '✓ Saved!';
                     setTimeout(() => {
-                        btn.textContent = '💾 Save Draft';
-                    }, 2000);
+                        if (btn) btn.textContent = '💾 Save to Documents';
+                    }, 3000);
                 }
             } else {
-                alert('Failed to save draft: ' + data.error);
+                alert('Failed to save resume: ' + (data.error || 'Unknown error'));
+                if (btn) btn.textContent = '💾 Save to Documents';
             }
         } catch (err) {
             console.error('Save error:', err);
-            alert('Failed to save draft');
+            alert('Failed to save resume');
+            if (btn) btn.textContent = '💾 Save to Documents';
         } finally {
             setIsSaving(false);
         }
@@ -199,12 +253,13 @@ export function TailoredResumeEditor({
     const addKeywordToResume = (keyword: string) => {
         if (!resume) return;
 
-        // Add to skills.tools by default
+        // Add to 'Other' skills bucket (dynamic Record<string, string[]> shape)
+        const otherSkills = resume.skills?.['Other'] ?? [];
         setResume({
             ...resume,
             skills: {
                 ...resume.skills,
-                tools: [...resume.skills.tools, keyword],
+                'Other': [...otherSkills, keyword],
             },
             updatedAt: new Date().toISOString(),
         });
@@ -233,12 +288,13 @@ export function TailoredResumeEditor({
 
         if (!confirmed) return;
 
-        // Add all missing keywords to tools
+        // Add all missing keywords to 'Other' skills bucket
+        const otherSkills = resume.skills?.['Other'] ?? [];
         setResume({
             ...resume,
             skills: {
                 ...resume.skills,
-                tools: [...resume.skills.tools, ...keywords.missing],
+                'Other': [...otherSkills, ...keywords.missing],
             },
             updatedAt: new Date().toISOString(),
         });
@@ -575,7 +631,7 @@ export function TailoredResumeEditor({
                                 {isGenerating ? (
                                     <>
                                         <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                                        Generating...
+                                        {generationStep || 'Generating…'}
                                     </>
                                 ) : (
                                     'Generate Tailored Resume'
@@ -605,12 +661,12 @@ export function TailoredResumeEditor({
                                     🔄 Regenerate
                                 </button>
                                 <button
-                                    id="save-draft-btn"
-                                    onClick={handleSaveDraft}
+                                    id="save-documents-btn"
+                                    onClick={handleSaveToDocuments}
                                     disabled={isSaving}
                                     className="btn btn-secondary"
                                 >
-                                    {isSaving ? '...' : '💾 Save Draft'}
+                                    {isSaving ? '...' : '💾 Save to Documents'}
                                 </button>
                                 <button
                                     onClick={handleDownloadPdf}

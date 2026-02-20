@@ -1043,6 +1043,10 @@ function DocumentsTab({ isMobile }: { isMobile?: boolean }) {
         window.open(`/api/resumes/${id}/preview`, '_blank');
     };
 
+    const handleDownloadResume = (id: string) => {
+        window.open(`/api/resumes/${id}/download`, '_blank');
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
@@ -1092,15 +1096,43 @@ function DocumentsTab({ isMobile }: { isMobile?: boolean }) {
                                     <div style={{ display: 'flex', gap: '8px' }}>
                                         <button
                                             onClick={() => handlePreviewResume(resume.id)}
-                                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '12px' }}
+                                            style={{
+                                                border: 'none', background: 'var(--surface)', cursor: 'pointer', color: 'var(--text-secondary)',
+                                                width: '28px', height: '28px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            }}
+                                            title="Preview"
                                         >
-                                            Preview
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                <circle cx="12" cy="12" r="3" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={() => handleDownloadResume(resume.id)}
+                                            style={{
+                                                border: 'none', background: 'var(--surface)', cursor: 'pointer', color: 'var(--accent)',
+                                                width: '28px', height: '28px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            }}
+                                            title="Download"
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                <polyline points="7 10 12 15 17 10" />
+                                                <line x1="12" y1="15" x2="12" y2="3" />
+                                            </svg>
                                         </button>
                                         <button
                                             onClick={() => handleDeleteResume(resume.id)}
-                                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '12px' }}
+                                            style={{
+                                                border: 'none', background: 'var(--surface)', cursor: 'pointer', color: 'var(--error)',
+                                                width: '28px', height: '28px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            }}
+                                            title="Delete"
                                         >
-                                            Delete
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            </svg>
                                         </button>
                                     </div>
                                 </div>

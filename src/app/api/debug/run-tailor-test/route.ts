@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { generateEnhancedTailoredResume } from '@/lib/enhanced-tailored-resume-service';
-import { analyzeJobForATS } from '@/lib/keyword-extractor';
 import { renderResumeHtml } from '@/lib/resume-templates';
 
 export const runtime = 'nodejs';
@@ -34,10 +33,8 @@ export async function POST(req: Request) {
         // 1. Run Generation
         const result = await generateEnhancedTailoredResume(
             jobId,
+            userId,
             SAMPLE_JOB_DESCRIPTION,
-            undefined,
-            undefined,
-            userId
         );
 
         if (!result.success || !result.resume) {
@@ -63,17 +60,13 @@ export async function POST(req: Request) {
             { term: 'react', found: resumeText.includes('react') },
             { term: 'next.js', found: resumeText.includes('next.js') },
             { term: 'typescript', found: resumeText.includes('typescript') },
-            { term: 'profiency', found: true }, // Skip fuzzy
             { term: 'tailwind', found: resumeText.includes('tailwind') },
             { term: 'supabase', found: resumeText.includes('supabase') },
         ];
 
-        // 4. Check for Fixed Contact Info presence
-        const contactCheck =
-            resume.contact.email === 'mchaudhary1s@semo.edu' &&
-            resume.contact.phone === '+1(573) 587-1035' &&
-            resume.contact.linkedin === 'linkedin.com/in/marvin-chaudhary' &&
-            resume.contact.github.includes('github.com/Marvyn007');
+        // 4. Removed hardcoded contact check (was Marvin specific)
+        // Instead check if any contact info exists
+        const contactCheck = !!resume.contact.email || !!resume.contact.phone;
 
         // 5. Check SVG Icon in HTML (rough check)
         const hasSvgIcon = resumeHtml.includes('<svg') && resumeHtml.includes('path d="M18 13v6');
