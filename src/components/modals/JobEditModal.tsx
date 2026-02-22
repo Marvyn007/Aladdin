@@ -391,12 +391,52 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
 
                     {/* Location with Autocomplete */}
                     <div style={{ position: 'relative' }}>
-                        <label htmlFor="edit-job-location" style={labelStyle}>
-                            Location
-                            <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: '6px', fontSize: '11px' }}>
-                                (select from suggestions)
-                            </span>
-                        </label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label htmlFor="edit-job-location" style={{ ...labelStyle, marginBottom: 0 }}>
+                                Location
+                                <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: '6px', fontSize: '11px' }}>
+                                    (select from suggestions)
+                                </span>
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsRemote(!isRemote);
+                                        setErrors(prev => ({ ...prev, location: '' }));
+                                        if (showSuggestions) setShowSuggestions(false);
+                                    }}
+                                    style={{
+                                        width: '36px',
+                                        height: '20px',
+                                        borderRadius: '10px',
+                                        background: isRemote ? 'var(--accent)' : 'var(--border)',
+                                        border: 'none',
+                                        position: 'relative',
+                                        cursor: 'pointer',
+                                        transition: 'background 0.2s',
+                                        padding: 0,
+                                    }}
+                                    aria-label="Toggle Remote"
+                                    aria-pressed={isRemote}
+                                >
+                                    <div style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        background: 'white',
+                                        position: 'absolute',
+                                        top: '2px',
+                                        left: isRemote ? '18px' : '2px',
+                                        transition: 'left 0.2s',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                    }} />
+                                </button>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                                    This position is fully remote
+                                </span>
+                            </div>
+                        </div>
                         <div style={{ position: 'relative' }}>
                             <input
                                 ref={locationInputRef}
@@ -522,46 +562,6 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
                         )}
 
                         {errors.location && <p style={errorStyle}>{errors.location}</p>}
-
-                        {/* Remote Toggle */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '14px' }}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsRemote(!isRemote);
-                                    setErrors(prev => ({ ...prev, location: '' }));
-                                    if (showSuggestions) setShowSuggestions(false);
-                                }}
-                                style={{
-                                    width: '36px',
-                                    height: '20px',
-                                    borderRadius: '10px',
-                                    background: isRemote ? 'var(--accent)' : 'var(--border)',
-                                    border: 'none',
-                                    position: 'relative',
-                                    cursor: 'pointer',
-                                    transition: 'background 0.2s',
-                                    padding: 0,
-                                }}
-                                aria-label="Toggle Remote"
-                                aria-pressed={isRemote}
-                            >
-                                <div style={{
-                                    width: '16px',
-                                    height: '16px',
-                                    borderRadius: '50%',
-                                    background: 'white',
-                                    position: 'absolute',
-                                    top: '2px',
-                                    left: isRemote ? '18px' : '2px',
-                                    transition: 'left 0.2s',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                                }} />
-                            </button>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                                This position is fully remote
-                            </span>
-                        </div>
                     </div>
 
                     {/* Description */}
