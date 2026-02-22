@@ -53,7 +53,6 @@ function initializeSchema(database: DatabaseType): void {
       normalized_text TEXT,
       raw_text_summary TEXT,
       content_hash TEXT UNIQUE,
-      content_hash TEXT UNIQUE,
       is_imported INTEGER DEFAULT 0,
       original_posted_date TEXT,
       original_posted_raw TEXT,
@@ -142,6 +141,17 @@ function initializeSchema(database: DatabaseType): void {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    -- Companies table (API caching & autocomplete)
+    CREATE TABLE IF NOT EXISTS companies (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      name TEXT UNIQUE NOT NULL,
+      domain TEXT,
+      logo_url TEXT,
+      logo_fetched INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     -- Insert default settings if not exists
     INSERT OR IGNORE INTO app_settings (id, fresh_limit) VALUES (1, 300);
 
@@ -200,6 +210,15 @@ function runMigrations(database: DatabaseType): void {
     console.log('Migration: advanced import fields added successfully.');
   }
 
+  /* 
+  // Migration: Add logo_cached_at column (Deprecated)
+  if (!tableInfo.some(col => col.name === 'logo_cached_at')) {
+    console.log('Migration: Adding logo_cached_at column to jobs table...');
+    database.exec("ALTER TABLE jobs ADD COLUMN logo_cached_at TEXT");
+    console.log('Migration: logo_cached_at column added successfully.');
+  }
+  */
+
   // Migration: Add new scraper v2 fields
   if (!tableInfo.some(col => col.name === 'raw_description_html')) {
     console.log('Migration: Adding scraper v2 fields to jobs table...');
@@ -226,6 +245,25 @@ function runMigrations(database: DatabaseType): void {
     console.log('Migration: Adding theme_preferences to app_settings...');
     database.exec("ALTER TABLE app_settings ADD COLUMN theme_preferences TEXT");
     console.log('Migration: theme_preferences added successfully.');
+  }
+
+  // Migration: Add companies table
+  const hasCompaniesTable = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='companies'").get();
+  if (!hasCompaniesTable) {
+    console.log('Migration: Creating companies table...');
+    database.exec(`
+      CREATE TABLE companies (
+        id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+        name TEXT UNIQUE NOT NULL,
+        domain TEXT,
+        logo_url TEXT,
+        logo_fetched INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX idx_companies_name ON companies(name);
+    `);
+    console.log('Migration: companies table created successfully.');
   }
 }
 

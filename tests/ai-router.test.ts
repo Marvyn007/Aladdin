@@ -133,7 +133,7 @@ describe.skip('AI Router - 5 Tier & Safety', () => {
         const res = await routeAICall('prompt');
         expect(res).toBe('Rep Result');
 
-        const state = getProviderStates();
+        const state = getProviderStates() as any;
         expect(state.providers.huggingFace.health).toBe('disabled_free_tier_exhausted');
         expect(DB.updateProviderStats).toHaveBeenCalledWith('huggingface', expect.objectContaining({
             status: 'disabled_free_tier_exhausted'

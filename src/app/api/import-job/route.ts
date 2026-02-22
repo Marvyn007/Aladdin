@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        const { url, description, title, company, location, bypassValidation } = await req.json();
+        const { url, description, title, company, location, company_logo_url, bypassValidation } = await req.json();
 
         if (!url && !description) {
             return NextResponse.json(
@@ -99,12 +99,13 @@ export async function POST(req: NextRequest) {
                 raw_description_html: description,
                 normalized_text: description,
                 extracted_skills: [],
-                extraction_confidence: 1.0,
+                confidence: { description: 1.0, date: 1.0, location: 1.0 },
                 job_description_plain: description, // Keep this for compatibility with existing code
                 date_posted_iso: new Date().toISOString(),
                 date_posted_display: 'Today',
                 date_posted_relative: false,
                 scraped_at: new Date().toISOString(),
+                company_logo_url: company_logo_url || null,
             };
         } else {
             if (!url) {
@@ -178,7 +179,8 @@ export async function POST(req: NextRequest) {
             date_posted_relative: scrapeResult.date_posted_relative,
             source_host: scrapeResult.source_host,
             scraped_at: scrapeResult.scraped_at,
-            extraction_confidence: scrapeResult.confidence
+            extraction_confidence: scrapeResult.confidence,
+            company_logo_url: scrapeResult.company_logo_url
         }, user ? {
             firstName: user.firstName,
             lastName: user.lastName,

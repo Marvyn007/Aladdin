@@ -24,6 +24,8 @@ export interface Job {
   original_posted_raw?: string | null;
   original_posted_source?: string | null;
   location_display?: string | null;
+  company_logo_url?: string | null;
+  logo_cached_at?: string | null;
   import_tag?: string | null;
   raw_description_html?: string | null;
   job_description_plain?: string | null;

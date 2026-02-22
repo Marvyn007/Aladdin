@@ -93,7 +93,7 @@ export async function PUT(
 
         const { id } = await params;
         const body = await request.json();
-        const { title, company, location, description } = body;
+        const { title, company, location, description, company_logo_url } = body;
 
         // Validate required fields
         if (!title?.trim() || !company?.trim() || !description?.trim()) {
@@ -116,6 +116,7 @@ export async function PUT(
             company: company.trim(),
             location: (location || '').trim(),
             description: description.trim(),
+            company_logo_url: company_logo_url || null,
         });
 
         if (!updatedJob) {

@@ -241,6 +241,19 @@ model AppSettings {
   @@map("app_settings")
 }
 
+model Company {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique
+  domain      String?
+  logoUrl     String?   @map("logo_url")
+  logoFetched Boolean   @default(false) @map("logo_fetched")
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([name], map: "idx_companies_name")
+  @@map("companies")
+}
+
 model playing_with_neon {
   id    Int    @id @default(autoincrement())
   name  String

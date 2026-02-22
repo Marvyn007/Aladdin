@@ -53,7 +53,7 @@ interface AppState {
     // UI State
     sidebarOpen: boolean;
     viewMode: 'list' | 'map';
-    activeModal: 'cover-letter' | 'resume-selector' | 'linkedin-selector' | 'import-job' | null;
+    activeModal: 'cover-letter' | 'resume-selector' | 'linkedin-selector' | 'import-job' | 'import-job-selection' | 'import-job-manual' | 'import-job-auto' | null;
 
     // Actions
     setTheme: (theme: 'light' | 'dark') => void;

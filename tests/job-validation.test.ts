@@ -166,6 +166,8 @@ describe('Scrape Result Validation', () => {
         source_host: 'example.com',
         raw_description_html: '<p>Test description</p>',
         job_description_plain: 'Test description',
+        normalized_text: 'Test description',
+        extracted_skills: [],
         date_posted_iso: '2024-01-01T00:00:00Z',
         date_posted_display: 'Posted: Today',
         date_posted_relative: false,

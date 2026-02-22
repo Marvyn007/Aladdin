@@ -1,0 +1,8 @@
+﻿src/app/api/import-job/route.ts(100,17): error TS2353: Object literal may only specify known properties, and 'normalized_text' does not exist in type 'ScrapeResult'.
+src/components/Dashboard.tsx(1369,14): error TS2367: This comparison appears to be unintentional because the types '"cover-letter" | "resume-selector" | "linkedin-selector" | "import-job" | null' and '"import-job-selection"' have no overlap.
+src/components/Dashboard.tsx(1373,63): error TS2345: Argument of type '"import-job-manual"' is not assignable to parameter of type '"cover-letter" | "resume-selector" | "linkedin-selector" | "import-job" | null'.
+src/components/Dashboard.tsx(1374,45): error TS2345: Argument of type '"import-job-auto"' is not assignable to parameter of type '"cover-letter" | "resume-selector" | "linkedin-selector" | "import-job" | null'.
+src/components/Dashboard.tsx(1378,14): error TS2367: This comparison appears to be unintentional because the types '"cover-letter" | "resume-selector" | "linkedin-selector" | "import-job" | null' and '"import-job-manual"' have no overlap.
+src/components/Dashboard.tsx(1384,14): error TS2367: This comparison appears to be unintentional because the types '"cover-letter" | "resume-selector" | "linkedin-selector" | "import-job" | null' and '"import-job-auto"' have no overlap.
+src/components/layout/Sidebar.tsx(172,96): error TS2345: Argument of type '"import-job-selection"' is not assignable to parameter of type '"cover-letter" | "resume-selector" | "linkedin-selector" | "import-job" | null'.
+tests/ai-router.test.ts(137,22): error TS2339: Property 'providers' does not exist on type 'AIRouterState'.

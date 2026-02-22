@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
+import { CompanyAutocomplete } from '@/components/shared/CompanyAutocomplete';
 
 interface ManualImportModalProps {
     onClose: () => void;
@@ -20,12 +21,17 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
     const { addImportedJob } = useStore();
     const [url, setUrl] = useState('');
     const [title, setTitle] = useState('');
+
+    // Company states handled by CompanyAutocomplete
     const [company, setCompany] = useState('');
-    const [isRemote, setIsRemote] = useState(false);
+    const [companyLogoUrl, setCompanyLogoUrl] = useState('');
+    const [companyLogoFile, setCompanyLogoFile] = useState<File | null>(null);
+    const [isCustomCompany, setIsCustomCompany] = useState(false);
 
     // Mapbox states
     const [location, setLocation] = useState('');
     const [locationInput, setLocationInput] = useState('');
+    const [isRemote, setIsRemote] = useState(false);
     const [locationConfirmed, setLocationConfirmed] = useState(false);
     const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -43,10 +49,13 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
     const suggestionsRef = useRef<HTMLDivElement>(null);
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Initial focus + Escape listener
+    // Initial focus only on mount
     useEffect(() => {
         titleInputRef.current?.focus();
+    }, []);
 
+    // Escape listener
+    useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 if (showSuggestions) {
@@ -61,7 +70,7 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [onClose, showSuggestions]);
 
-    // Close location dropdown when clicking outside
+    // Close dropdowns when clicking outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (
@@ -107,6 +116,7 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
             // fail silently
         }
     }, []);
+
 
     const handleLocationInputChange = (value: string) => {
         setLocationInput(value);
@@ -166,7 +176,15 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
         }
 
         if (!title.trim()) errs.title = 'Title is required';
-        if (!company.trim()) errs.company = 'Company is required';
+
+        if (isCustomCompany) {
+            if (!company.trim()) errs.company = 'Company name is required';
+        } else {
+            if (!company.trim()) {
+                errs.company = 'Please select a company from the dropdown or click "Add Custom Company".';
+            }
+        }
+
         if (!description.trim()) {
             errs.description = 'Description is required';
         } else if (description.trim().length < MIN_DESCRIPTION_LENGTH) {
@@ -189,13 +207,38 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
 
         try {
             const finalLocation = isRemote ? 'Remote' : location.trim();
+            let finalLogoUrl = companyLogoUrl.trim();
+            let finalCompany = company.trim();
+
+            if (isCustomCompany && companyLogoFile) {
+                // Upload custom logo first
+                const formData = new FormData();
+                formData.append('name', finalCompany);
+                formData.append('logo', companyLogoFile);
+
+                const uploadRes = await fetch('/api/company', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (uploadRes.ok) {
+                    const uploadData = await uploadRes.json();
+                    if (uploadData.success && uploadData.company?.logo_url) {
+                        finalLogoUrl = uploadData.company.logo_url;
+                    }
+                } else {
+                    console.error('Failed to upload custom logo');
+                }
+            }
+
             const res = await fetch('/api/import-job', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     url: url.trim(),
                     title: title.trim(),
-                    company: company.trim(),
+                    company: finalCompany,
+                    company_logo_url: finalLogoUrl || undefined,
                     location: finalLocation,
                     description: description.trim(),
                     bypassValidation: true, // It's manual input, bypass generic regex scraping checks
@@ -256,7 +299,16 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
                     </div>
                     <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>Job Added Successfully!</h3>
-                    <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}><strong>{success.job.title}</strong><span> at {success.job.company}</span></p>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
+                        {success.job.company_logo_url && (
+                            <img src={success.job.company_logo_url} alt="Logo" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }} />
+                        )}
+                        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+                            <strong>{success.job.title}</strong><span> at {success.job.company}</span>
+                        </p>
+                    </div>
+
                     <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Closing automatically...</p>
                 </div>
             </div>
@@ -313,25 +365,42 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
                     </div>
 
                     {/* Company */}
-                    <div>
-                        <label htmlFor="manual-job-company" style={labelStyle}>Company Name *</label>
-                        <input
-                            id="manual-job-company"
-                            type="text"
-                            value={company}
-                            onChange={(e) => { setCompany(e.target.value); setErrors(prev => ({ ...prev, company: '' })); }}
-                            style={{ ...inputStyle, borderColor: errors.company ? '#ef4444' : undefined }}
-                            placeholder="e.g. Google"
-                        />
-                        {errors.company && <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{errors.company}</p>}
-                    </div>
+                    <CompanyAutocomplete
+                        value={company}
+                        error={errors.company}
+                        initialLogoUrl={companyLogoUrl}
+                        onSelect={({ name, logoUrl, logoFile, isCustom }) => {
+                            setCompany(name);
+                            setCompanyLogoUrl(logoUrl);
+                            setCompanyLogoFile(logoFile);
+                            setIsCustomCompany(isCustom);
+                            setErrors(prev => ({ ...prev, company: '' }));
+                        }}
+                    />
 
                     {/* Location with Autocomplete & Toggle */}
                     <div style={{ position: 'relative' }}>
-                        <label htmlFor="manual-job-location" style={labelStyle}>
-                            Location *
-                            {!isRemote && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: '6px', fontSize: '11px' }}>(select from suggestions)</span>}
-                        </label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label htmlFor="manual-job-location" style={{ ...labelStyle, marginBottom: 0 }}>
+                                Location *
+                                {!isRemote && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: '6px', fontSize: '11px' }}>(select from suggestions)</span>}
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsRemote(!isRemote);
+                                        setErrors(prev => ({ ...prev, location: '' }));
+                                        if (showSuggestions) setShowSuggestions(false);
+                                    }}
+                                    style={{ width: '36px', height: '20px', borderRadius: '10px', background: isRemote ? 'var(--accent)' : 'var(--border)', border: 'none', position: 'relative', cursor: 'pointer', padding: 0 }}
+                                    aria-label="Toggle Remote"
+                                >
+                                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'white', position: 'absolute', top: '2px', left: isRemote ? '18px' : '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                                </button>
+                                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>This position is fully remote</span>
+                            </div>
+                        </div>
                         <div style={{ position: 'relative' }}>
                             <input
                                 ref={locationInputRef}
@@ -380,22 +449,6 @@ export function ManualImportModal({ onClose, onImportSuccess }: ManualImportModa
 
                         {errors.location && <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{errors.location}</p>}
 
-                        {/* Remote Toggle */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '14px' }}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsRemote(!isRemote);
-                                    setErrors(prev => ({ ...prev, location: '' }));
-                                    if (showSuggestions) setShowSuggestions(false);
-                                }}
-                                style={{ width: '36px', height: '20px', borderRadius: '10px', background: isRemote ? 'var(--accent)' : 'var(--border)', border: 'none', position: 'relative', cursor: 'pointer', padding: 0 }}
-                                aria-label="Toggle Remote"
-                            >
-                                <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'white', position: 'absolute', top: '2px', left: isRemote ? '18px' : '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                            </button>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>This position is fully remote</span>
-                        </div>
                     </div>
 
                     {/* Description */}

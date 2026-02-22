@@ -10,6 +10,22 @@ import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { ImageWithRetry } from '@/components/common/ImageWithRetry';
 
+// Get dynamic color based on company name
+export function getCompanyColor(companyName: string | null): string {
+    if (!companyName) return 'var(--text-tertiary)';
+    const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#34d399', '#2dd4bf', '#38bdf8', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#e879f9', '#f472b6', '#fb7185'];
+    let hash = 0;
+    for (let i = 0; i < companyName.length; i++) {
+        hash = companyName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+}
+
+export function getCompanyInitial(companyName: string | null): string {
+    if (!companyName) return '?';
+    return companyName.charAt(0).toUpperCase();
+}
+
 interface JobDetailProps {
     job: Job | null;
     onApply: (jobId: string) => void;
@@ -74,7 +90,7 @@ function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteContro
         };
 
         fetchVotes();
-        const intervalId = setInterval(fetchVotes, 3000);
+        const intervalId = setInterval(fetchVotes, 3600000); // Poll once per hour (3,600,000 ms)
         return () => { isMounted = false; clearInterval(intervalId); };
     }, [targetUser?.id, currentUserId]);
 
@@ -170,7 +186,7 @@ function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteContro
                 letterSpacing: '1px',
                 color: 'var(--text-secondary)'
             }}>
-                Posted by
+                Added by
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
@@ -639,10 +655,60 @@ export function JobDetail({
                                     {job.title}
                                 </h2>
                             </div>
-                            {job.company && (
-                                <p style={{ fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                                    {job.company}
-                                </p>
+                            {(job.company || job.company_logo_url) && (
+                                <a
+                                    href={job.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="company-link-header"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        marginBottom: '8px',
+                                        textDecoration: 'none',
+                                        cursor: 'pointer',
+                                        width: 'fit-content',
+                                        transition: 'opacity 0.2s'
+                                    }}
+                                >
+                                    {job.company_logo_url ? (
+                                        <img
+                                            src={job.company_logo_url}
+                                            alt={`${job.company} logo`}
+                                            style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }}
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                if (e.currentTarget.nextElementSibling) {
+                                                    (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                                                }
+                                            }}
+                                        />
+                                    ) : null}
+                                    {/* Fallback initial icon, hidden by default if trying to load an image */}
+                                    <div
+                                        style={{
+                                            width: '20px',
+                                            height: '20px',
+                                            borderRadius: '4px',
+                                            flexShrink: 0,
+                                            display: job.company_logo_url ? 'none' : 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            backgroundColor: getCompanyColor(job.company),
+                                            color: '#fff',
+                                            fontSize: '12px',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {getCompanyInitial(job.company)}
+                                    </div>
+                                    {job.company && (
+                                        <p style={{ fontSize: '16px', color: 'var(--text-secondary)', margin: 0 }}>
+                                            {job.company}
+                                        </p>
+                                    )}
+                                </a>
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -700,7 +766,7 @@ export function JobDetail({
                                 <polyline points="12 6 12 12 16 14" />
                             </svg>
                             <span style={{ color: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 'var(--success)' : 'var(--error)' }}>
-                                Posted: {job.original_posted_raw && !job.original_posted_date
+                                Added: {job.original_posted_raw && !job.original_posted_date
                                     ? job.original_posted_raw
                                     : formatPostedDate(job.original_posted_date || job.posted_at)}
                             </span>

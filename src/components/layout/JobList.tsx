@@ -28,14 +28,14 @@ function getScoreClass(score: number): string {
 
 // Format posted date
 function formatPostedDate(postedAt: string | null): string {
-    if (!postedAt) return 'Posted: N/A';
+    if (!postedAt) return 'Added: N/A';
 
     try {
         const date = new Date(postedAt);
         const chicagoTime = toZonedTime(date, 'America/Chicago');
-        return `Posted ${formatDistanceToNow(chicagoTime, { addSuffix: true })}`;
+        return `Added ${formatDistanceToNow(chicagoTime, { addSuffix: true })}`;
     } catch {
-        return 'Posted: N/A';
+        return 'Added: N/A';
     }
 }
 
@@ -50,6 +50,22 @@ function isRecentlyPosted(postedAt: string | null): boolean {
     } catch {
         return false;
     }
+}
+
+// Get dynamic color based on company name
+export function getCompanyColor(companyName: string | null): string {
+    if (!companyName) return 'var(--text-tertiary)';
+    const colors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#34d399', '#2dd4bf', '#38bdf8', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#e879f9', '#f472b6', '#fb7185'];
+    let hash = 0;
+    for (let i = 0; i < companyName.length; i++) {
+        hash = companyName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+}
+
+export function getCompanyInitial(companyName: string | null): string {
+    if (!companyName) return '?';
+    return companyName.charAt(0).toUpperCase();
 }
 
 export function JobList({ onJobClick }: JobListProps) {
@@ -358,12 +374,10 @@ export function JobList({ onJobClick }: JobListProps) {
                                     onJobClick(job);
                                     trackJobInteraction(job.id, 'view', { source: 'job_list', sort: sorting.by });
                                 }}
-                                className="card card-interactive"
+                                className={`card card-interactive ${selectedJob?.id === job.id ? 'selected' : ''}`}
                                 style={{
                                     padding: '12px',
                                     cursor: 'pointer',
-                                    borderColor: selectedJob?.id === job.id ? 'var(--accent)' : undefined,
-                                    boxShadow: selectedJob?.id === job.id ? 'var(--shadow-glow)' : undefined,
                                     position: 'relative',
                                 }}
                             >
@@ -456,14 +470,44 @@ export function JobList({ onJobClick }: JobListProps) {
                                     )}
                                 </div>
 
-                                {/* Company */}
-                                {
-                                    job.company && (
-                                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                                            {job.company}
+                                {/* Company & Logo */}
+                                {(job.company || job.company_logo_url) && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                        {job.company_logo_url ? (
+                                            <img
+                                                src={job.company_logo_url}
+                                                alt={`${job.company} logo`}
+                                                style={{ width: '16px', height: '16px', borderRadius: '4px', objectFit: 'cover' }}
+                                                onError={(e) => {
+                                                    // Replace with building icon on error immediately
+                                                    e.currentTarget.style.display = 'none';
+                                                    if (e.currentTarget.nextElementSibling) {
+                                                        (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'block';
+                                                    }
+                                                }}
+                                            />
+                                        ) : null}
+                                        {/* Fallback initial icon, hidden by default if trying to load an image */}
+                                        <div
+                                            style={{
+                                                width: '16px',
+                                                height: '16px',
+                                                borderRadius: '4px',
+                                                flexShrink: 0,
+                                                display: job.company_logo_url ? 'none' : 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: getCompanyColor(job.company),
+                                                color: '#fff',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold'
+                                            }}
+                                        >
+                                            {getCompanyInitial(job.company)}
                                         </div>
-                                    )
-                                }
+                                        {job.company && <span>{job.company}</span>}
+                                    </div>
+                                )}
 
                                 {/* Location & Posted */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
@@ -484,7 +528,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                         title={job.original_posted_raw ? `Original: ${job.original_posted_raw}` : undefined}
                                     >
                                         {job.original_posted_raw && !job.original_posted_date
-                                            ? `Posted ${job.original_posted_raw}`
+                                            ? `Added ${job.original_posted_raw}`
                                             : formatPostedDate(job.original_posted_date || job.posted_at)}
                                     </span>
                                 </div>

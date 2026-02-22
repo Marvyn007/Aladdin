@@ -19,6 +19,9 @@ export interface ScrapeResult {
     source_host: string;
     raw_description_html: string;
     job_description_plain: string;
+    normalized_text: string;
+    extracted_skills?: string[];
+    company_logo_url?: string | null;
     date_posted_iso: string | null;
     date_posted_display: string;
     date_posted_relative: boolean;
@@ -314,6 +317,7 @@ export async function scrapeJobPageFetch(url: string): Promise<ScrapeResult> {
         source_host: sourceHost,
         raw_description_html: rawHtml,
         job_description_plain: jobDescriptionPlain,
+        normalized_text: jobDescriptionPlain,
         date_posted_iso: datePostedIso,
         date_posted_display: datePostedDisplay,
         date_posted_relative: datePostedRelative,

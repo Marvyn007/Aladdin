@@ -159,8 +159,10 @@ export async function getAllPublicJobs(
                    uj.poster_first_name, uj.poster_last_name, uj.poster_image_url,
                    u.votes as poster_votes,
                    u.id as poster_id,
-                   viewer_uj.status as viewer_status
+                   viewer_uj.status as viewer_status,
+                   c.logo_url as company_logo_url
             FROM jobs j
+            LEFT JOIN companies c ON j.company = c.name
             LEFT JOIN user_jobs uj ON j.id = uj.job_id AND j.posted_by_user_id = uj.user_id
             LEFT JOIN users u ON j.posted_by_user_id = u.id
             LEFT JOIN user_jobs viewer_uj ON j.id = viewer_uj.job_id AND viewer_uj.user_id = $3
@@ -171,8 +173,10 @@ export async function getAllPublicJobs(
             SELECT j.*, 
                    uj.poster_first_name, uj.poster_last_name, uj.poster_image_url,
                    u.votes as poster_votes,
-                   u.id as poster_id
+                   u.id as poster_id,
+                   c.logo_url as company_logo_url
             FROM jobs j
+            LEFT JOIN companies c ON j.company = c.name
             LEFT JOIN user_jobs uj ON j.id = uj.job_id AND j.posted_by_user_id = uj.user_id
             LEFT JOIN users u ON j.posted_by_user_id = u.id
             ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}
@@ -290,8 +294,10 @@ export async function getJobs(
                    uj.why, 
                    uj.archived_at,
                    poster_uj.poster_first_name, poster_uj.poster_last_name, poster_uj.poster_image_url,
-                   u.id as poster_id, u.votes as poster_votes
+                   u.id as poster_id, u.votes as poster_votes,
+                   c.logo_url as company_logo_url
             FROM jobs j
+            LEFT JOIN companies c ON j.company = c.name
             JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
             LEFT JOIN user_jobs poster_uj ON j.id = poster_uj.job_id AND j.posted_by_user_id = poster_uj.user_id
             LEFT JOIN users u ON j.posted_by_user_id = u.id
@@ -468,7 +474,7 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
-        let query = 'SELECT * FROM jobs WHERE id = $1';
+        let query = 'SELECT j.*, c.logo_url as company_logo_url FROM jobs j LEFT JOIN companies c ON j.company = c.name WHERE j.id = $1';
         let params: any[] = [id];
 
         if (userId) {
@@ -479,8 +485,10 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
                        uj.matched_skills, 
                        uj.missing_skills, 
                        uj.why, 
-                       uj.archived_at
+                       uj.archived_at,
+                       c.logo_url as company_logo_url
                 FROM jobs j
+                LEFT JOIN companies c ON j.company = c.name
                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $2
                 WHERE j.id = $1
             `;
@@ -658,8 +666,13 @@ export async function insertJob(
             `, [userId, jobId, posterFirstName, posterLastName, posterImageUrl]);
         });
 
-        return { ...job, id: jobId!, status: 'fresh', match_score: 0, matched_skills: null, missing_skills: null, why: null, content_hash: contentHash, fetched_at: new Date().toISOString() };
+        // Sync company logo globally if provided
+        if ((job as any).company_logo_url && job.company) {
+            const { saveCompanyToDb } = await import('./company');
+            await saveCompanyToDb(job.company, null, (job as any).company_logo_url);
+        }
 
+        return { ...job, id: jobId!, status: 'fresh', match_score: 0, matched_skills: null, missing_skills: null, why: null, content_hash: contentHash, fetched_at: new Date().toISOString() };
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
 
@@ -704,7 +717,7 @@ export async function insertJob(
                 source_host: job.source_host || null,
                 scraped_at: job.scraped_at || null,
                 extraction_confidence: job.extraction_confidence || null,
-                posted_by_user_id: userId,
+                posted_by_user_id: userId
             });
             if (insertError) throw insertError;
         }
@@ -740,7 +753,7 @@ export async function insertJob(
                 date_posted_display, date_posted_relative, source_host, scraped_at, extraction_confidence,
                 posted_by_user_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 jobId, job.title, job.company, job.location, job.source_url, job.posted_at,
                 job.normalized_text, job.raw_text_summary, contentHash, job.isImported ? 1 : 0,
@@ -881,6 +894,7 @@ export interface JobEditFields {
     company: string;
     location: string;
     description: string; // Maps to job_description_plain + normalized_text
+    company_logo_url?: string | null;
 }
 
 /**
@@ -916,6 +930,12 @@ export async function updateJobById(
 
         if (res.rows.length === 0) return null;
 
+        // Sync company logo globally if provided
+        if (fields.company_logo_url) {
+            const { saveCompanyToDb } = await import('./company');
+            await saveCompanyToDb(fields.company, null, fields.company_logo_url);
+        }
+
         const row = res.rows[0];
         return {
             ...row,
@@ -946,6 +966,12 @@ export async function updateJobById(
 
         if (error || !data) return null;
 
+        // Sync company logo globally if provided
+        if (fields.company_logo_url) {
+            const { saveCompanyToDb } = await import('./company');
+            await saveCompanyToDb(fields.company, null, fields.company_logo_url);
+        }
+
         return {
             ...data,
             isImported: Boolean(data.is_imported),
@@ -968,6 +994,12 @@ export async function updateJobById(
         );
 
         if ((result as any).changes === 0) return null;
+
+        // Sync company logo globally if provided
+        if (fields.company_logo_url) {
+            const { saveCompanyToDb } = await import('./company');
+            await saveCompanyToDb(fields.company, null, fields.company_logo_url);
+        }
 
         const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId) as any;
         if (!row) return null;

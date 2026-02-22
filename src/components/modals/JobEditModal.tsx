@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CompanyAutocomplete } from '@/components/shared/CompanyAutocomplete';
 import type { Job } from '@/types';
 
 interface JobEditModalProps {
@@ -20,6 +21,9 @@ interface LocationSuggestion {
 export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
     const [title, setTitle] = useState(job.title);
     const [company, setCompany] = useState(job.company || '');
+    const [companyLogoUrl, setCompanyLogoUrl] = useState(job.company_logo_url || '');
+    const [companyLogoFile, setCompanyLogoFile] = useState<File | null>(null);
+    const [isCustomCompany, setIsCustomCompany] = useState(false);
     const initialIsRemote = job.location === 'Remote' || job.location_display === 'Remote';
     const initialLocation = initialIsRemote ? '' : (job.location_display || job.location || '');
 
@@ -100,7 +104,7 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
     }, [location, locationConfirmed]);
 
     // Fetch location suggestions from Mapbox
-    const fetchSuggestions = useCallback(async (query: string) => {
+    const fetchSuggestions = async (query: string) => {
         if (!query.trim() || query.trim().length < 2 || !MAPBOX_TOKEN) {
             setSuggestions([]);
             return;
@@ -123,7 +127,7 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
         } catch {
             // Silently fail — user can still type
         }
-    }, []);
+    };
 
     const handleLocationInputChange = (value: string) => {
         setLocationInput(value);
@@ -198,14 +202,54 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
         setIsSaving(true);
         setSaveError(null);
         try {
+            const finalLocation = isRemote ? 'Remote' : location.trim();
+            let finalLogoUrl = companyLogoUrl.trim();
+            let finalCompany = company.trim();
+
+            if (isCustomCompany && companyLogoFile) {
+                // Upload custom logo first
+                const formData = new FormData();
+                formData.append('name', finalCompany);
+                formData.append('logo', companyLogoFile);
+
+                const uploadRes = await fetch('/api/company', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (uploadRes.ok) {
+                    const uploadData = await uploadRes.json();
+                    if (uploadData.success && uploadData.company?.logo_url) {
+                        finalLogoUrl = uploadData.company.logo_url;
+                    }
+                }
+            }
+
+            const res = await fetch(`/api/job/${job.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: title.trim(),
+                    company: finalCompany,
+                    company_logo_url: finalLogoUrl || null,
+                    location: finalLocation,
+                    description: description.trim(),
+                }),
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.message || 'Failed to save changes');
+            }
             await onSave({
                 title: title.trim(),
-                company: company.trim(),
-                location: isRemote ? 'Remote' : location.trim(),
+                company: finalCompany,
+                location: finalLocation,
                 description: description.trim(),
             });
+            onClose();
         } catch (err) {
             setSaveError(err instanceof Error ? err.message : 'Failed to save changes');
+        } finally {
             setIsSaving(false);
         }
     };
@@ -332,18 +376,18 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
                     </div>
 
                     {/* Company */}
-                    <div>
-                        <label htmlFor="edit-job-company" style={labelStyle}>Company Name *</label>
-                        <input
-                            id="edit-job-company"
-                            type="text"
-                            value={company}
-                            onChange={(e) => { setCompany(e.target.value); setErrors(prev => ({ ...prev, company: '' })); }}
-                            style={{ ...inputStyle, borderColor: errors.company ? '#ef4444' : undefined }}
-                            placeholder="e.g. Google"
-                        />
-                        {errors.company && <p style={errorStyle}>{errors.company}</p>}
-                    </div>
+                    <CompanyAutocomplete
+                        value={company}
+                        error={errors.company}
+                        initialLogoUrl={companyLogoUrl}
+                        onSelect={({ name, logoUrl, logoFile, isCustom }) => {
+                            setCompany(name);
+                            setCompanyLogoUrl(logoUrl);
+                            setCompanyLogoFile(logoFile);
+                            setIsCustomCompany(isCustom);
+                            setErrors(prev => ({ ...prev, company: '' }));
+                        }}
+                    />
 
                     {/* Location with Autocomplete */}
                     <div style={{ position: 'relative' }}>
