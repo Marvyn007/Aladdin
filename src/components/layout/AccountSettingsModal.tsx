@@ -11,8 +11,9 @@ import { useUser, useClerk } from '@clerk/nextjs';
 import { useStore, useStoreActions } from '@/store/useStore';
 import { THEMES } from '@/lib/themes';
 import { ActivityGraph } from '@/components/profile/ActivityGraph';
+import { InterviewExperienceModal } from '@/components/modals/InterviewExperienceModal';
 
-type TabType = 'profile' | 'documents' | 'appearance' | 'security' | 'touch-grass';
+type TabType = 'profile' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
 
 interface AccountSettingsModalProps {
     isOpen: boolean;
@@ -174,6 +175,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
         { id: 'profile', label: 'Profile', icon: <ProfileIcon /> },
         { id: 'touch-grass', label: 'Touch the grass', icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.5-3.3.3-1.09.88-2.16 1.7-3.2.3 2.5.8 4 1.3 5.2z"></path></svg> },
         { id: 'documents', label: 'My Documents', icon: <DocumentsIcon /> },
+        { id: 'reviews', label: 'Interview Experiences', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg> },
         { id: 'appearance', label: 'Appearance', icon: <AppearanceIcon /> },
         { id: 'security', label: 'Security', icon: <SecurityIcon /> },
     ];
@@ -512,6 +514,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                             />
                         )}
                         {activeTab === 'security' && <SecurityTab user={user} isMobile={isMobile} />}
+                        {activeTab === 'reviews' && <ReviewsTab isMobile={isMobile} />}
                     </div>
                 </div >
             </div >
@@ -1632,6 +1635,57 @@ function TouchGrassTab() {
                     Loading your grass...
                 </div>
             )}
+        </div>
+    );
+}
+
+function ReviewsTab({ isMobile }: { isMobile?: boolean }) {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    return (
+        <div style={{
+            padding: isMobile ? '16px' : '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            height: '100%',
+            overflowY: 'auto'
+        }}>
+            <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                    Interview Experiences
+                </h3>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                    Manage and view interview experiences you have shared.
+                </p>
+            </div>
+
+            <button
+                onClick={() => setIsModalOpen(true)}
+                style={{
+                    padding: '12px 24px',
+                    background: 'var(--accent)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    width: 'fit-content'
+                }}
+            >
+                + Add Interview Experience
+            </button>
+
+            <div style={{ padding: '32px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: '12px' }}>
+                <p style={{ color: 'var(--text-secondary)' }}>
+                    Your submitted reviews will appear here.
+                </p>
+            </div>
+
+            <InterviewExperienceModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+            />
         </div>
     );
 }

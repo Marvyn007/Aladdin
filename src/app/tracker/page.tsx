@@ -26,6 +26,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Application, ApplicationColumn, Job } from '@/types';
 
+import { InterviewExperienceModal } from '@/components/modals/InterviewExperienceModal';
+
 const COLUMNS: ApplicationColumn[] = [
     'Applied',
     'Got OA',
@@ -63,6 +65,9 @@ function SortableJobCard({
         opacity: isDragging ? 0.3 : 1, // Placeholder opacity
         cursor: isDragging ? 'grabbing' : 'grab',
     };
+
+    const isInterviewOrOffer = ['Interview R1', 'Interview R2', 'Interview R3', 'Interview R4', 'Got Offer'].includes(application.column_name || '');
+    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
     return (
         <div
@@ -139,6 +144,39 @@ function SortableJobCard({
                     </svg>
                     View Job
                 </a>
+            )}
+
+            {isInterviewOrOffer && (
+                <>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsReviewModalOpen(true);
+                        }}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            marginTop: '12px',
+                            padding: '8px',
+                            background: 'var(--accent)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Add Interview Experience
+                    </button>
+                    <InterviewExperienceModal
+                        isOpen={isReviewModalOpen}
+                        onClose={() => setIsReviewModalOpen(false)}
+                        initialCompany={application.job?.company}
+                    />
+                </>
             )}
         </div>
     );

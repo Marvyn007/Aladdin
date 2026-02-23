@@ -31,6 +31,7 @@ model User {
   votes               Int                    @default(0)
   castVotes           UserReputationVote[]   @relation("CastVotes")
   receivedVotes       UserReputationVote[]   @relation("ReceivedVotes")
+  interviewExperiences InterviewExperience[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -246,9 +247,10 @@ model Company {
   name        String    @unique
   domain      String?
   logoUrl     String?   @map("logo_url")
-  logoFetched Boolean   @default(false) @map("logo_fetched")
-  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  logoFetched          Boolean               @default(false) @map("logo_fetched")
+  createdAt            DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime?             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  interviewExperiences InterviewExperience[]
 
   @@index([name], map: "idx_companies_name")
   @@map("companies")
@@ -357,3 +359,28 @@ model SearchSuggestions {
   @@index([frequency(sort: Desc)], map: "idx_search_suggestions_freq")
   @@map("search_suggestions")
 }
+
+model InterviewExperience {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @map("user_id")
+  companyName        String    @map("company_name")
+  role               String
+  location           String
+  workOption         String    @map("work_option")
+  offerStatus        String    @map("offer_status")
+  salaryHourly       Float?    @map("salary_hourly")
+  appliedDate        DateTime? @map("applied_date") @db.Date
+  offerDate          DateTime? @map("offer_date") @db.Date
+  processSteps       Json      @default("[]") @map("process_steps")
+  interviewDetails   Json      @default("{}") @map("interview_details")
+  additionalComments String?   @map("additional_comments")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyName], references: [name], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyName], map: "idx_interview_exp_company")
+  @@index([userId], map: "idx_interview_exp_user")
+  @@map("interview_experiences")
+}
+

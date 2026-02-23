@@ -11,6 +11,8 @@ const JobsMap = dynamic(() => import('@/components/layout/JobsMap'), {
     ssr: false,
     loading: () => <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#666' }}>Loading Map...</div>
 });
+import { InterviewExperiencesView } from '@/components/layout/InterviewExperiencesView';
+import { InterviewExperienceDetailView } from '@/components/layout/InterviewExperienceDetailView';
 import { CoverLetterModal } from '@/components/modals/CoverLetterModal';
 import { CoverLetterSetupModal } from '@/components/modals/CoverLetterSetupModal';
 import { TailoredResumeEditor } from '@/components/resume-editor/TailoredResumeEditor';
@@ -294,11 +296,16 @@ function DroppableColumn({
 }
 
 interface DashboardProps {
-    defaultActiveView?: 'jobs' | 'tracker';
+    defaultActiveView?: 'jobs' | 'tracker' | 'interview-experiences';
     defaultJobMode?: 'list' | 'map';
+    selectedCompany?: string; // New prop for detail view
 }
 
-export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' }: DashboardProps) {
+export function Dashboard({
+    defaultActiveView = 'jobs',
+    defaultJobMode = 'list',
+    selectedCompany
+}: DashboardProps) {
     const {
         jobs,
         setJobs,
@@ -326,10 +333,11 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
     // Derive active state mainly from props/URL
     const isJobBoard = defaultActiveView === 'jobs';
     const isTracker = defaultActiveView === 'tracker';
+    const isInterviewExperiences = defaultActiveView === 'interview-experiences';
     const isMapMode = defaultJobMode === 'map';
 
     // We keep these for internal logic, but they should sync with props
-    const [activeView, setActiveView] = useState<'jobs' | 'tracker'>(defaultActiveView);
+    const [activeView, setActiveView] = useState<'jobs' | 'tracker' | 'interview-experiences'>(defaultActiveView);
     const [applicationStatus, setApplicationStatus] = useState<Record<string, 'none' | 'applied' | 'loading'>>({});
     const [applications, setApplications] = useState<ApplicationWithJob[]>([]);
 
@@ -1125,6 +1133,14 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                         View Jobs on Map
                         {!isSignedIn && <span style={{ marginLeft: 6, opacity: 0.5 }}>🔒</span>}
                     </Link>
+                    <Link
+                        href="/interview-experiences"
+                        className={`view-tab ${isInterviewExperiences ? 'active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg>
+                        Interview Experiences
+                    </Link>
                 </div>
 
                 {/* Content based on active view */}
@@ -1333,6 +1349,14 @@ export function Dashboard({ defaultActiveView = 'jobs', defaultJobMode = 'list' 
                             </DragOverlay>
                         </DndContext>
                     </div>
+                )}
+
+                {isInterviewExperiences && (
+                    selectedCompany ? (
+                        <InterviewExperienceDetailView companyName={selectedCompany} />
+                    ) : (
+                        <InterviewExperiencesView />
+                    )
                 )}
             </div>
 
