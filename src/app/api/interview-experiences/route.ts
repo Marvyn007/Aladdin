@@ -72,36 +72,11 @@ export async function GET(req: Request) {
         const query = searchParams.get('q')?.toLowerCase() || '';
         const page = parseInt(searchParams.get('page') || '1', 10);
         const limit = parseInt(searchParams.get('limit') || '36', 10);
+        const sortBy = searchParams.get('sort_by') || 'most_reviews'; // Default to most_reviews
 
         const skip = (page - 1) * limit;
 
-        // Fetch all companies with review counts and average salary
-        const companiesFetched = await prisma.company.findMany({
-            where: query ? {
-                name: {
-                    contains: query,
-                    mode: 'insensitive'
-                }
-            } : {},
-            include: {
-                _count: {
-                    select: {
-                        interviewExperiences: true
-                    }
-                },
-                interviewExperiences: {
-                    select: {
-                        salaryHourly: true
-                    }
-                }
-            },
-            orderBy: {
-                name: 'asc'
-            },
-            skip,
-            take: limit
-        });
-
+        // Fetch all matching companies
         const totalCount = await prisma.company.count({
             where: query ? {
                 name: {
@@ -111,8 +86,25 @@ export async function GET(req: Request) {
             } : {}
         });
 
-        // Compute averages in memory
-        const formattedCompanies = (companiesFetched as any[]).map(company => {
+        // Fetch without skipping/limiting here because we need to sort by in-memory computed stats like avgSalary or reviewCount first.
+        const allCompaniesFetched = await prisma.company.findMany({
+            where: query ? {
+                name: {
+                    contains: query,
+                    mode: 'insensitive'
+                }
+            } : {},
+            include: {
+                interviewExperiences: {
+                    select: {
+                        salaryHourly: true
+                    }
+                }
+            }
+        });
+
+        // Compute averages and prepare for sorting
+        const formattedCompanies = (allCompaniesFetched as any[]).map(company => {
             const reviews = company.interviewExperiences || [];
             const validSalaries = reviews
                 .map((r: any) => r.salaryHourly)
@@ -125,13 +117,36 @@ export async function GET(req: Request) {
             return {
                 name: company.name,
                 logoUrl: company.logoUrl,
-                reviewCount: company._count?.interviewExperiences || 0,
+                reviewCount: reviews.length,
                 avgSalaryHourly: avgSalary
             };
         });
 
+        // Apply sorting
+        if (sortBy === 'most_reviews') {
+            // First sort by reviews descending, then by name ascending for ties
+            formattedCompanies.sort((a, b) => {
+                if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+                return a.name.localeCompare(b.name);
+            });
+        } else if (sortBy === 'highest_pay') {
+            formattedCompanies.sort((a, b) => {
+                const payA = a.avgSalaryHourly || 0;
+                const payB = b.avgSalaryHourly || 0;
+                if (payB !== payA) return payB - payA;
+                return a.name.localeCompare(b.name);
+            });
+        } else if (sortBy === 'a_z') {
+            formattedCompanies.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (sortBy === 'z_a') {
+            formattedCompanies.sort((a, b) => b.name.localeCompare(a.name));
+        }
+
+        // Apply pagination after sorting
+        const paginatedCompanies = formattedCompanies.slice(skip, skip + limit);
+
         return NextResponse.json({
-            companies: formattedCompanies,
+            companies: paginatedCompanies,
             pagination: {
                 page,
                 limit,

@@ -9,6 +9,7 @@ import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { ImageWithRetry } from '@/components/common/ImageWithRetry';
+import Link from 'next/link';
 
 // Get dynamic color based on company name
 export function getCompanyColor(companyName: string | null): string {
@@ -656,10 +657,8 @@ export function JobDetail({
                                 </h2>
                             </div>
                             {(job.company || job.company_logo_url) && (
-                                <a
-                                    href={job.source_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <Link
+                                    href={`/interview-experiences/${encodeURIComponent(job.company || '')}`}
                                     className="company-link-header"
                                     style={{
                                         display: 'flex',
@@ -708,7 +707,7 @@ export function JobDetail({
                                             {job.company}
                                         </p>
                                     )}
-                                </a>
+                                </Link>
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>

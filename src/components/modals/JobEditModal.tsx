@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CompanyAutocomplete } from '@/components/shared/CompanyAutocomplete';
 import type { Job } from '@/types';
+import Link from 'next/link';
 
 interface JobEditModalProps {
     job: Job;
@@ -623,28 +624,58 @@ export function JobEditModal({ job, onClose, onSave }: JobEditModalProps) {
                         background: 'var(--background)',
                     }}
                 >
-                    {/* View Original - bottom left */}
-                    <a
-                        href={job.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            fontSize: '13px',
-                            color: 'var(--accent)',
-                            textDecoration: 'none',
-                            fontWeight: 500,
-                        }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                            <polyline points="15 3 21 3 21 9" />
-                            <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                        View Original
-                    </a>
+                    {/* Links - bottom left */}
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <a
+                            href={job.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                fontSize: '13px',
+                                color: 'var(--accent)',
+                                textDecoration: 'none',
+                                fontWeight: 500,
+                            }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                <polyline points="15 3 21 3 21 9" />
+                                <line x1="10" y1="14" x2="21" y2="3" />
+                            </svg>
+                            View Original
+                        </a>
+
+                        {/* Interviews link - next to View Original */}
+                        {job.company && (
+                            <Link
+                                href={`/interview-experiences/${encodeURIComponent(job.company)}`}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    fontSize: '13px',
+                                    color: 'var(--text-secondary)',
+                                    textDecoration: 'none',
+                                    fontWeight: 500,
+                                    marginLeft: '16px',
+                                    transition: 'color 0.2s',
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.color = 'var(--accent)'}
+                                onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 010 7.75" />
+                                </svg>
+                                Interviews
+                            </Link>
+                        )}
+                    </div>
 
                     {/* Cancel + Save - bottom right */}
                     <div style={{ display: 'flex', gap: '12px' }}>

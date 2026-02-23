@@ -22,10 +22,11 @@ interface PaginationData {
 export function InterviewExperiencesView() {
     const [companies, setCompanies] = useState<CompanyStats[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [sortBy, setSortBy] = useState('most_reviews');
     const [isLoading, setIsLoading] = useState(true);
     const [pagination, setPagination] = useState<PaginationData>({
         page: 1,
-        limit: 36,
+        limit: 15,
         total: 0,
         totalPages: 0
     });
@@ -34,15 +35,16 @@ export function InterviewExperiencesView() {
 
     useEffect(() => {
         fetchCompanies(1);
-    }, [searchQuery]);
+    }, [searchQuery, sortBy]);
 
     const fetchCompanies = async (page: number) => {
         try {
             setIsLoading(true);
             const params = new URLSearchParams({
                 page: page.toString(),
-                limit: '36',
-                ...(searchQuery ? { q: searchQuery } : {})
+                limit: '15',
+                ...(searchQuery ? { q: searchQuery } : {}),
+                sort_by: sortBy
             });
             const res = await fetch(`/api/interview-experiences?${params.toString()}`);
             if (res.ok) {
@@ -67,9 +69,9 @@ export function InterviewExperiencesView() {
     };
 
     return (
-        <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--background)' }}>
+        <div className="content-area" style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--background)', overflowY: 'auto' }}>
             {/* Header Area */}
-            <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
+            <div style={{ padding: '24px 8vw 32px 8vw', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
                 <div>
                     <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>
                         Interview Experiences
@@ -105,11 +107,19 @@ export function InterviewExperiencesView() {
             </div>
 
             {/* Search & Tool Bar */}
-            <div style={{ padding: '16px 32px', background: 'var(--background-secondary)', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ position: 'relative', maxWidth: '400px' }}>
+            <div style={{
+                padding: '0 8vw 32px 8vw',
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: '24px',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+            }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: '300px', maxWidth: '500px' }}>
                     <Search
                         size={18}
-                        style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }}
+                        style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }}
                     />
                     <input
                         type="text"
@@ -118,20 +128,60 @@ export function InterviewExperiencesView() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{
                             width: '100%',
-                            padding: '10px 12px 10px 40px',
+                            padding: '12px 16px 12px 48px',
                             background: 'var(--surface)',
                             border: '1px solid var(--border)',
-                            borderRadius: '8px',
+                            borderRadius: '12px',
                             fontSize: '14px',
                             color: 'var(--text-primary)',
                             outline: 'none',
+                            transition: 'border-color 0.2s'
                         }}
+                        onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+                        onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
                     />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--text-tertiary)' }}>Sort by:</span>
+                    <div style={{
+                        display: 'flex',
+                        background: 'var(--background-secondary)',
+                        padding: '4px',
+                        borderRadius: '12px',
+                        border: '1px solid var(--border)'
+                    }}>
+                        {[
+                            { id: 'most_reviews', label: 'Most Reviews' },
+                            { id: 'highest_pay', label: 'Highest Pay' },
+                            { id: 'a_z', label: 'A-Z' },
+                            { id: 'z_a', label: 'Z-A' }
+                        ].map((option) => (
+                            <button
+                                key={option.id}
+                                onClick={() => setSortBy(option.id)}
+                                style={{
+                                    padding: '8px 16px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    background: sortBy === option.id ? 'var(--surface)' : 'transparent',
+                                    color: sortBy === option.id ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                                    boxShadow: sortBy === option.id ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
             {/* Content Area - Grid */}
-            <div style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
+            <div style={{ flex: 1, padding: '32px 8vw' }}>
                 {isLoading ? (
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
                         <div className="w-8 h-8 border-4 border-slate-200 border-t-sky-500 rounded-full animate-spin" />
@@ -144,62 +194,60 @@ export function InterviewExperiencesView() {
                 ) : (
                     <>
                         <div
-                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10"
                         >
                             {companies.map((company) => (
                                 <div
                                     key={company.name}
                                     onClick={() => router.push(`/interview-experiences/${encodeURIComponent(company.name)}`)}
                                     style={{
-                                        background: 'var(--surface)',
+                                        background: 'var(--background-secondary)',
                                         border: '1px solid var(--border)',
-                                        borderRadius: '12px',
-                                        padding: '20px',
+                                        borderRadius: '16px',
+                                        padding: '24px',
                                         cursor: 'pointer',
-                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        gap: '12px',
+                                        gap: '16px',
                                         position: 'relative',
                                         overflow: 'hidden'
                                     }}
                                     className="company-card"
                                     onMouseEnter={(e) => {
                                         e.currentTarget.style.borderColor = 'var(--accent)';
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 8px 16px -4px rgba(0,0,0,0.1)';
+                                        e.currentTarget.style.boxShadow = '0 0 20px rgba(var(--accent-rgb), 0.15)';
+                                        e.currentTarget.style.background = 'var(--surface)';
                                     }}
                                     onMouseLeave={(e) => {
                                         e.currentTarget.style.borderColor = 'var(--border)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
                                         e.currentTarget.style.boxShadow = 'none';
+                                        e.currentTarget.style.background = 'var(--background-secondary)';
                                     }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                         <div style={{
-                                            width: '40px',
-                                            height: '40px',
-                                            borderRadius: '8px',
-                                            background: '#fff',
+                                            width: '56px',
+                                            height: '56px',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            overflow: 'hidden',
                                             flexShrink: 0,
-                                            border: '1px solid var(--border)'
                                         }}>
                                             {company.logoUrl ? (
                                                 <img
                                                     src={company.logoUrl}
                                                     alt={company.name}
-                                                    style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }}
                                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                 />
                                             ) : (
-                                                <span style={{ fontSize: '16px', fontWeight: 'bold' }}>{company.name.charAt(0)}</span>
+                                                <div style={{ width: '100%', height: '100%', borderRadius: '12px', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <span style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>{company.name.charAt(0)}</span>
+                                                </div>
                                             )}
                                         </div>
-                                        <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {company.name}
                                         </span>
                                     </div>
@@ -226,52 +274,73 @@ export function InterviewExperiencesView() {
                                 display: 'flex',
                                 justifyContent: 'center',
                                 alignItems: 'center',
-                                gap: '16px',
+                                gap: '8px',
                                 marginTop: '48px',
-                                paddingBottom: '20px'
+                                paddingBottom: '60px'
                             }}>
                                 <button
                                     onClick={() => handlePageChange(pagination.page - 1)}
                                     disabled={pagination.page === 1}
                                     style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        padding: '8px 12px',
-                                        background: 'var(--surface)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '8px',
+                                        display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px',
+                                        background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px',
                                         color: pagination.page === 1 ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                                        cursor: pagination.page === 1 ? 'not-allowed' : 'pointer',
-                                        fontSize: '14px'
+                                        cursor: pagination.page === 1 ? 'not-allowed' : 'pointer', fontSize: '14px',
+                                        marginRight: '8px'
                                     }}
                                 >
-                                    <ChevronLeft size={16} />
-                                    Previous
+                                    <ChevronLeft size={16} /> Prev
                                 </button>
 
-                                <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                                    Page <strong>{pagination.page}</strong> of <strong>{pagination.totalPages}</strong>
-                                </span>
+                                {(() => {
+                                    const { page, totalPages } = pagination;
+                                    const pages = [];
+                                    if (totalPages <= 5) {
+                                        for (let i = 1; i <= totalPages; i++) pages.push(i);
+                                    } else {
+                                        pages.push(1);
+                                        if (page > 3) pages.push('...');
+                                        const start = Math.max(2, page - 1);
+                                        const end = Math.min(totalPages - 1, page + 1);
+                                        for (let i = start; i <= end; i++) pages.push(i);
+                                        if (page < totalPages - 2) pages.push('...');
+                                        pages.push(totalPages);
+                                    }
+
+                                    return pages.map((p, idx) => (
+                                        typeof p === 'number' ? (
+                                            <button
+                                                key={`page-${p}-${idx}`}
+                                                onClick={() => handlePageChange(p)}
+                                                style={{
+                                                    minWidth: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    background: page === p ? 'var(--accent)' : 'var(--surface)',
+                                                    color: page === p ? 'white' : 'var(--text-primary)',
+                                                    border: page === p ? 'none' : '1px solid var(--border)',
+                                                    borderRadius: '8px', fontWeight: page === p ? 'bold' : 'normal',
+                                                    cursor: 'pointer', transition: 'all 0.2s', fontSize: '14px'
+                                                }}
+                                            >
+                                                {p}
+                                            </button>
+                                        ) : (
+                                            <span key={`ellipsis-${idx}`} style={{ color: 'var(--text-tertiary)', padding: '0 8px' }}>{p}</span>
+                                        )
+                                    ));
+                                })()}
 
                                 <button
                                     onClick={() => handlePageChange(pagination.page + 1)}
                                     disabled={pagination.page === pagination.totalPages}
                                     style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        padding: '8px 12px',
-                                        background: 'var(--surface)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '8px',
+                                        display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px',
+                                        background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px',
                                         color: pagination.page === pagination.totalPages ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                                        cursor: pagination.page === pagination.totalPages ? 'not-allowed' : 'pointer',
-                                        fontSize: '14px'
+                                        cursor: pagination.page === pagination.totalPages ? 'not-allowed' : 'pointer', fontSize: '14px',
+                                        marginLeft: '8px'
                                     }}
                                 >
-                                    Next
-                                    <ChevronRight size={16} />
+                                    Next <ChevronRight size={16} />
                                 </button>
                             </div>
                         )}
