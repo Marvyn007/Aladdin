@@ -37,6 +37,7 @@ import {
     getCachedApplications,
     setCachedApplications,
     isApplicationsCacheStale,
+    invalidateApplicationsCache,
 } from '@/lib/job-cache';
 import {
     DndContext,
@@ -165,60 +166,60 @@ function DraggableJobCard({
                     </svg>
                 </button>
             </div>
-            {application.job?.source_url && (
-                <a
-                    href={application.job.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        marginTop: '8px',
-                        fontSize: '11px',
-                        color: 'var(--accent)',
-                        textDecoration: 'none',
-                    }}
-                >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                        <polyline points="15 3 21 3 21 9" />
-                        <line x1="10" y1="14" x2="21" y2="3" />
-                    </svg>
-                    View Job
-                </a>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
+                {application.job?.source_url && (
+                    <a
+                        href={application.job.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            color: 'var(--accent)',
+                            textDecoration: 'none',
+                        }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                        View Job
+                    </a>
+                )}
 
-            {application.job?.company && (
-                <Link
-                    href={`/interview-experiences/${encodeURIComponent(application.job.company)}`}
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        marginTop: '8px',
-                        marginLeft: '12px',
-                        fontSize: '11px',
-                        color: 'var(--text-secondary)',
-                        textDecoration: 'none',
-                        transition: 'color 0.2s'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.color = 'var(--accent)'}
-                    onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M23 21v-2a4 4 0 00-3-3.87" />
-                        <path d="M16 3.13a4 4 0 010 7.75" />
-                    </svg>
-                    Interviews
-                </Link>
-            )}
+                {application.job?.company && (
+                    <Link
+                        href={`/interview-experiences/${encodeURIComponent(application.job.company)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            color: 'var(--accent)',
+                            textDecoration: 'none',
+                            transition: 'color 0.2s',
+                            opacity: 0.9,
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.color = 'var(--accent-hover)'; e.currentTarget.style.textDecoration = 'underline'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.textDecoration = 'none'; }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                            <path d="M16 3.13a4 4 0 010 7.75" />
+                        </svg>
+                        Interview Experiences
+                    </Link>
+                )}
+            </div>
         </div>
     );
 }
@@ -847,6 +848,7 @@ export function Dashboard({
                 // Remove from fresh jobs
                 setJobs(jobs.filter(j => j.id !== jobId));
                 if (selectedJob?.id === jobId) setSelectedJob(null);
+                invalidateApplicationsCache(); // Clear stale cache
                 loadApplications();
             } else {
                 setApplicationStatus(prev => ({ ...prev, [jobId]: 'none' }));
