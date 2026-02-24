@@ -1326,7 +1326,6 @@ export async function getResumeById(userId: string, id: string): Promise<{ resum
             // Most AI parsing logic can take text or we can fetch the S3 object stream.
             // For now, to keep compatible signatures, we will fetch the object if file_data is expected and missing, 
             // BUT getting buffer from S3 every time is slow. 
-            // Let's see where getResumeById is used. It is used in enhanced-tailored-resume-service.ts to parse PDF.
             // So we DO need the buffer there unless we change how parsing works.
             // I'll fetch it from S3 if s3_key exists.
 

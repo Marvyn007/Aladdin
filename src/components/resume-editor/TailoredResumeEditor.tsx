@@ -6,10 +6,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { ContentPanel } from './ContentPanel';
 import { DesignPanel } from './DesignPanel';
 import { ResumePreview, getResumePreviewHtml } from './ResumePreview';
-import type { TailoredResumeData, KeywordAnalysis, DEFAULT_RESUME_DESIGN } from '@/types';
+import { type TailoredResumeData, type KeywordAnalysis, DEFAULT_RESUME_DESIGN } from '@/types';
 
 interface TailoredResumeEditorProps {
     isOpen: boolean;
@@ -67,75 +68,93 @@ export function TailoredResumeEditor({
 
         setIsGenerating(true);
         setError(null);
-        setGenerationStep('Starting…');
+        setGenerationStep('Initializing Editor…');
 
         try {
-            const response = await fetch('/api/generate-tailored-resume', {
+            // Call the strict master orchestrator
+            const response = await fetch('/api/generate-tailored-resume-strict', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    job_id: jobId,
-                    job_description: jobDescription,
-                }),
+                body: JSON.stringify({ jobId, jobDescription })
             });
 
-            // If a non-SSE error response (auth, bad request), handle it
-            const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('text/event-stream')) {
-                const data = await response.json();
-                setError(data.error || 'Failed to generate tailored resume');
-                setIsGenerating(false);
-                setGenerationStep('');
-                return;
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                console.error('Generator failed:', data.details || data.error);
+                throw new Error(data.error || 'Strict generation pipeline failed.');
             }
 
-            // Read SSE stream
-            const reader = response.body?.getReader();
-            if (!reader) {
-                setError('Failed to start stream');
-                setIsGenerating(false);
-                return;
-            }
+            // Extract the rescored CandidateProfile output from Stage 6
+            const parsed = data.data.rescored_profile;
 
-            const decoder = new TextDecoder();
-            let buffer = '';
+            // Map strict JSON schema to internal TailoredResumeData state
+            const initialResume: TailoredResumeData = {
+                id: uuidv4(),
+                contact: {
+                    name: parsed.basics?.name || parsed.basics?.full_name || '',
+                    email: parsed.basics?.email || '',
+                    phone: parsed.basics?.phone || '',
+                    linkedin: parsed.basics?.linkedin || '',
+                    location: parsed.basics?.location || '',
+                    github: parsed.basics?.portfolio ? [parsed.basics.portfolio] : [],
+                },
+                summary: parsed.summary || '',
+                sections: [
+                    {
+                        id: 'exp',
+                        type: 'experience',
+                        title: 'Experience',
+                        items: (parsed.experience || []).map((exp: any) => ({
+                            id: uuidv4(),
+                            title: exp.title,
+                            subtitle: exp.company,
+                            location: exp.location,
+                            dates: `${exp.start_date} - ${exp.end_date}`,
+                            bullets: (exp.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                        }))
+                    },
+                    {
+                        id: 'edu',
+                        type: 'education',
+                        title: 'Education',
+                        items: (parsed.education || []).map((edu: any) => ({
+                            id: uuidv4(),
+                            title: edu.degree,
+                            subtitle: edu.institution,
+                            dates: `${edu.start_date} - ${edu.end_date}`,
+                            bullets: []
+                        }))
+                    },
+                    {
+                        id: 'proj',
+                        type: 'projects',
+                        title: 'Projects',
+                        items: (parsed.projects || []).map((proj: any) => ({
+                            id: uuidv4(),
+                            title: proj.name || proj.title || '',
+                            bullets: (proj.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                        }))
+                    },
+                ],
+                skills: {
+                    'Technical': parsed.skills?.technical || [],
+                    'Tools': parsed.skills?.tools || [],
+                    'Soft Skills': parsed.skills?.soft || [],
+                },
+                design: DEFAULT_RESUME_DESIGN,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                jobId: jobId,
+                jobTitle: jobTitle
+            };
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-
-                // Parse SSE events from the buffer
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-                let eventType = '';
-                for (const line of lines) {
-                    if (line.startsWith('event: ')) {
-                        eventType = line.slice(7).trim();
-                    } else if (line.startsWith('data: ') && eventType) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            if (eventType === 'progress' && data.detail) {
-                                setGenerationStep(data.detail);
-                            } else if (eventType === 'complete' && data.success && data.resume) {
-                                setResume(data.resume);
-                                setKeywords(data.keywords || { matched: [], missing: [] });
-                                setHasGenerated(true);
-                            } else if (eventType === 'error') {
-                                setError(data.error || 'Generation failed');
-                            }
-                        } catch {
-                            // skip malformed SSE data
-                        }
-                        eventType = '';
-                    }
-                }
-            }
+            setResume(initialResume);
+            setKeywords({ matched: [], missing: [] });
+            setHasGenerated(true);
         } catch (err: any) {
-            console.error('Generation error:', err);
-            setError('Network error. Please try again.');
+            console.error('Initialization error:', err);
+            setError(err.message || 'Failed to parse resume from PDF.');
         } finally {
             setIsGenerating(false);
             setGenerationStep('');
@@ -378,10 +397,10 @@ export function TailoredResumeEditor({
                     <div style={isSetupMode ? { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } : undefined}>
                         <div>
                             <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                Tailored Resume Editor
+                                Resume Parser (Strict JSON)
                             </h2>
                             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                {jobTitle} {company && `at ${company}`}
+                                Parse your default resume into a strict standardized JSON layout.
                             </p>
                         </div>
                         {isSetupMode && (
@@ -630,11 +649,11 @@ export function TailoredResumeEditor({
                             >
                                 {isGenerating ? (
                                     <>
-                                        <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                                        {generationStep || 'Generating…'}
+                                        <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block' }} />
+                                        Parsing (Takes ~30s)...
                                     </>
                                 ) : (
-                                    'Generate Tailored Resume'
+                                    'Parse & Edit Resume'
                                 )}
                             </button>
                         </div>
