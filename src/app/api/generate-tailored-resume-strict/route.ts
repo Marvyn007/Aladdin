@@ -72,6 +72,12 @@ export async function POST(req: Request) {
         // Run resume parser (Stage 1)
         console.log(`[Stage 1] Parsing Resume PDF...`);
         const resumeParseResult = await parseResumeFromPdfStrict(fileBuffer);
+
+        console.log('\n--- E2E STRICT PARSE RESULT START ---');
+        console.log('[Stage 1] Test Results (Failures/Warnings):', JSON.stringify(resumeParseResult.failedTests, null, 2));
+        console.log('[Stage 1] Parsed JSON:', JSON.stringify(resumeParseResult.data, null, 2));
+        console.log('--- E2E STRICT PARSE RESULT END ---\n');
+
         if (!resumeParseResult.success || !resumeParseResult.data) {
             console.error('[Stage 1] Failed Tests from parseResumeFromPdfStrict:', resumeParseResult.failedTests);
             return NextResponse.json({ success: false, error: 'Resume extraction failed (Stage 1).', details: resumeParseResult.failedTests }, { status: 400 });
@@ -81,6 +87,12 @@ export async function POST(req: Request) {
         // Run JD parser (Stage 2)
         console.log(`[Stage 2] Parsing Job Description...`);
         const jdParseResult = await parseJdStrictPipeline(jobDescription);
+
+        console.log('\n--- E2E STRICT PARSE RESULT START (JD) ---');
+        console.log('[Stage 2] Test Results (Failures/Warnings):', JSON.stringify(jdParseResult.failedTests, null, 2));
+        console.log('[Stage 2] Parsed JSON:', JSON.stringify(jdParseResult.data, null, 2));
+        console.log('--- E2E STRICT PARSE RESULT END (JD) ---\n');
+
         if (!jdParseResult.success || !jdParseResult.data) {
             return NextResponse.json({ success: false, error: 'Job Description extraction failed (Stage 2).', details: jdParseResult.failedTests }, { status: 400 });
         }
