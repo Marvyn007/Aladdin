@@ -1,0 +1,5 @@
+paddleocr
+pdfplumber
+sentence-transformers
+keybert
+scikit-learn

@@ -18,80 +18,41 @@ interface ParsingProgressProps {
 
 export function ParsingProgress({ stages, currentStageIndex, onCancel }: ParsingProgressProps) {
     const [animatedStages, setAnimatedStages] = useState<number>(0);
-    const logsEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (currentStageIndex > animatedStages) {
+            // Delay reveal of next stage to allow line animation to finish
             const timer = setTimeout(() => {
                 setAnimatedStages(currentStageIndex);
-            }, 800);
+            }, 600);
             return () => clearTimeout(timer);
         }
     }, [currentStageIndex, animatedStages]);
 
-    useEffect(() => {
-        logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [stages]);
+    // Only show stages that are completed or currently running (plus the next one being revealed)
+    const visibleStages = stages.filter((_, index) => index <= Math.max(currentStageIndex, animatedStages));
 
     return (
         <div style={{
-            padding: '24px',
-            background: 'var(--surface)',
-            borderRadius: '12px',
-            maxWidth: '500px',
+            padding: '24px 0',
+            background: 'transparent',
+            maxWidth: '550px',
             margin: '0 auto',
         }}>
-            <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    Parsing Resume
-                </h3>
-                {onCancel && (
-                    <button onClick={onCancel} className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '13px' }}>
-                        Cancel
-                    </button>
-                )}
-            </div>
-
-            <div style={{ position: 'relative', paddingLeft: '32px' }}>
-                {stages.map((stage, index) => (
+            <div style={{ position: 'relative' }}>
+                {visibleStages.map((stage, index) => (
                     <StageItem
                         key={stage.id}
                         stage={stage}
                         index={index}
                         isActive={index === currentStageIndex}
-                        isCompleted={index < animatedStages}
-                        isAnimating={index === animatedStages && index < currentStageIndex}
+                        isCompleted={index < currentStageIndex}
+                        isRevealing={index === currentStageIndex && index > animatedStages}
                         hasNext={index < stages.length - 1}
+                        isLastVisible={index === visibleStages.length - 1}
                     />
                 ))}
             </div>
-
-            {currentStageIndex < stages.length && stages[currentStageIndex] && (
-                <div ref={logsEndRef} style={{
-                    marginTop: '20px',
-                    padding: '12px',
-                    background: 'var(--background)',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    fontFamily: 'monospace',
-                    maxHeight: '120px',
-                    overflowY: 'auto',
-                    color: 'var(--text-secondary)',
-                }}>
-                    {stages[currentStageIndex].logs.map((log, i) => (
-                        <div key={i} style={{ marginBottom: '4px', opacity: 0.8 }}>
-                            {i === stages[currentStageIndex].logs.length - 1 ? (
-                                <span>
-                                    <span style={{ color: 'var(--accent)', marginRight: '8px' }}>›</span>
-                                    {log}
-                                </span>
-                            ) : (
-                                <span style={{ color: 'var(--text-tertiary)', marginLeft: '20px' }}>{log}</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
         </div>
     );
 }
@@ -101,123 +62,180 @@ interface StageItemProps {
     index: number;
     isActive: boolean;
     isCompleted: boolean;
-    isAnimating: boolean;
+    isRevealing: boolean;
     hasNext: boolean;
+    isLastVisible: boolean;
 }
 
-function StageItem({ stage, index, isActive, isCompleted, isAnimating, hasNext }: StageItemProps) {
-    const [dotPosition, setDotPosition] = useState(0);
+function StageItem({ stage, index, isActive, isCompleted, isRevealing, hasNext, isLastVisible }: StageItemProps) {
+    const [time, setTime] = useState(0);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        if (isAnimating) {
-            const interval = setInterval(() => {
-                setDotPosition(prev => (prev + 1) % 4);
-            }, 300);
-            return () => clearInterval(interval);
+        if (isActive && stage.status === 'running') {
+            if (!timerRef.current) {
+                setTime(0);
+                timerRef.current = setInterval(() => {
+                    setTime(prev => prev + 1);
+                }, 1000);
+            }
+        } else if (stage.status === 'completed' || stage.status === 'failed') {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
         }
-    }, [isAnimating]);
+
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+        };
+    }, [isActive, stage.status]);
+
+    const formatTime = (seconds: number) => {
+        if (seconds === 0 && !isCompleted) return '';
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        if (m > 0) return `${m} m ${s} sec`;
+        return `${s} sec`;
+    };
 
     return (
-        <div style={{ position: 'relative', marginBottom: hasNext ? '0' : '0' }}>
+        <div style={{
+            position: 'relative',
+            display: 'flex',
+            gap: '20px',
+            opacity: isRevealing ? 0 : 1,
+            transform: isRevealing ? 'translateY(10px)' : 'translateY(0)',
+            transition: 'all 0.5s ease',
+            marginBottom: isLastVisible ? 0 : '16px'
+        }}>
+            {/* Left Column: Icons and Lines */}
             <div style={{
-                position: 'absolute',
-                left: '-32px',
-                top: '0',
-                width: '20px',
-                height: '20px',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
+                width: '24px',
+                flexShrink: 0
             }}>
-                {isCompleted ? (
-                    <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        background: '#22c55e',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}>
-                        <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                            <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                    </div>
-                ) : isActive ? (
-                    <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        border: '2px solid var(--accent)',
-                        background: isAnimating ? 'var(--accent)' : 'transparent',
-                        animation: isAnimating ? 'pulse 1s infinite' : 'none',
-                    }}>
-                        {isAnimating && (
-                            <div style={{
-                                width: '4px',
-                                height: '4px',
-                                borderRadius: '50%',
-                                background: 'white',
-                                margin: '2px',
-                            }}>
-                                <DotLoader dots={dotPosition} />
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        border: '2px solid var(--border)',
-                        background: 'transparent',
-                    }} />
-                )}
-            </div>
-
-            {hasNext && (
                 <div style={{
-                    position: 'absolute',
-                    left: '-26px',
-                    top: '20px',
-                    width: '2px',
-                    height: 'calc(100% + 20px)',
-                    background: isCompleted ? '#22c55e' : 'var(--border)',
-                    transition: 'background 0.5s ease',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 2,
+                    background: 'var(--surface)',
+                    borderRadius: '50%'
                 }}>
-                    {isAnimating && (
+                    {isCompleted ? (
                         <div style={{
-                            width: '100%',
+                            width: '20px',
                             height: '20px',
+                            borderRadius: '50%',
+                            background: '#22c55e',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M2.5 6L5 8.5L9.5 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </div>
+                    ) : isActive ? (
+                        <div style={{
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
                             background: 'var(--accent)',
-                            animation: 'lineFlow 0.8s ease forwards',
+                            boxShadow: '0 0 0 4px rgba(var(--accent-rgb, 59, 130, 246), 0.2)',
+                        }} />
+                    ) : (
+                        <div style={{
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            border: '2px solid var(--border)',
+                            background: 'transparent',
                         }} />
                     )}
                 </div>
-            )}
 
-            <div style={{
-                padding: '12px 16px',
-                borderRadius: '8px',
-                background: isActive ? 'var(--background)' : 'transparent',
-                transition: 'background 0.3s ease',
-                marginBottom: hasNext ? '24px' : '0',
-            }}>
-                <div style={{
-                    fontSize: '14px',
-                    fontWeight: isActive || isCompleted ? 600 : 400,
-                    color: isCompleted ? '#22c55e' : isActive ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                    marginBottom: '4px',
-                }}>
-                    {stage.title}
+                {hasNext && !isLastVisible && (
+                    <div style={{
+                        width: '2px',
+                        flex: 1,
+                        background: 'var(--border)',
+                        position: 'relative',
+                        marginTop: '4px',
+                        marginBottom: '4px'
+                    }}>
+                        {isCompleted && (
+                            <div style={{
+                                width: '100%',
+                                height: '100%',
+                                background: '#22c55e',
+                                animation: 'fillLine 0.6s ease-out forwards',
+                                transformOrigin: 'top'
+                            }} />
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Right Column: Content */}
+            <div style={{ flex: 1, paddingBottom: isLastVisible ? 0 : '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2px' }}>
+                    <div style={{
+                        fontSize: '15px',
+                        fontWeight: isActive || isCompleted ? 600 : 400,
+                        color: isCompleted ? '#22c55e' : isActive ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    }}>
+                        {stage.title}
+                    </div>
+                    {(isActive || isCompleted) && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                            {formatTime(time)}
+                        </div>
+                    )}
                 </div>
                 <div style={{
                     fontSize: '13px',
                     color: isActive ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+                    lineHeight: 1.4
                 }}>
                     {stage.description}
                 </div>
+
+                {isActive && stage.logs.length > 0 && (
+                    <div style={{
+                        marginTop: '8px',
+                        fontSize: '12px',
+                        color: 'var(--text-secondary)',
+                        fontFamily: 'inherit',
+                        fontWeight: 400
+                    }}>
+                        {stage.logs.map((log, i) => (
+                            <div key={i} style={{
+                                marginBottom: i === stage.logs.length - 1 ? 0 : '2px',
+                                opacity: i === stage.logs.length - 1 ? 1 : 0.5,
+                                transition: 'opacity 0.3s ease'
+                            }}>
+                                {log}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
+
+            <style>{`
+                @keyframes fillLine {
+                    from { transform: scaleY(0); }
+                    to { transform: scaleY(1); }
+                }
+            `}</style>
         </div>
     );
 }
@@ -230,7 +248,7 @@ function DotLoader({ dots }: { dots: number }) {
         { x: 0, y: 1 },
     ];
     const pos = positions[dots];
-    
+
     return (
         <div style={{
             position: 'relative',
@@ -313,7 +331,7 @@ export function useParsingProgress() {
             }
             return stage;
         }));
-        
+
         const idx = stages.findIndex(s => s.id === stageId);
         if (idx !== -1 && idx !== currentStageIndex) {
             setCurrentStageIndex(idx);
@@ -321,14 +339,14 @@ export function useParsingProgress() {
     };
 
     const completeStage = (stageId: string) => {
-        setStages(prev => prev.map(stage => 
+        setStages(prev => prev.map(stage =>
             stage.id === stageId ? { ...stage, status: 'completed' as const } : stage
         ));
     };
 
     const addLog = (stageId: string, log: string) => {
-        setStages(prev => prev.map(stage => 
-            stage.id === stageId 
+        setStages(prev => prev.map(stage =>
+            stage.id === stageId
                 ? { ...stage, logs: [...stage.logs, log] }
                 : stage
         ));

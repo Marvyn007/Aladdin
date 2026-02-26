@@ -50,6 +50,8 @@ export function TailoredResumeEditor({
     const [generationStep, setGenerationStep] = useState<string>('');
     const [hasSavedToDocuments, setHasSavedToDocuments] = useState(false);
     const [showDownloadModal, setShowDownloadModal] = useState(false);
+    const [showDebugPanel, setShowDebugPanel] = useState(false);
+    const [debugData, setDebugData] = useState<any>(null);
     const parsingProgress = useParsingProgress();
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -77,6 +79,7 @@ export function TailoredResumeEditor({
 
         setIsGenerating(true);
         setError(null);
+        setShowDebugPanel(false);
         parsingProgress.reset();
 
         abortControllerRef.current = new AbortController();
@@ -85,8 +88,8 @@ export function TailoredResumeEditor({
             const response = await fetch('/api/generate-tailored-resume-stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    jobId, 
+                body: JSON.stringify({
+                    jobId,
                     jobDescription,
                     linkedinProfileUrl,
                     linkedinData
@@ -94,10 +97,16 @@ export function TailoredResumeEditor({
                 signal: abortControllerRef.current.signal
             });
 
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+
             const reader = response.body?.getReader();
             if (!reader) {
                 throw new Error('Failed to read response stream');
             }
+
+            console.log('[FRONTEND] SSE stream started');
 
             const decoder = new TextDecoder();
             let buffer = '';
@@ -120,6 +129,7 @@ export function TailoredResumeEditor({
 
                     if (trimmed.startsWith('event: ')) {
                         currentEvent = trimmed.slice(7).trim();
+                        console.log('[FRONTEND] Event type:', currentEvent);
                         continue;
                     }
 
@@ -128,135 +138,249 @@ export function TailoredResumeEditor({
                             const data = JSON.parse(trimmed.slice(6));
                             const eventType = currentEvent;
 
-                            if (eventType === 'stage') {
+                            if (eventType === 'open') {
+                                console.log('[FRONTEND] SSE connection opened');
+                            } else if (eventType === 'stage') {
                                 parsingProgress.updateStage(data.stageId);
                             } else if (eventType === 'log') {
                                 parsingProgress.addLog(data.stageId, data.log);
                             } else if (eventType === 'complete') {
                                 parsingProgress.completeStage(data.stageId);
                             } else if (eventType === 'done') {
-                                console.log('[FRONTEND] Received done event with full data');
-                                console.log('[FRONTEND] Raw AI logs count:', data.data.raw_ai_logs?.length || 0);
-                                console.log('[FRONTEND] Structured data present:', !!data.data.structured_data);
-                                
-                                const structuredData = data.data.structured_data;
-                                const rawAILogs = data.data.raw_ai_logs || [];
-                                
-                                if (structuredData) {
-                                    console.log('[FRONTEND] Structured data - summary_keywords:', JSON.stringify(structuredData.summary_keywords || []));
-                                    console.log('[FRONTEND] Structured data - prioritized_skills:', JSON.stringify(structuredData.prioritized_skills || []));
-                                    console.log('[FRONTEND] Structured data - sections_order:', JSON.stringify(structuredData.sections_order || []));
-                                    console.log('[FRONTEND] Structured data - experience_bullets keys:', Object.keys(structuredData.experience_bullets || {}).length);
-                                    console.log('[FRONTEND] Structured data - composed_markdown length:', structuredData.composed_markdown?.length || 0);
-                                }
+                                console.log('[FRONTEND] Received done event');
+                                console.log('[FRONTEND] Done payload keys:', Object.keys(data));
+                                console.log('[FRONTEND] Done payload size:', JSON.stringify(data).length);
 
-                                if (!structuredData) {
-                                    console.error('[FRONTEND] CRITICAL: No structured_data in response!');
-                                    throw new Error('CRITICAL: No structured data returned from orchestrator. Cannot build resume.');
-                                }
+                                // Handle new format with status field
+                                if (data.status === 'success' && data.final_resume_json) {
+                                    console.log('[FRONTEND] Final resume JSON keys:', Object.keys(data.final_resume_json));
+                                    console.log('[FRONTEND] Final resume JSON size:', JSON.stringify(data.final_resume_json).length);
 
-                                const missingFields: string[] = [];
-                                if (!structuredData.profile) missingFields.push('profile');
-                                if (!structuredData.composed_markdown) missingFields.push('composed_markdown');
-                                if (!structuredData.experience_bullets) missingFields.push('experience_bullets');
-                                if (!structuredData.summary_keywords) missingFields.push('summary_keywords');
-                                if (!structuredData.prioritized_skills) missingFields.push('prioritized_skills');
-                                if (!structuredData.sections_order) missingFields.push('sections_order');
+                                    const finalResumeJson = data.final_resume_json;
 
-                                if (missingFields.length > 0) {
-                                    const errorMsg = `CRITICAL: Frontend received incomplete data. Missing: ${missingFields.join(', ')}`;
-                                    console.error('[FRONTEND]', errorMsg);
-                                    throw new Error(errorMsg);
-                                }
+                                    // Validate required fields
+                                    const missingFields: string[] = [];
+                                    if (!finalResumeJson.basics) missingFields.push('basics');
+                                    if (!finalResumeJson.summary) missingFields.push('summary');
+                                    if (!finalResumeJson.skills) missingFields.push('skills');
+                                    if (!finalResumeJson.experience) missingFields.push('experience');
+                                    if (!finalResumeJson.education) missingFields.push('education');
 
-                                console.log('[FRONTEND] All required fields validated ✓');
-                                
-                                const parsed = structuredData.profile;
-                                
-                                const initialResume: TailoredResumeData = {
-                                    id: uuidv4(),
-                                    contact: {
-                                        name: parsed.basics?.name || parsed.basics?.full_name || '',
-                                        email: parsed.basics?.email || '',
-                                        phone: parsed.basics?.phone || '',
-                                        linkedin: parsed.basics?.linkedin || '',
-                                        location: parsed.basics?.location || '',
-                                        github: parsed.basics?.portfolio ? [parsed.basics.portfolio] : [],
-                                    },
-                                    summary: parsed.summary || '',
-                                    sections: [
-                                        {
-                                            id: 'exp',
-                                            type: 'experience',
-                                            title: 'Experience',
-                                            items: (parsed.experience || []).map((exp: any) => ({
-                                                id: uuidv4(),
-                                                title: exp.title,
-                                                subtitle: exp.company,
-                                                location: exp.location,
-                                                dates: `${exp.start_date} - ${exp.end_date}`,
-                                                bullets: (exp.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                            }))
+                                    if (missingFields.length > 0) {
+                                        const errorMsg = `CRITICAL: Frontend received incomplete data. Missing: ${missingFields.join(', ')}`;
+                                        console.error('[FRONTEND]', errorMsg);
+                                        throw new Error(errorMsg);
+                                    }
+
+                                    console.log('[FRONTEND] All required fields validated ✓');
+
+                                    const parsed = finalResumeJson;
+
+                                    const initialResume: TailoredResumeData = {
+                                        id: uuidv4(),
+                                        contact: {
+                                            name: parsed.basics?.name || parsed.basics?.full_name || '',
+                                            email: parsed.basics?.email || '',
+                                            phone: parsed.basics?.phone || '',
+                                            linkedin: parsed.basics?.linkedin || '',
+                                            location: parsed.basics?.location || '',
+                                            github: parsed.basics?.portfolio ? [parsed.basics.portfolio] : [],
                                         },
-                                        {
-                                            id: 'edu',
-                                            type: 'education',
-                                            title: 'Education',
-                                            items: (parsed.education || []).map((edu: any) => ({
-                                                id: uuidv4(),
-                                                title: edu.degree,
-                                                subtitle: edu.institution,
-                                                dates: `${edu.start_date} - ${edu.end_date}`,
-                                                bullets: []
-                                            }))
+                                        summary: parsed.summary || '',
+                                        sections: [
+                                            {
+                                                id: 'exp',
+                                                type: 'experience',
+                                                title: 'Experience',
+                                                items: (parsed.experience || []).map((exp: any) => ({
+                                                    id: uuidv4(),
+                                                    title: exp.title,
+                                                    subtitle: exp.company,
+                                                    location: exp.location,
+                                                    dates: `${exp.start_date || ''} - ${exp.end_date || ''}`,
+                                                    bullets: (exp.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                                                }))
+                                            },
+                                            {
+                                                id: 'edu',
+                                                type: 'education',
+                                                title: 'Education',
+                                                items: (parsed.education || []).map((edu: any) => ({
+                                                    id: uuidv4(),
+                                                    title: edu.degree,
+                                                    subtitle: edu.institution,
+                                                    dates: `${edu.start_date || ''} - ${edu.end_date || ''}`,
+                                                    bullets: []
+                                                }))
+                                            },
+                                            {
+                                                id: 'proj',
+                                                type: 'projects',
+                                                title: 'Projects',
+                                                items: (parsed.projects || []).map((proj: any) => ({
+                                                    id: uuidv4(),
+                                                    title: proj.name || proj.title || '',
+                                                    bullets: (proj.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                                                }))
+                                            },
+                                            {
+                                                id: 'comm',
+                                                type: 'community',
+                                                title: 'Community',
+                                                items: (parsed.community || []).map((comm: any) => ({
+                                                    id: uuidv4(),
+                                                    title: comm.role || comm.organization || '',
+                                                    subtitle: comm.organization || '',
+                                                    bullets: comm.description ? [{ id: uuidv4(), text: comm.description }] : []
+                                                }))
+                                            },
+                                        ],
+                                        skills: {
+                                            'Technical': parsed.skills?.technical || [],
+                                            'Tools': parsed.skills?.tools || [],
+                                            'Soft Skills': parsed.skills?.soft || [],
                                         },
-                                        {
-                                            id: 'proj',
-                                            type: 'projects',
-                                            title: 'Projects',
-                                            items: (parsed.projects || []).map((proj: any) => ({
-                                                id: uuidv4(),
-                                                title: proj.name || proj.title || '',
-                                                bullets: (proj.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                            }))
+                                        design: DEFAULT_RESUME_DESIGN,
+                                        createdAt: new Date().toISOString(),
+                                        updatedAt: new Date().toISOString(),
+                                        jobId: jobId,
+                                        jobTitle: jobTitle
+                                    };
+
+                                    console.log('[FRONTEND] Mapped resume - name:', initialResume.contact.name);
+                                    console.log('[FRONTEND] Mapped resume - experience items:', initialResume.sections[0].items.length);
+
+                                    setResume(initialResume);
+                                    setKeywords({ matched: [], missing: [] });
+                                    setHasGenerated(true);
+                                    setActiveTab('content');
+                                    parsingProgress.complete();
+                                } else if (data.final_resume_json) {
+                                    // Legacy format without status field - handle same as above
+                                    console.log('[FRONTEND] Received legacy done format, using data.final_resume_json');
+                                    const finalResumeJson = data.final_resume_json;
+
+                                    if (!finalResumeJson || Object.keys(finalResumeJson).length === 0) {
+                                        throw new Error('final_resume_json is empty');
+                                    }
+
+                                    const parsed = finalResumeJson;
+
+                                    const initialResume: TailoredResumeData = {
+                                        id: uuidv4(),
+                                        contact: {
+                                            name: parsed.basics?.name || parsed.basics?.full_name || '',
+                                            email: parsed.basics?.email || '',
+                                            phone: parsed.basics?.phone || '',
+                                            linkedin: parsed.basics?.linkedin || '',
+                                            location: parsed.basics?.location || '',
+                                            github: parsed.basics?.portfolio ? [parsed.basics.portfolio] : [],
                                         },
-                                    ],
-                                    skills: {
-                                        'Technical': parsed.skills?.technical || [],
-                                        'Tools': parsed.skills?.tools || [],
-                                        'Soft Skills': parsed.skills?.soft || [],
-                                    },
-                                    design: DEFAULT_RESUME_DESIGN,
-                                    createdAt: new Date().toISOString(),
-                                    updatedAt: new Date().toISOString(),
-                                    jobId: jobId,
-                                    jobTitle: jobTitle
-                                };
+                                        summary: parsed.summary || '',
+                                        sections: [
+                                            {
+                                                id: 'exp',
+                                                type: 'experience',
+                                                title: 'Experience',
+                                                items: (parsed.experience || []).map((exp: any) => ({
+                                                    id: uuidv4(),
+                                                    title: exp.title,
+                                                    subtitle: exp.company,
+                                                    location: exp.location,
+                                                    dates: `${exp.start_date || ''} - ${exp.end_date || ''}`,
+                                                    bullets: (exp.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                                                }))
+                                            },
+                                            {
+                                                id: 'edu',
+                                                type: 'education',
+                                                title: 'Education',
+                                                items: (parsed.education || []).map((edu: any) => ({
+                                                    id: uuidv4(),
+                                                    title: edu.degree,
+                                                    subtitle: edu.institution,
+                                                    dates: `${edu.start_date || ''} - ${edu.end_date || ''}`,
+                                                    bullets: []
+                                                }))
+                                            },
+                                            {
+                                                id: 'proj',
+                                                type: 'projects',
+                                                title: 'Projects',
+                                                items: (parsed.projects || []).map((proj: any) => ({
+                                                    id: uuidv4(),
+                                                    title: proj.name || proj.title || '',
+                                                    bullets: (proj.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                                                }))
+                                            },
+                                            {
+                                                id: 'comm',
+                                                type: 'community',
+                                                title: 'Community',
+                                                items: (parsed.community || []).map((comm: any) => ({
+                                                    id: uuidv4(),
+                                                    title: comm.role || comm.organization || '',
+                                                    subtitle: comm.organization || '',
+                                                    bullets: comm.description ? [{ id: uuidv4(), text: comm.description }] : []
+                                                }))
+                                            },
+                                        ],
+                                        skills: {
+                                            'Technical': parsed.skills?.technical || [],
+                                            'Tools': parsed.skills?.tools || [],
+                                            'Soft Skills': parsed.skills?.soft || [],
+                                        },
+                                        design: DEFAULT_RESUME_DESIGN,
+                                        createdAt: new Date().toISOString(),
+                                        updatedAt: new Date().toISOString(),
+                                        jobId: jobId,
+                                        jobTitle: jobTitle
+                                    };
 
-                                console.log('[FRONTEND] Mapped resume - name:', initialResume.contact.name);
-                                console.log('[FRONTEND] Mapped resume - summary length:', (initialResume.summary || '').length);
-                                console.log('[FRONTEND] Mapped resume - experience items:', initialResume.sections[0].items.length);
-                                console.log('[FRONTEND] Mapped resume - education items:', initialResume.sections[1].items.length);
-                                console.log('[FRONTEND] Mapped resume - skills:', JSON.stringify(initialResume.skills));
+                                    setResume(initialResume);
+                                    setKeywords({ matched: [], missing: [] });
+                                    setHasGenerated(true);
+                                    setActiveTab('content');
+                                    parsingProgress.complete();
+                                } else {
+                                    // Missing final_resume_json - try to fetch from compose_response_path
+                                    console.error('[FRONTEND] CRITICAL: No final_resume_json in done event!');
+                                    console.log('[FRONTEND] Available data keys:', Object.keys(data));
+                                    console.log('[FRONTEND] compose_response_path:', data.compose_response_path);
 
-                                setResume(initialResume);
-                                setKeywords({ matched: [], missing: [] });
-                                setHasGenerated(true);
-                                parsingProgress.complete();
+                                    if (data.compose_response_path) {
+                                        try {
+                                            const debugResponse = await fetch(`/api/debug-compose-response?path=${encodeURIComponent(data.compose_response_path)}`);
+                                            if (debugResponse.ok) {
+                                                const debugJson = await debugResponse.json();
+                                                console.log('[FRONTEND] Fetched debug data from server:', Object.keys(debugJson));
+                                                setDebugData(debugJson);
+                                                setShowDebugPanel(true);
+                                                setError('Received empty final_resume_json. Debug data loaded below.');
+                                            }
+                                        } catch (fetchErr) {
+                                            console.error('[FRONTEND] Failed to fetch debug data:', fetchErr);
+                                            throw new Error('CRITICAL: No final resume JSON returned from orchestrator. Failed to load debug data.');
+                                        }
+                                    } else {
+                                        throw new Error('CRITICAL: No final resume JSON returned from orchestrator and no debug path available.');
+                                    }
+                                }
                             } else if (eventType === 'error') {
-                                throw new Error(data.message);
+                                console.error('[FRONTEND] Received error event:', data);
+                                throw new Error(data.message || 'Stream error');
                             }
                         } catch (e) {
-                            console.error('Failed to parse SSE data:', e);
+                            console.error('[FRONTEND] Failed to parse SSE data:', e);
                         }
                     }
                 }
             }
         } catch (err: any) {
             if (err.name === 'AbortError') {
-                console.log('Request cancelled');
+                console.log('[FRONTEND] Request cancelled');
             } else {
-                console.error('Initialization error:', err);
+                console.error('[FRONTEND] Initialization error:', err);
                 setError(err.message || 'Failed to parse resume from PDF.');
             }
         } finally {
@@ -282,12 +406,12 @@ export function TailoredResumeEditor({
 
     const getDownloadFilename = () => {
         if (!resume?.contact?.name) return 'Resume.pdf';
-        
+
         const nameParts = resume.contact.name.split(' ');
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join('_') || '';
         const companyName = (company || '').replace(/[^a-zA-Z0-9]/g, '');
-        
+
         const filename = `${firstName}_${lastName}_${companyName}_resume.pdf`.toLowerCase();
         return filename.replace(/__/g, '_').replace(/^_|_$/g, '') || 'Resume.pdf';
     };
@@ -538,18 +662,29 @@ export function TailoredResumeEditor({
                 style={containerStyle}
             >
                 {/* Header */}
-                <div style={headerStyle}>
-                    <div style={isSetupMode ? { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } : undefined}>
-                        <div>
-                            <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                Resume Parser (Strict JSON)
-                            </h2>
-                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                Parse your default resume into a strict standardized JSON layout.
-                            </p>
+                {!isGenerating && (
+                    <div style={headerStyle}>
+                        <div style={isSetupMode ? { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } : undefined}>
+                            <div>
+                                <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    Resume Parser (Strict JSON)
+                                </h2>
+                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                    Parse your default resume into a strict standardized JSON layout.
+                                </p>
+                            </div>
+                            {isSetupMode && (
+                                <button onClick={onClose} className="btn btn-ghost btn-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                </button>
+                            )}
                         </div>
-                        {isSetupMode && (
-                            <button onClick={onClose} className="btn btn-ghost btn-icon" disabled={isGenerating}>
+
+                        {!isSetupMode && (
+                            <button onClick={onClose} className="btn btn-ghost btn-icon">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <line x1="18" y1="6" x2="6" y2="18" />
                                     <line x1="6" y1="6" x2="18" y2="18" />
@@ -557,49 +692,55 @@ export function TailoredResumeEditor({
                             </button>
                         )}
                     </div>
-
-                    {!isSetupMode && (
-                        <button onClick={onClose} className="btn btn-ghost btn-icon" disabled={isGenerating}>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
-                    )}
-                </div>
+                )}
 
                 {/* Main Content */}
                 <div style={{ flex: 1, display: 'flex', overflow: 'hidden', flexDirection: 'column' }}>
                     {isSetupMode ? (
                         // Initial Setup View - Match CoverLetterSetupModal content structure
-                        <div style={{ flex: 1, overflowY: 'auto' }}>
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                                    Job Description <span style={{ color: 'var(--error)' }}>*</span>
-                                </label>
-                                <textarea
-                                    value={jobDescription}
-                                    onChange={(e) => setJobDescription(e.target.value)}
-                                    placeholder="Paste the full job description here..."
-                                    style={{
-                                        width: '100%',
-                                        minHeight: '200px',
-                                        padding: '12px',
-                                        fontSize: '14px',
-                                        borderRadius: 'var(--radius-md)',
-                                        border: '1px solid var(--border)',
-                                        resize: 'vertical',
-                                        background: 'var(--background)',
-                                        color: 'var(--text-primary)'
-                                    }}
-                                    disabled={isGenerating}
+                        <div style={{
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflowY: isGenerating ? 'hidden' : 'auto',
+                            justifyContent: isGenerating ? 'center' : 'flex-start',
+                            padding: isGenerating ? '40px' : '0'
+                        }}>
+                            {!isGenerating ? (
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                                        Job Description <span style={{ color: 'var(--error)' }}>*</span>
+                                    </label>
+                                    <textarea
+                                        value={jobDescription}
+                                        onChange={(e) => setJobDescription(e.target.value)}
+                                        placeholder="Paste the full job description here..."
+                                        style={{
+                                            width: '100%',
+                                            minHeight: '200px',
+                                            padding: '12px',
+                                            fontSize: '14px',
+                                            borderRadius: 'var(--radius-md)',
+                                            border: '1px solid var(--border)',
+                                            resize: 'vertical',
+                                            background: 'var(--background)',
+                                            color: 'var(--text-primary)'
+                                        }}
+                                        disabled={isGenerating}
+                                    />
+                                    {error && (
+                                        <p style={{ color: 'var(--error)', fontSize: '13px', marginTop: '8px' }}>
+                                            ⚠️ {error}
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <ParsingProgress
+                                    stages={parsingProgress.stages}
+                                    currentStageIndex={parsingProgress.currentStageIndex}
+                                    onCancel={handleCancelParsing}
                                 />
-                                {error && (
-                                    <p style={{ color: 'var(--error)', fontSize: '13px', marginTop: '8px' }}>
-                                        ⚠️ {error}
-                                    </p>
-                                )}
-                            </div>
+                            )}
                         </div>
                     ) : resume ? (
                         // Two-Panel Editor View
@@ -760,62 +901,73 @@ export function TailoredResumeEditor({
                 {/* Footer Actions */}
                 {isSetupMode ? (
                     <div style={{
-                        paddingTop: '16px',
-                        borderTop: '1px solid var(--border)',
+                        paddingTop: isGenerating ? '0' : '16px',
+                        borderTop: isGenerating ? 'none' : '1px solid var(--border)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '16px'
+                        gap: '16px',
+                        overflow: isGenerating ? 'hidden' : 'auto' // Hide scrollbar part 1
                     }}>
+                        {/* Hide scrollbar part 2 */}
+                        <style>{`
+                            .modal-content::-webkit-scrollbar { display: none; }
+                            .modal-content { -ms-overflow-style: none; scrollbar-width: none; }
+                        `}</style>
+
                         {isGenerating && (
-                            <ParsingProgress 
-                                stages={parsingProgress.stages} 
-                                currentStageIndex={parsingProgress.currentStageIndex}
-                                onCancel={handleCancelParsing}
-                            />
-                        )}
-
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            {jobUrl ? (
-                                <a
-                                    href={jobUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                paddingTop: '16px',
+                                marginTop: 'auto'
+                            }}>
+                                <button
+                                    onClick={handleCancelParsing}
                                     className="btn btn-ghost"
-                                    style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    style={{ fontSize: '13px' }}
                                 >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                                        <polyline points="15 3 21 3 21 9" />
-                                        <line x1="10" y1="14" x2="21" y2="3" />
-                                    </svg>
-                                    View Original Job
-                                </a>
-                            ) : <div></div>}
-
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                                <button onClick={onClose} className="btn btn-ghost">
                                     Cancel
                                 </button>
-                                <button
-                                    onClick={handleGenerate}
-                                    disabled={isGenerating || !jobDescription.trim()}
-                                    className="btn btn-primary"
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block' }} />
-                                            Parsing (Takes ~30s)...
-                                        </>
-                                    ) : (
-                                        'Parse & Edit Resume'
-                                    )}
-                                </button>
                             </div>
-                        </div>
+                        )}
+
+                        {!isGenerating && (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                {jobUrl ? (
+                                    <a
+                                        href={jobUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-ghost"
+                                        style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                                            <polyline points="15 3 21 3 21 9" />
+                                            <line x1="10" y1="14" x2="21" y2="3" />
+                                        </svg>
+                                        View Original Job
+                                    </a>
+                                ) : <div></div>}
+
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                    <button onClick={onClose} className="btn btn-ghost">
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleGenerate}
+                                        disabled={isGenerating || !jobDescription.trim()}
+                                        className="btn btn-primary"
+                                    >
+                                        Parse & Edit Resume
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     hasGenerated && resume && (
@@ -861,7 +1013,7 @@ export function TailoredResumeEditor({
 
             {/* Download Confirmation Modal */}
             {showDownloadModal && (
-                <div 
+                <div
                     style={{
                         position: 'fixed',
                         top: 0,
@@ -876,7 +1028,7 @@ export function TailoredResumeEditor({
                     }}
                     onClick={() => setShowDownloadModal(false)}
                 >
-                    <div 
+                    <div
                         style={{
                             background: 'var(--surface)',
                             borderRadius: '12px',
@@ -893,17 +1045,78 @@ export function TailoredResumeEditor({
                             Would you like to save your resume to Documents before downloading? This helps keep your files organized.
                         </p>
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                            <button 
+                            <button
                                 onClick={handleDownloadWithoutSaving}
                                 className="btn btn-ghost"
                             >
                                 Download Only
                             </button>
-                            <button 
+                            <button
                                 onClick={handleDownloadAfterSave}
                                 className="btn btn-primary"
                             >
                                 Save & Download
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Debug Panel */}
+            {showDebugPanel && debugData && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0, 0, 0, 0.9)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 3000,
+                    }}
+                    onClick={() => setShowDebugPanel(false)}
+                >
+                    <div
+                        style={{
+                            background: 'var(--surface)',
+                            borderRadius: '12px',
+                            padding: '24px',
+                            maxWidth: '90%',
+                            maxHeight: '90%',
+                            width: '800px',
+                            overflow: 'auto',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 600, color: 'var(--error)' }}>
+                            ⚠️ Debug Data Loaded
+                        </h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '14px' }}>
+                            The done event was received but final_resume_json was empty. This debug data was loaded from the server.
+                        </p>
+                        <pre style={{ 
+                            background: 'var(--background-secondary)', 
+                            padding: '16px', 
+                            borderRadius: '8px', 
+                            overflow: 'auto',
+                            fontSize: '12px',
+                            maxHeight: '400px',
+                            textWrap: 'wrap'
+                        }}>
+                            {JSON.stringify(debugData, null, 2)}
+                        </pre>
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                            <button
+                                onClick={() => {
+                                    setShowDebugPanel(false);
+                                    onClose();
+                                }}
+                                className="btn btn-ghost"
+                            >
+                                Close & Go Back
                             </button>
                         </div>
                     </div>

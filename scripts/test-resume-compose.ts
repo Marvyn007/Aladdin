@@ -163,11 +163,13 @@ async function run() {
         const tc = testCases[i];
 
         const input: ComposeResumeInput = {
-            candidate_profile: tc.cand as any,
-            rewritten_bullets_json: tc.bulls,
-            jd_top_10_keywords: tc.jdKws,
-            years_experience: tc.yoe,
-            jd_raw_text: tc.jdRaw
+            candidate_json: tc.cand as any,
+            job_json: { raw_text: tc.jdRaw, top_10_keywords: tc.jdKws },
+            bullets: Object.values(tc.bulls).flat().map((b: string) => ({ original: b, rewritten: b, fallback_used: false })),
+            meta: {
+                years_experience: tc.yoe,
+                jd_top_10_keywords: tc.jdKws
+            }
         };
 
         const result = await composeResumeStrictPipeline(input);
@@ -175,14 +177,10 @@ async function run() {
         if (!printedOne) {
             console.log("================= FULL COMPOSER RESULT (Comb 1) =================");
             console.log("--- CANDIDATE PROFILE JSON INPUT ---");
-            console.log(JSON.stringify(input.candidate_profile, null, 2));
-            console.log("\n--- REWRITTEN RESUME MARKDOWN ---");
-            console.log(result.output?.rewritten_resume_markdown);
+            console.log(JSON.stringify(input.candidate_json, null, 2));
+            console.log("\n--- COMPOSED OUTPUT (JSON) ---");
+            console.log(JSON.stringify(result.output, null, 2));
             console.log("\n--- METADATA ---");
-            console.log("Sections Order:", result.output?.sections_order);
-            console.log("Keywords Used in Summary:", result.output?.summary_used_keywords);
-            console.log("Prioritized Skills:", result.output?.skills_prioritized);
-            console.log("Word Estimate:", result.output?.length_estimate_words);
             console.log("Years Experience Computed To Limit:", tc.yoe);
 
             console.log("\n--- STRICT TEST RESULTS ---");

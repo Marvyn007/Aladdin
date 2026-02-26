@@ -88,13 +88,27 @@ OPENROUTER_API_KEY=your_key        # Primary (Gemini Flash 1.5)
 GEMINI_KEY_A=your_gemini_key       # Backup (optional)
 GEMINI_KEY_B=your_gemini_key_2     # Backup 2 (optional)
 
+# New LLM Settings
+LLM_PROVIDER="openrouter"          # or "openai"
+LLM_API_KEY=your_llm_api_key
+FALLBACK_LLM_API_KEY=your_fallback_llm_api_key
+
 # Ollama (local AI fallback - optional)
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=phi3:mini
 
+# Reactive Resume Intergration
+REACTIVE_RESUME_HOST=your_host
+REACTIVE_RESUME_API_KEY=your_key
+
+# OCR Settings
+PADDLE_OCR_API_KEY=your_key        # (if using hosted service; optional)
+
 # Rate Limits (optional)
 OPENROUTER_MAX_CALLS_PER_DAY=50
 ```
+
+**Note**: You should paste these keys into your `.env.local` file at the root of the project.
 
 ### Database Setup
 

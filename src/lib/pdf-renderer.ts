@@ -10,6 +10,7 @@ import puppeteer from 'puppeteer';
 /**
  * Generate a PDF buffer from a TailoredResumeData object.
  * Uses Puppeteer to render the resume HTML into a letter-sized PDF.
+ * Supports multi-page output - content can flow to additional pages naturally.
  */
 export async function generatePdfBuffer(resume: TailoredResumeData): Promise<Buffer> {
     const html = renderResumeHtml(resume);
@@ -29,11 +30,13 @@ export async function generatePdfBuffer(resume: TailoredResumeData): Promise<Buf
         const pdfBuffer = await page.pdf({
             format: 'Letter',
             printBackground: true,
+            preferCSSPageSize: false,
+            pageRanges: '',
             margin: {
-                top: '0in',
-                right: '0in',
-                bottom: '0in',
-                left: '0in',
+                top: '0.5in',
+                right: '0.5in',
+                bottom: '0.5in',
+                left: '0.5in',
             },
         });
 

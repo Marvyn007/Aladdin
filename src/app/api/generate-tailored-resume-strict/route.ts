@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getDefaultResume } from '@/lib/db';
-import { getS3Client } from '@/lib/s3';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { parseResumeFromPdfStrict } from '@/lib/gemini-strict';
 import { parseJdStrictPipeline } from '@/lib/gemini-jd-strict';
 import { parseLiStrictPipeline } from '@/lib/gemini-li-strict';
 import { mergeProfilesStrict } from '@/lib/gemini-merge-strict';
 import { orchestrateResumePipeline, OrchestrationInput } from '@/lib/resume-orchestrator-strict';
+import { randomUUID } from 'crypto';
 
 // Helper to determine years of experience roughly
 function getYearsOfExp(resumeJson: any): number {
@@ -123,6 +122,7 @@ export async function POST(req: Request) {
         console.log(`[Stage 4.2 -> Stage 6] Firing LLM Orchestrator Pipeline...`);
         const orchestrateInput: OrchestrationInput = {
             userId,
+            reqId: randomUUID(),
             candidate_profile: mergedProfile,
             jd_json: jdJson,
             years_experience: yearsExp,

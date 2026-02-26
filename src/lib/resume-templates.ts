@@ -7,15 +7,27 @@ import type { TailoredResumeData, ResumeSection, ResumeSectionItem } from '@/typ
 
 // Template CSS for Classic style - BLACK & WHITE ONLY
 export const CLASSIC_TEMPLATE_CSS = `
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: auto;
+}
+
 .resume-classic {
   font-family: var(--resume-font-family, 'Times New Roman', Georgia, serif);
   font-size: var(--resume-font-size, 11pt);
   color: #000;
-  max-width: 8.5in;
+  width: 8.5in;
   margin: 0 auto;
   padding: var(--resume-margin-top, 0.5in) var(--resume-margin-right, 0.5in) var(--resume-margin-bottom, 0.5in) var(--resume-margin-left, 0.5in);
   background: #fff;
   line-height: 1.3;
+  box-sizing: border-box;
+}
+
+.resume-classic section {
+  page-break-inside: avoid;
+  page-break-after: auto;
 }
 
 .resume-classic header {
@@ -145,15 +157,27 @@ export const CLASSIC_TEMPLATE_CSS = `
 
 // Template CSS for Modern style
 export const MODERN_TEMPLATE_CSS = `
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: auto;
+}
+
 .resume-modern {
   font-family: var(--resume-font-family, 'Inter', 'Segoe UI', sans-serif);
   font-size: var(--resume-font-size, 11px);
   color: #1f2937;
-  max-width: 8.5in;
+  width: 8.5in;
   margin: 0 auto;
   padding: var(--resume-margin-top, 0.5in) var(--resume-margin-right, 0.5in) var(--resume-margin-bottom, 0.5in) var(--resume-margin-left, 0.5in);
   background: #fff;
   line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.resume-modern section {
+  page-break-inside: avoid;
+  page-break-after: auto;
 }
 
 .resume-modern header {

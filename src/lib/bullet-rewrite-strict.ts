@@ -1,6 +1,8 @@
 import { routeAICall, routeAICallWithDetails, AIGenerateResult } from './ai-router';
 // Using Gemini direct fetch for embeddings since AI router doesn't abstract it
 import { config } from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 config({ path: '.env.local' });
 
 export interface RewriteBulletInput {
@@ -8,6 +10,8 @@ export interface RewriteBulletInput {
     top_10_keywords_array: string[];
     concatenated_candidate_text: string;
     jd_raw_text: string;
+    reqId?: string;
+    bulletIndex?: number;
 }
 
 export interface RewriteBulletOutput {
@@ -15,6 +19,12 @@ export interface RewriteBulletOutput {
     rewritten: string;
     keywords_used: string[];
     needs_user_metric: boolean;
+}
+
+export interface RewriteBulletResult {
+    rewritten: string;
+    needs_user_metric: boolean;
+    fallback_used: boolean;
 }
 
 export interface StrictRewriteResult {
@@ -45,7 +55,7 @@ const ACTION_VERBS = [
     "troubleshot", "updated", "upgraded", "utilized", "validated", "wrote"
 ];
 
-const SYSTEM_PROMPT = "You are a strict ATS optimization assistant.\nRewrite a single resume bullet while preserving all factual content.\nYou are forbidden from inventing numbers, tools, dates, responsibilities, or achievements.\nYou may only use words found in:\n- the original bullet\n- the candidate profile\n- the job description\n- the approved action verb list\nIf original bullet contains no number, append \"[add metric]\" at the end.\nMaximum 28 words.\nReturn ONLY JSON in required schema.";
+const SYSTEM_PROMPT = "You are a strict ATS optimization assistant in BUILD mode.\nRewrite a single resume bullet while preserving all factual content.\nYou are forbidden from inventing numbers, tools, dates, responsibilities, or achievements.\nYou may only use words found in:\n- the original bullet\n- the candidate profile\n- the job description\n- the approved action verb list\nIf original bullet contains no number, append \"[add metric]\" at the end.\nMaximum 28 words.\nCRITICAL: Use deterministic output. Do not add randomness.\nReturn ONLY JSON in required schema.";
 
 function getWordTokens(text: string): string[] {
     if (!text) return [];
@@ -212,10 +222,22 @@ export async function rewriteBulletStrictPipeline(
     let aiResult: AIGenerateResult | null = null;
     let aiResultStr = "";
     try {
-        aiResult = await routeAICallWithDetails(fullPrompt);
+        aiResult = await routeAICallWithDetails(fullPrompt, 0.2);
         aiResultStr = aiResult.text;
     } catch (e: any) {
         return { success: false, failedTests: ["AI Call failed: " + e.message] };
+    }
+
+    try {
+        strictJsonParse<{rewritten: string, keywords_used: string[], needs_user_metric: boolean}>(
+            aiResultStr,
+            input.reqId,
+            'bullet_strict_1',
+            ['rewritten', 'keywords_used', 'needs_user_metric']
+        );
+    } catch (e: any) {
+        saveRawOutput(input.reqId, 'bullet_strict_1', aiResultStr);
+        return { success: false, failedTests: ["JSON Parse Error (Strict): " + e.message] };
     }
 
     // Try Validation 1
@@ -233,13 +255,31 @@ export async function rewriteBulletStrictPipeline(
     let aiResult2: AIGenerateResult | null = null;
     let aiResultStr2 = "";
     try {
-        aiResult2 = await routeAICallWithDetails(fullPrompt + "\n\nPREVIOUS FAILURE REASONS:\n" + val1.failedTests.join("\n") + "\nDO NOT REPEAT THESE MISTAKES.");
+        aiResult2 = await routeAICallWithDetails(fullPrompt + "\n\nPREVIOUS FAILURE REASONS:\n" + val1.failedTests.join("\n") + "\nDO NOT REPEAT THESE MISTAKES.", 0.2);
         aiResultStr2 = aiResult2.text;
     } catch (e: any) {
         return { 
             success: false, 
             failedTests: val1.failedTests.concat(["Retry AI Call failed: " + e.message]),
             raw_response: aiResultStr,
+            provider: aiResult?.provider,
+            model: aiResult?.model
+        };
+    }
+
+    try {
+        strictJsonParse<{rewritten: string, keywords_used: string[], needs_user_metric: boolean}>(
+            aiResultStr2,
+            input.reqId,
+            'bullet_strict_2',
+            ['rewritten', 'keywords_used', 'needs_user_metric']
+        );
+    } catch (e: any) {
+        saveRawOutput(input.reqId, 'bullet_strict_2', aiResultStr2);
+        return { 
+            success: false, 
+            failedTests: val1.failedTests.concat(["JSON Parse Error (Strict Retry): " + e.message]),
+            raw_response: aiResultStr2,
             provider: aiResult?.provider,
             model: aiResult?.model
         };
@@ -262,5 +302,190 @@ export async function rewriteBulletStrictPipeline(
         raw_response: aiResultStr2 || aiResultStr,
         provider: aiResult2?.provider || aiResult?.provider,
         model: aiResult2?.model || aiResult?.model
+    };
+}
+
+async function persistBulletAttempt(
+    reqId: string | undefined,
+    bulletIndex: number | undefined,
+    attempt: 'embedding' | 'llm',
+    data: any,
+    error?: string
+): Promise<void> {
+    if (!reqId || bulletIndex === undefined) return;
+
+    const dir = `/tmp/resume_tasks/${reqId}`;
+    const filePath = path.join(dir, `bullet_${bulletIndex}.json`);
+
+    try {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        const existing = fs.existsSync(filePath) 
+            ? JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+            : { metadata: {} };
+
+        const payload = {
+            ...existing,
+            [attempt]: data,
+            metadata: {
+                ...existing.metadata,
+                last_attempt: attempt,
+                [attempt + '_error']: error || null,
+                [attempt + '_timestamp']: new Date().toISOString()
+            }
+        };
+
+        fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
+        console.log(`[PERSIST] Saved ${attempt} attempt to ${filePath}`);
+    } catch (e: any) {
+        console.error(`[PERSIST ERROR] Failed to write ${filePath}: ${e.message}`);
+    }
+}
+
+async function attemptEmbeddingRewrite(input: RewriteBulletInput): Promise<{success: boolean, rewritten?: string, needs_user_metric?: boolean, error?: string}> {
+    const key = process.env.GEMINI_API_KEY_A || process.env.GEMINI_API_KEY_B;
+    if (!key) {
+        return { success: false, error: 'No Gemini API Key configured' };
+    }
+
+    try {
+        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=" + key, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'models/text-embedding-004',
+                content: { parts: [{ text: input.original_bullet }] }
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            if (response.status === 404) {
+                return { success: false, error: '404 - Embedding model not found' };
+            }
+            return { success: false, error: `Embedding failed: ${errText}` };
+        }
+
+        const data = await response.json();
+        if (!data.embedding?.values) {
+            return { success: false, error: 'No embedding values returned' };
+        }
+
+        return { success: false, error: 'Embedding lookup not implemented - using LLM fallback' };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+function saveRawOutput(reqId: string | undefined, stage: string, rawOutput: string): void {
+    if (!reqId) return;
+    const dir = `/tmp/resume_tasks/${reqId}`;
+    const filePath = path.join(dir, `raw_${stage}.txt`);
+    try {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(filePath, rawOutput);
+        console.log(`[RAW OUTPUT] Saved to ${filePath}`);
+    } catch (e: any) {
+        console.error(`[RAW OUTPUT ERROR] Failed to save: ${e.message}`);
+    }
+}
+
+function strictJsonParse<T>(rawOutput: string, reqId: string | undefined, stage: string, schemaFields: string[]): T {
+    let cleanStr = rawOutput.trim();
+    const match = cleanStr.match(/`{3}(?:json)?\s*([\s\S]*?)\s*`{3}/);
+    if (match) cleanStr = match[1].trim();
+
+    try {
+        const parsed = JSON.parse(cleanStr);
+        
+        for (const field of schemaFields) {
+            if (!(field in parsed)) {
+                throw new Error(`Missing required field: ${field}`);
+            }
+        }
+        return parsed as T;
+    } catch (e: any) {
+        console.error(`[JSON PARSE ERROR] ${stage}: ${e.message}`);
+        saveRawOutput(reqId, stage, rawOutput);
+        throw new Error(`JSON parse failed for ${stage}: ${e.message}. Raw output saved to /tmp/resume_tasks/${reqId}/raw_${stage}.txt`);
+    }
+}
+
+async function callLLMFallback(input: RewriteBulletInput, reqId?: string): Promise<{rewritten: string, needs_user_metric: boolean}> {
+    const userPrompt = "Original bullet:\n\"" + input.original_bullet + "\"\n\nTop JD Keywords:\n" + JSON.stringify(input.top_10_keywords_array) + "\n\nApproved Action Verbs:\n" + JSON.stringify(ACTION_VERBS) + "\n\nCandidate Profile Text (for allowed vocabulary boundary):\n" + input.concatenated_candidate_text + "\n\nJob Description Raw Text:\n" + input.jd_raw_text;
+
+    const fullPrompt = SYSTEM_PROMPT + "\n\n" + userPrompt;
+
+    const aiResult = await routeAICallWithDetails(fullPrompt, 0.2);
+    
+    const parsed = strictJsonParse<{rewritten: string, needs_user_metric: boolean}>(
+        aiResult.text,
+        reqId,
+        'bullet_llm',
+        ['rewritten', 'needs_user_metric']
+    );
+
+    return {
+        rewritten: parsed.rewritten || input.original_bullet,
+        needs_user_metric: parsed.needs_user_metric === true
+    };
+}
+
+export async function rewriteBulletWithFallback(
+    input: RewriteBulletInput
+): Promise<RewriteBulletResult> {
+    const { reqId, bulletIndex, ...restInput } = input;
+    const useEmbedding = process.env.USE_EMBEDDING_REWRITE === 'true';
+
+    let embeddingResult: {success: boolean, rewritten?: string, needs_user_metric?: boolean, error?: string} = { success: false };
+    
+    if (useEmbedding) {
+        console.log('[BULLET REWRITE] Attempting embedding-based rewrite...');
+        embeddingResult = await attemptEmbeddingRewrite(restInput);
+        
+        await persistBulletAttempt(reqId, bulletIndex, 'embedding', {
+            attempted: true,
+            success: embeddingResult.success,
+            rewritten: embeddingResult.rewritten,
+            needs_user_metric: embeddingResult.needs_user_metric
+        }, embeddingResult.error);
+
+        if (embeddingResult.success && embeddingResult.rewritten) {
+            return {
+                rewritten: embeddingResult.rewritten,
+                needs_user_metric: embeddingResult.needs_user_metric || false,
+                fallback_used: false
+            };
+        }
+    }
+
+    console.log('[BULLET REWRITE] Calling LLM fallback...');
+    let llmResult: {rewritten: string, needs_user_metric: boolean};
+    let llmError: string | undefined;
+
+    try {
+        llmResult = await callLLMFallback(restInput, reqId);
+    } catch (e: any) {
+        llmError = e.message;
+        llmResult = {
+            rewritten: input.original_bullet,
+            needs_user_metric: !/\d/.test(input.original_bullet)
+        };
+    }
+
+    await persistBulletAttempt(reqId, bulletIndex, 'llm', {
+        success: !llmError,
+        rewritten: llmResult.rewritten,
+        needs_user_metric: llmResult.needs_user_metric
+    }, llmError);
+
+    return {
+        rewritten: llmResult.rewritten,
+        needs_user_metric: llmResult.needs_user_metric,
+        fallback_used: true
     };
 }

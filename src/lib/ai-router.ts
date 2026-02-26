@@ -141,7 +141,7 @@ async function syncOpenRouterState(): Promise<void> {
 // OPENROUTER CALLER
 // ============================================================================
 
-async function callOpenRouterModel(prompt: string, model: string, apiKey?: string): Promise<AIGenerateResult> {
+async function callOpenRouterModel(prompt: string, model: string, apiKey?: string, temperature?: number): Promise<AIGenerateResult> {
     const key = apiKey || process.env.OPENROUTER_API_KEY!;
     const start = Date.now();
 
@@ -150,6 +150,16 @@ async function callOpenRouterModel(prompt: string, model: string, apiKey?: strin
 
     const keyLabel = apiKey ? 'FALLBACK' : 'PRIMARY';
     console.log(`[AI Router] Trying OpenRouter (${model}) with ${keyLabel} key...`);
+
+    const requestBody: any = {
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 8192
+    };
+
+    if (temperature !== undefined) {
+        requestBody.temperature = temperature;
+    }
 
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -160,11 +170,7 @@ async function callOpenRouterModel(prompt: string, model: string, apiKey?: strin
                 'HTTP-Referer': 'https://usealaddin.com',
                 'X-Title': 'Aladdin'
             },
-            body: JSON.stringify({
-                model,
-                messages: [{ role: 'user', content: prompt }],
-                max_tokens: 8192
-            }),
+            body: JSON.stringify(requestBody),
             signal: controller.signal
         });
 
@@ -291,14 +297,15 @@ export async function routeAICall(prompt: string): Promise<string> {
 
 /**
  * Route AI call and return detailed result with provider info
+ * @param temperature - Set to 0.0-0.2 for deterministic output (recommended for bullet rewrite and compose)
  */
-export async function routeAICallWithDetails(prompt: string): Promise<AIGenerateResult> {
+export async function routeAICallWithDetails(prompt: string, temperature?: number): Promise<AIGenerateResult> {
     await initialize();
 
     // 1. Try OpenRouter with PRIMARY KEY
     if (isOpenRouterAvailable()) {
         // Try Gemini 2.0 Flash with primary key
-        const geminiResult = await callOpenRouterModel(prompt, OPENROUTER_PRIMARY_MODEL);
+        const geminiResult = await callOpenRouterModel(prompt, OPENROUTER_PRIMARY_MODEL, undefined, temperature);
 
         if (geminiResult.success) {
             await handleOpenRouterSuccess();
@@ -309,7 +316,7 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
 
         // Gemini failed - always try Claude Haiku with primary key
         console.log(`[AI Router] Gemini 2.0 Flash failed (${geminiResult.error}), trying Claude Haiku...`);
-        const haikuResult = await callOpenRouterModel(prompt, OPENROUTER_SECONDARY_MODEL);
+        const haikuResult = await callOpenRouterModel(prompt, OPENROUTER_SECONDARY_MODEL, undefined, temperature);
 
         if (haikuResult.success) {
             await handleOpenRouterSuccess();
@@ -328,7 +335,7 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
         console.log('[AI Router] Trying with FALLBACK API key...');
 
         // Try Gemini 2.0 Flash with fallback key
-        const geminiResult = await callOpenRouterModel(prompt, OPENROUTER_PRIMARY_MODEL, fallbackKey);
+        const geminiResult = await callOpenRouterModel(prompt, OPENROUTER_PRIMARY_MODEL, fallbackKey, temperature);
 
         if (geminiResult.success) {
             routerState.activeProvider = 'openrouter-fallback';
@@ -338,7 +345,14 @@ export async function routeAICallWithDetails(prompt: string): Promise<AIGenerate
 
         // Gemini failed - always try Claude Haiku with fallback key
         console.log(`[AI Router] Gemini 2.0 Flash failed with fallback key (${geminiResult.error}), trying Claude Haiku...`);
-        const haikuResult = await callOpenRouterModel(prompt, OPENROUTER_SECONDARY_MODEL, fallbackKey);
+        const haikuResult = await callOpenRouterModel(prompt, OPENROUTER_SECONDARY_MODEL, fallbackKey, temperature);
+
+        if (haikuResult.success) {
+            routerState.activeProvider = 'openrouter-fallback';
+            routerState.lastSuccessfulProvider = 'openrouter-fallback';
+            console.log(`[AI Router] ✓ Claude Haiku succeeded with fallback key!`);
+            return haikuResult;
+        }
 
         if (haikuResult.success) {
             routerState.activeProvider = 'openrouter-fallback';

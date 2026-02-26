@@ -5,6 +5,7 @@ import { computeAtsScoreStrict, AtsScoreResult } from './ats-score-strict';
 import { rewriteBulletStrictPipeline, RewriteBulletInput, RewriteBulletOutput } from './bullet-rewrite-strict';
 import { composeResumeStrictPipeline, ComposeResumeInput, ComposeResumeOutput } from './resume-compose-strict';
 import { runFinalIntegrityAudit, IntegrityAuditOutput } from './resume-integrity-strict';
+import { saveLLMOutput, saveRawFailedOutput, saveBulletJson } from './llm-output-persistence';
 
 const MemoryCache = new Map<string, any>();
 
@@ -96,6 +97,7 @@ export function validateAndMapStructuredData(
 
 export interface OrchestrationInput {
     userId: string;
+    reqId?: string;
     candidate_profile: CandidateProfile; // Merged from Stage 4.1
     jd_json: any;                        // Parsed JD from Stage 2
     years_experience: number;
@@ -147,6 +149,7 @@ export interface OrchestrationResult {
     error?: string;
     needs_user_confirmation?: boolean;
     final_markdown?: string;
+    final_resume_json?: ComposeResumeOutput;
     rescored_profile?: CandidateProfile;
     explanation?: TwoPassExplanation;
     integrity?: IntegrityAuditOutput;
@@ -156,6 +159,82 @@ export interface OrchestrationResult {
 
 function sha256(str: string): string {
     return createHash('sha256').update(str).digest('hex');
+}
+
+function jsonToMarkdown(output: ComposeResumeOutput): string {
+    let md = "";
+    const b = output.basics || {};
+    md += `# ${b.name || b.full_name || "Applicant"}\n`;
+    const contactInfo = [];
+    if (b.email) contactInfo.push(b.email);
+    if (b.phone) contactInfo.push(b.phone);
+    if (b.location) contactInfo.push(typeof b.location === 'string' ? b.location : Object.values(b.location).join(', '));
+    md += `${contactInfo.join(' | ')}\n\n`;
+
+    if (output.summary) {
+        md += `## Summary\n${output.summary}\n\n`;
+    }
+
+    if (output.skills) {
+        const allSkills = [
+            ...(output.skills.technical || []),
+            ...(output.skills.tools || []),
+            ...(output.skills.soft || [])
+        ];
+        if (allSkills.length > 0) {
+            md += `## Skills\n${allSkills.join(', ')}\n\n`;
+        }
+    }
+
+    if (output.experience && output.experience.length > 0) {
+        md += `## Experience\n`;
+        for (const exp of output.experience) {
+            md += `### ${exp.title} - ${exp.company}\n`;
+            md += `*${exp.start_date || ""} - ${exp.end_date || ""}* | ${exp.location || ""}\n\n`;
+            if (exp.bullets && Array.isArray(exp.bullets)) {
+                for (const bullet of exp.bullets) {
+                    md += `- ${bullet}\n`;
+                }
+            }
+            md += `\n`;
+        }
+    }
+
+    if (output.education && output.education.length > 0) {
+        md += `## Education\n`;
+        for (const edu of output.education) {
+            md += `### ${edu.institution}\n`;
+            md += `${edu.degree || ""} | *${edu.start_date || ""} - ${edu.end_date || ""}*\n`;
+            if (edu.relevant_coursework && edu.relevant_coursework.length > 0) {
+                md += `Relevant Coursework: ${edu.relevant_coursework.join(', ')}\n`;
+            }
+            md += `\n`;
+        }
+    }
+
+    if (output.projects && output.projects.length > 0) {
+        md += `## Projects\n`;
+        for (const proj of output.projects) {
+            md += `### ${proj.name}\n`;
+            if (proj.description) md += `${proj.description}\n`;
+            if (proj.technologies && proj.technologies.length > 0) {
+                md += `Technologies: ${proj.technologies.join(', ')}\n`;
+            }
+            md += `\n`;
+        }
+    }
+
+    if (output.community && output.community.length > 0) {
+        md += `## Community\n`;
+        for (const comm of output.community) {
+            md += `### ${comm.organization}\n`;
+            if (comm.role) md += `${comm.role}\n`;
+            if (comm.description) md += `${comm.description}\n`;
+            md += `\n`;
+        }
+    }
+
+    return md;
 }
 
 export async function explainScoreDelta(
@@ -300,19 +379,20 @@ export async function orchestrateResumePipeline(
     const jdHash = sha256(JSON.stringify(top10));
 
     console.log('[ORCHESTRATOR] === STAGE 2: BULLET REWRITING ===');
-    const rewritten_bullets_json: Record<string, string[]> = {};
+    const allBullets: {original: string, rewritten: string, fallback_used: boolean}[] = [];
     const experience_bullets_records: Record<string, BulletRewriteRecord[]> = {};
     let metricMissing = false;
 
+    let bulletIndex = 0;
     for (const exp of (input.candidate_profile.experience || [])) {
         const key = `${exp.company}_${exp.title}`;
-        rewritten_bullets_json[key] = [];
         experience_bullets_records[key] = [];
 
         console.log(`[ORCHESTRATOR] Processing experience: ${exp.title} at ${exp.company}`);
         console.log(`[ORCHESTRATOR] Original bullets count: ${exp.bullets?.length || 0}`);
 
         for (const b of (exp.bullets || [])) {
+            bulletIndex++;
             if (typeof b !== 'string') continue;
 
             const bHash = sha256(b + jdHash);
@@ -323,7 +403,7 @@ export async function orchestrateResumePipeline(
 
             if (cached) {
                 console.log(`[CACHE HIT] Bullet: ${bHash.substring(0, 8)}`);
-                rewritten_bullets_json[key].push(cached.rewritten);
+                allBullets.push({ original: b, rewritten: cached.rewritten, fallback_used: false });
                 experience_bullets_records[key].push({
                     original_bullet: b,
                     rewritten_bullet: cached.rewritten,
@@ -339,7 +419,9 @@ export async function orchestrateResumePipeline(
                     original_bullet: b,
                     top_10_keywords_array: top10,
                     concatenated_candidate_text: truncProfileText,
-                    jd_raw_text: (input.jd_json.raw_text || "").slice(0, 1500)
+                    jd_raw_text: (input.jd_json.raw_text || "").slice(0, 1500),
+                    reqId: input.reqId,
+                    bulletIndex
                 };
 
                 const startTime = Date.now();
@@ -347,12 +429,13 @@ export async function orchestrateResumePipeline(
                 const elapsed = Date.now() - startTime;
 
                 if (res.success && res.output) {
-                    rewritten_bullets_json[key].push(res.output.rewritten);
+                    const rewrittenBullet = res.output.rewritten;
+                    allBullets.push({ original: b, rewritten: rewrittenBullet, fallback_used: false });
                     MemoryCache.set(bHash, res.output);
                     
                     const record: BulletRewriteRecord = {
                         original_bullet: b,
-                        rewritten_bullet: res.output.rewritten,
+                        rewritten_bullet: rewrittenBullet,
                         keywords_used: res.output.keywords_used || [],
                         needs_user_metric: res.output.needs_user_metric || false,
                         raw_ai_response: {
@@ -368,14 +451,22 @@ export async function orchestrateResumePipeline(
                     experience_bullets_records[key].push(record);
                     
                     console.log(`[BULLET REWRITE] Original: "${b.substring(0, 40)}..."`);
-                    console.log(`[BULLET REWRITE] Rewritten: "${res.output.rewritten.substring(0, 40)}..."`);
+                    console.log(`[BULLET REWRITE] Rewritten: "${rewrittenBullet.substring(0, 40)}..."`);
                     console.log(`[BULLET REWRITE] Keywords used: ${JSON.stringify(res.output.keywords_used || [])}`);
+                    
+                    saveBulletJson(input.reqId, bulletIndex, {
+                        original: b,
+                        rewritten: rewrittenBullet,
+                        keywords_used: res.output.keywords_used,
+                        needs_user_metric: res.output.needs_user_metric,
+                        validation_passed: true
+                    });
                     
                     if (res.output.needs_user_metric) metricMissing = true;
                 } else {
                     console.error(`[BULLET REWRITE FAILED] Original: "${b.substring(0, 40)}..."`);
                     console.error(`[BULLET REWRITE ERROR] ${JSON.stringify(res.failedTests || [])}`);
-                    rewritten_bullets_json[key].push(b);
+                    allBullets.push({ original: b, rewritten: b, fallback_used: true });
                     experience_bullets_records[key].push({
                         original_bullet: b,
                         rewritten_bullet: b,
@@ -384,10 +475,23 @@ export async function orchestrateResumePipeline(
                         validation_passed: false,
                         validation_errors: res.failedTests || []
                     });
+                    
+                    if (res.raw_response) {
+                        saveRawFailedOutput(input.reqId, `bullet_${bulletIndex}`, res.raw_response, res.failedTests?.join('; '));
+                    }
+                    
+                    saveBulletJson(input.reqId, bulletIndex, {
+                        original: b,
+                        rewritten: b,
+                        keywords_used: [],
+                        needs_user_metric: !origHasNumber,
+                        validation_passed: false,
+                        validation_errors: res.failedTests
+                    });
                 }
             }
         }
-        console.log(`[ORCHESTRATOR] Finished processing: ${key}, bullets rewritten: ${rewritten_bullets_json[key].length}`);
+        console.log(`[ORCHESTRATOR] Finished processing: ${key}`);
     }
 
     console.log('[ORCHESTRATOR] === STAGE 3: RESUME COMPOSITION ===');
@@ -401,7 +505,7 @@ export async function orchestrateResumePipeline(
         delete compProfile.basics.url;
     }
 
-    const compHash = sha256(JSON.stringify(compProfile) + JSON.stringify(rewritten_bullets_json) + jdHash);
+    const compHash = sha256(JSON.stringify(compProfile) + JSON.stringify(allBullets) + jdHash);
     const compCached = MemoryCache.get(compHash);
 
     if (compCached) {
@@ -414,11 +518,14 @@ export async function orchestrateResumePipeline(
         console.log(`[ORCHESTRATOR] Experience entries: ${compProfile.experience?.length || 0}`);
         
         const compInput: ComposeResumeInput = {
-            candidate_profile: compProfile,
-            rewritten_bullets_json,
-            jd_top_10_keywords: top10,
-            years_experience: input.years_experience,
-            jd_raw_text: ""
+            candidate_json: compProfile,
+            job_json: input.jd_json,
+            bullets: allBullets,
+            meta: {
+                years_experience: input.years_experience,
+                jd_top_10_keywords: top10
+            },
+            reqId: input.reqId
         };
         
         const startTime = Date.now();
@@ -426,25 +533,46 @@ export async function orchestrateResumePipeline(
         const elapsed = Date.now() - startTime;
 
         if (composeRes.success && composeRes.output) {
-            finalMarkdown = composeRes.output.rewritten_resume_markdown;
             composeOutput = composeRes.output;
+            finalMarkdown = jsonToMarkdown(composeRes.output);
             MemoryCache.set(compHash, finalMarkdown);
             
             if (composeRes.raw_response) {
                 logRawAI(composeRes.provider || 'unknown', composeRes.model || 'unknown', composeRes.raw_response, elapsed);
             }
             
-            console.log(`[COMPOSE] Generated markdown length: ${finalMarkdown.length} chars`);
-            console.log(`[COMPOSE] Summary keywords: ${JSON.stringify(composeRes.output.summary_used_keywords || [])}`);
-            console.log(`[COMPOSE] Prioritized skills: ${JSON.stringify(composeRes.output.skills_prioritized || [])}`);
-            console.log(`[COMPOSE] Sections order: ${JSON.stringify(composeRes.output.sections_order || [])}`);
-            console.log(`[COMPOSE] Length estimate: ${composeRes.output.length_estimate_words || 'N/A'} words`);
-        } else if (composeRes.output?.rewritten_resume_markdown) {
-            finalMarkdown = composeRes.output.rewritten_resume_markdown;
+            console.log(`[COMPOSE] Generated JSON output`);
+            console.log(`[COMPOSE] Summary: "${composeRes.output.summary?.substring(0, 50) || ''}..."`);
+            console.log(`[COMPOSE] Experience count: ${composeRes.output.experience?.length || 0}`);
+            console.log(`[COMPOSE] Skills count: ${(composeRes.output.skills?.technical?.length || 0) + (composeRes.output.skills?.tools?.length || 0)}`);
+            
+            saveLLMOutput(input.reqId, 'compose', {
+                rawResponse: composeRes.raw_response,
+                parsedJson: composeRes.output,
+                success: true
+            });
+        } else if (composeRes.output) {
             composeOutput = composeRes.output;
+            finalMarkdown = jsonToMarkdown(composeRes.output);
             console.warn(`[COMPOSE] Fallback used - validation errors: ${JSON.stringify(composeRes.failedTests || [])}`);
+            
+            saveLLMOutput(input.reqId, 'compose', {
+                rawResponse: composeRes.raw_response,
+                parsedJson: composeRes.output,
+                success: false,
+                error: composeRes.failedTests?.join('; ')
+            });
+            
+            if (composeRes.raw_response) {
+                saveRawFailedOutput(input.reqId, 'compose', composeRes.raw_response, composeRes.failedTests?.join('; '));
+            }
         } else {
             console.error(`[COMPOSE] Completely failed: ${JSON.stringify(composeRes.failedTests || [])}`);
+            
+            if (composeRes.raw_response) {
+                saveRawFailedOutput(input.reqId, 'compose', composeRes.raw_response, composeRes.failedTests?.join('; '));
+            }
+            
             return { 
                 success: false, 
                 error: "Composer completely failed. No markdown layout generated.\n" + (composeRes.failedTests || []).join(', '),
@@ -489,10 +617,14 @@ export async function orchestrateResumePipeline(
         profile: input.candidate_profile,
         experience_bullets: experience_bullets_records,
         composed_markdown: finalMarkdown,
-        summary_keywords: composeOutput?.summary_used_keywords || [],
-        prioritized_skills: composeOutput?.skills_prioritized || [],
-        sections_order: composeOutput?.sections_order || ['Summary', 'Skills', 'Experience', 'Education'],
-        length_estimate: composeOutput?.length_estimate_words || 0,
+        summary_keywords: [],
+        prioritized_skills: composeOutput?.skills ? [
+            ...(composeOutput.skills.technical || []),
+            ...(composeOutput.skills.tools || []),
+            ...(composeOutput.skills.soft || [])
+        ] : [],
+        sections_order: ['Summary', 'Skills', 'Experience', 'Education', 'Projects', 'Community'],
+        length_estimate: finalMarkdown.split(/\s+/).length,
         raw_compose_response: composeOutput ? {
             raw_response: '[captured-in-compose]',
             provider: 'unknown',
@@ -502,7 +634,6 @@ export async function orchestrateResumePipeline(
         } : undefined
     };
 
-    console.log(`[ORCHESTRATOR] Structured data summary_keywords: ${JSON.stringify(structuredData.summary_keywords)}`);
     console.log(`[ORCHESTRATOR] Structured data prioritized_skills: ${JSON.stringify(structuredData.prioritized_skills)}`);
     console.log(`[ORCHESTRATOR] Structured data sections_order: ${JSON.stringify(structuredData.sections_order)}`);
     console.log(`[ORCHESTRATOR] Structured data experience entries: ${Object.keys(structuredData.experience_bullets).length}`);
@@ -513,6 +644,7 @@ export async function orchestrateResumePipeline(
         success: true,
         needs_user_confirmation: finalMarkdown.includes("[add metric]") || metricMissing,
         final_markdown: finalMarkdown,
+        final_resume_json: composeOutput || undefined,
         rescored_profile: rescoredProfile,
         explanation,
         integrity,

@@ -12,6 +12,7 @@ export interface CandidateProfile {
     education: any[];
     projects: any[];
     certifications: any[];
+    community?: any[];
 }
 
 export interface MergeStrictResult {
