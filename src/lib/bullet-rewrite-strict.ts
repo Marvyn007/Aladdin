@@ -1,4 +1,4 @@
-import { routeAICall } from './ai-router';
+import { routeAICall, routeAICallWithDetails, AIGenerateResult } from './ai-router';
 // Using Gemini direct fetch for embeddings since AI router doesn't abstract it
 import { config } from 'dotenv';
 config({ path: '.env.local' });
@@ -21,6 +21,9 @@ export interface StrictRewriteResult {
     success: boolean;
     failedTests: string[];
     output?: RewriteBulletOutput;
+    raw_response?: string;
+    provider?: string;
+    model?: string;
 }
 
 const ACTION_VERBS = [
@@ -206,31 +209,58 @@ export async function rewriteBulletStrictPipeline(
 
     const fullPrompt = SYSTEM_PROMPT + "\n\n" + userPrompt;
 
+    let aiResult: AIGenerateResult | null = null;
     let aiResultStr = "";
     try {
-        aiResultStr = await routeAICall(fullPrompt);
+        aiResult = await routeAICallWithDetails(fullPrompt);
+        aiResultStr = aiResult.text;
     } catch (e: any) {
         return { success: false, failedTests: ["AI Call failed: " + e.message] };
     }
 
     // Try Validation 1
     const val1 = await validateBulletRewriteStrict(input, aiResultStr);
-    if (val1.success) return val1;
+    if (val1.success) {
+        return {
+            ...val1,
+            raw_response: aiResultStr,
+            provider: aiResult?.provider,
+            model: aiResult?.model
+        };
+    }
 
     // Failed -> Retry Once
+    let aiResult2: AIGenerateResult | null = null;
     let aiResultStr2 = "";
     try {
-        aiResultStr2 = await routeAICall(fullPrompt + "\n\nPREVIOUS FAILURE REASONS:\n" + val1.failedTests.join("\n") + "\nDO NOT REPEAT THESE MISTAKES.");
+        aiResult2 = await routeAICallWithDetails(fullPrompt + "\n\nPREVIOUS FAILURE REASONS:\n" + val1.failedTests.join("\n") + "\nDO NOT REPEAT THESE MISTAKES.");
+        aiResultStr2 = aiResult2.text;
     } catch (e: any) {
-        return { success: false, failedTests: val1.failedTests.concat(["Retry AI Call failed: " + e.message]) };
+        return { 
+            success: false, 
+            failedTests: val1.failedTests.concat(["Retry AI Call failed: " + e.message]),
+            raw_response: aiResultStr,
+            provider: aiResult?.provider,
+            model: aiResult?.model
+        };
     }
 
     const val2 = await validateBulletRewriteStrict(input, aiResultStr2);
-    if (val2.success) return val2;
+    if (val2.success) {
+        return {
+            ...val2,
+            raw_response: aiResultStr2,
+            provider: aiResult2?.provider || aiResult?.provider,
+            model: aiResult2?.model || aiResult?.model
+        };
+    }
 
-    // Completely failed
+    // Completely failed - still return the raw responses for debugging
     return {
         success: false,
         failedTests: ["ATTEMPT 1 FAILS:", ...val1.failedTests, "ATTEMPT 2 FAILS:", ...val2.failedTests],
+        raw_response: aiResultStr2 || aiResultStr,
+        provider: aiResult2?.provider || aiResult?.provider,
+        model: aiResult2?.model || aiResult?.model
     };
 }

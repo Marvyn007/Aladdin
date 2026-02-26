@@ -15,6 +15,7 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
+    console.log(`[Proxy] Request hitting: ${req.nextUrl.pathname}`);
     const { userId } = await auth();
 
     // Redirect authenticated users away from sign-in/sign-up pages
@@ -26,9 +27,6 @@ export default clerkMiddleware(async (auth, req) => {
     // If it's a protected route, check auth
     if (isProtectedRoute(req)) {
         if (!userId) {
-            // Depending on if it's an API call or page visit, handle differently
-            // But since these are mostly APIs, 401 is appropriate or redirect for pages
-            // For now, let's just protect the API routes securely
             if (req.nextUrl.pathname.startsWith('/api')) {
                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
             }
@@ -38,7 +36,6 @@ export default clerkMiddleware(async (auth, req) => {
         }
     }
 
-    // Allow everything else (Public-first)
     return NextResponse.next();
 });
 

@@ -430,6 +430,8 @@ export function Dashboard({
         company: string | null;
         jobDescription: string;
         jobUrl: string | null;
+        linkedinProfileUrl: string | null;
+        linkedinData: string | null;
     }>({
         isOpen: false,
         jobId: null,
@@ -437,6 +439,8 @@ export function Dashboard({
         company: null,
         jobDescription: '',
         jobUrl: null,
+        linkedinProfileUrl: null,
+        linkedinData: null,
     });
 
     const sensors = useSensors(
@@ -986,6 +990,8 @@ export function Dashboard({
             company: job.company,
             jobDescription: job.raw_text_summary || job.normalized_text || '',
             jobUrl: job.source_url || null,
+            linkedinProfileUrl: null,
+            linkedinData: null,
         });
     };
 
@@ -1452,6 +1458,8 @@ export function Dashboard({
                 company={tailoredResumeModal.company}
                 jobDescription={tailoredResumeModal.jobDescription}
                 jobUrl={tailoredResumeModal.jobUrl || undefined}
+                linkedinProfileUrl={tailoredResumeModal.linkedinProfileUrl || undefined}
+                linkedinData={tailoredResumeModal.linkedinData || undefined}
             />
 
             {/* Resume Selector Modal */}

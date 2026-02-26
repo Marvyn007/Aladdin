@@ -1,4 +1,4 @@
-import { routeAICall } from './ai-router';
+import { routeAICall, routeAICallWithDetails, AIGenerateResult } from './ai-router';
 import { CandidateProfile } from './gemini-merge-strict';
 import { config } from 'dotenv';
 config({ path: '.env.local' });
@@ -23,6 +23,9 @@ export interface StrictComposeResult {
     success: boolean;
     failedTests: string[];
     output?: ComposeResumeOutput;
+    raw_response?: string;
+    provider?: string;
+    model?: string;
 }
 
 const ACTION_VERBS = [
@@ -293,26 +296,50 @@ Rules:
 
     const fullPrompt = `${SYSTEM_PROMPT}\n\n${userPrompt}`;
 
+    let aiResult: AIGenerateResult | null = null;
     let aiResultStr = "";
     try {
-        aiResultStr = await routeAICall(fullPrompt);
+        aiResult = await routeAICallWithDetails(fullPrompt);
+        aiResultStr = aiResult.text;
     } catch (e: any) {
         return { success: false, failedTests: ["AI Call failed: " + e.message] };
     }
 
     let val1 = await validateResumeComposeStrict(input, aiResultStr);
-    if (val1.success) return val1;
+    if (val1.success) {
+        return {
+            ...val1,
+            raw_response: aiResultStr,
+            provider: aiResult?.provider,
+            model: aiResult?.model
+        };
+    }
 
     // Failure -> single retry
+    let aiResult2: AIGenerateResult | null = null;
     let aiResultStr2 = "";
     try {
-        aiResultStr2 = await routeAICall(fullPrompt + "\n\nPREVIOUS FAILURE REASONS:\n" + val1.failedTests.join("\n") + "\nDO NOT REPEAT THESE MISTAKES. Follow the JSON schema strictly and do not hallucinate words.");
+        aiResult2 = await routeAICallWithDetails(fullPrompt + "\n\nPREVIOUS FAILURE REASONS:\n" + val1.failedTests.join("\n") + "\nDO NOT REPEAT THESE MISTAKES. Follow the JSON schema strictly and do not hallucinate words.");
+        aiResultStr2 = aiResult2.text;
     } catch (e: any) {
-        return { success: false, failedTests: val1.failedTests.concat(["Retry AI Call failed: " + e.message]) };
+        return { 
+            success: false, 
+            failedTests: val1.failedTests.concat(["Retry AI Call failed: " + e.message]),
+            raw_response: aiResultStr,
+            provider: aiResult?.provider,
+            model: aiResult?.model
+        };
     }
 
     let val2 = await validateResumeComposeStrict(input, aiResultStr2);
-    if (val2.success) return val2;
+    if (val2.success) {
+        return {
+            ...val2,
+            raw_response: aiResultStr2,
+            provider: aiResult2?.provider || aiResult?.provider,
+            model: aiResult2?.model || aiResult?.model
+        };
+    }
 
     // Both failed -> deterministic layout
     const fallbackMd = generateDeterministicFallbackContent(input);
@@ -327,6 +354,9 @@ Rules:
     return {
         success: false,
         failedTests: ["ATTEMPT 1 FAILS:\n", ...val1.failedTests, "ATTEMPT 2 FAILS:\n", ...val2.failedTests, "FALLBACK USED"],
-        output: fallbackOutput
+        output: fallbackOutput,
+        raw_response: aiResultStr2 || aiResultStr,
+        provider: aiResult2?.provider || aiResult?.provider,
+        model: aiResult2?.model || aiResult?.model
     };
 }
