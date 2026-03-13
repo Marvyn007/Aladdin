@@ -1,0 +1,6 @@
+TypeError: Cannot read properties of undefined (reading 'toString')
+    at convertFileToBase64 (C:/Users/iamma/OneDrive/Desktop/Aladdin/src/lib/resumePipeline/parse.ts:104:19)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at Module.parseResume (C:/Users/iamma/OneDrive/Desktop/Aladdin/src/lib/resumePipeline/parse.ts:34:22)
+    at C:/Users/iamma/OneDrive/Desktop/Aladdin/src/lib/resumePipeline/test-parse-default-fallback.test.ts:86:13
+    at file:///C:/Users/iamma/OneDrive/Desktop/Aladdin/node_modules/@vitest/runner/dist/index.js:915:20

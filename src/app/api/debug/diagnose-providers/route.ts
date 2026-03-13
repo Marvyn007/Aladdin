@@ -19,7 +19,7 @@ const TEST_PROMPT = "Reply with the word OK.";
 
 async function testGemini(key: string, name: string): Promise<DiagnosticResult> {
     const start = Date.now();
-    const modelName = 'gemini-2.0-flash'; // Hardcoded for diagnostic to verify standard
+    const modelName = process.env.LLM_MODEL || 'openai/gpt-4o-mini'; // Use environment variable
     try {
         if (!key) throw new Error('API Key missing');
         const client = new GoogleGenerativeAI(key);
@@ -52,7 +52,7 @@ async function testGemini(key: string, name: string): Promise<DiagnosticResult> 
 
 async function testOpenRouter(key: string): Promise<DiagnosticResult> {
     const start = Date.now();
-    const modelName = 'google/gemini-2.0-flash-001'; // Try specific OR model ID
+    const modelName = process.env.LLM_MODEL || 'openai/gpt-4o-mini'; // Use environment variable
     try {
         if (!key) throw new Error('API Key missing');
 

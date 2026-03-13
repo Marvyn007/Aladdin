@@ -43,6 +43,7 @@ export function TailoredResumeEditor({
     const [resume, setResume] = useState<TailoredResumeData | null>(null);
     const [keywords, setKeywords] = useState<KeywordAnalysis | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isCategorizing, setIsCategorizing] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export function TailoredResumeEditor({
     const [showDownloadModal, setShowDownloadModal] = useState(false);
     const [showDebugPanel, setShowDebugPanel] = useState(false);
     const [debugData, setDebugData] = useState<any>(null);
+    const [showInfoTooltip, setShowInfoTooltip] = useState(false);
     const parsingProgress = useParsingProgress();
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -160,11 +162,9 @@ export function TailoredResumeEditor({
 
                                     // Validate required fields
                                     const missingFields: string[] = [];
-                                    if (!finalResumeJson.basics) missingFields.push('basics');
                                     if (!finalResumeJson.summary) missingFields.push('summary');
                                     if (!finalResumeJson.skills) missingFields.push('skills');
-                                    if (!finalResumeJson.experience) missingFields.push('experience');
-                                    if (!finalResumeJson.education) missingFields.push('education');
+                                    if (!finalResumeJson.sections || !Array.isArray(finalResumeJson.sections)) missingFields.push('sections');
 
                                     if (missingFields.length > 0) {
                                         const errorMsg = `CRITICAL: Frontend received incomplete data. Missing: ${missingFields.join(', ')}`;
@@ -176,6 +176,42 @@ export function TailoredResumeEditor({
 
                                     const parsed = finalResumeJson;
 
+                                    // Skills: dynamically nested format preservation
+                                    let skillsFlat: string[] = [];
+                                    let skillsRecord: Record<string, string[]> = {};
+                                    if (Array.isArray(parsed.skills)) {
+                                        skillsFlat = parsed.skills;
+                                        skillsRecord = { 'Skills': parsed.skills };
+                                    } else if (parsed.skills && typeof parsed.skills === 'object') {
+                                        skillsRecord = parsed.skills;
+                                        skillsFlat = Object.values(parsed.skills).flat() as string[];
+                                    }
+
+                                    const mappedSections = (parsed.sections || []).map((sec: any) => ({
+                                        id: uuidv4(),
+                                        type: sec.name.toLowerCase().replace(/[^a-z]/g, ''),
+                                        title: sec.name,
+                                        items: (sec.entries || []).map((entry: any) => ({
+                                            id: uuidv4(),
+                                            title: entry.title || '',
+                                            subtitle: entry.subtitle || '',
+                                            location: entry.location || '',
+                                            dates: entry.startDate && entry.endDate ? `${entry.startDate} - ${entry.endDate}` : (entry.startDate || entry.dates || ''),
+                                            bullets: (entry.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                                        }))
+                                    }));
+
+                                    // Ensure the skills anchor stub exists so ContentPanel renders the editor
+                                    if (!mappedSections.some((s: any) => s.type === 'skills')) {
+                                        const eduIndex = mappedSections.findIndex((s: any) => s.type === 'education');
+                                        const stub = { id: uuidv4(), type: 'skills', title: 'Skills', items: [] };
+                                        if (eduIndex !== -1) {
+                                            mappedSections.splice(eduIndex, 0, stub);
+                                        } else {
+                                            mappedSections.push(stub);
+                                        }
+                                    }
+
                                     const initialResume: TailoredResumeData = {
                                         id: uuidv4(),
                                         contact: {
@@ -184,62 +220,11 @@ export function TailoredResumeEditor({
                                             phone: parsed.basics?.phone || '',
                                             linkedin: parsed.basics?.linkedin || '',
                                             location: parsed.basics?.location || '',
-                                            github: parsed.basics?.portfolio ? [parsed.basics.portfolio] : [],
+                                            github: parsed.basics?.website ? [parsed.basics.website] : (parsed.basics?.portfolio ? [parsed.basics.portfolio] : []),
                                         },
                                         summary: parsed.summary || '',
-                                        sections: [
-                                            {
-                                                id: 'exp',
-                                                type: 'experience',
-                                                title: 'Experience',
-                                                items: (parsed.experience || []).map((exp: any) => ({
-                                                    id: uuidv4(),
-                                                    title: exp.title,
-                                                    subtitle: exp.company,
-                                                    location: exp.location,
-                                                    dates: `${exp.start_date || ''} - ${exp.end_date || ''}`,
-                                                    bullets: (exp.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                                }))
-                                            },
-                                            {
-                                                id: 'edu',
-                                                type: 'education',
-                                                title: 'Education',
-                                                items: (parsed.education || []).map((edu: any) => ({
-                                                    id: uuidv4(),
-                                                    title: edu.degree,
-                                                    subtitle: edu.institution,
-                                                    dates: `${edu.start_date || ''} - ${edu.end_date || ''}`,
-                                                    bullets: []
-                                                }))
-                                            },
-                                            {
-                                                id: 'proj',
-                                                type: 'projects',
-                                                title: 'Projects',
-                                                items: (parsed.projects || []).map((proj: any) => ({
-                                                    id: uuidv4(),
-                                                    title: proj.name || proj.title || '',
-                                                    bullets: (proj.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                                }))
-                                            },
-                                            {
-                                                id: 'comm',
-                                                type: 'community',
-                                                title: 'Community',
-                                                items: (parsed.community || []).map((comm: any) => ({
-                                                    id: uuidv4(),
-                                                    title: comm.role || comm.organization || '',
-                                                    subtitle: comm.organization || '',
-                                                    bullets: comm.description ? [{ id: uuidv4(), text: comm.description }] : []
-                                                }))
-                                            },
-                                        ],
-                                        skills: {
-                                            'Technical': parsed.skills?.technical || [],
-                                            'Tools': parsed.skills?.tools || [],
-                                            'Soft Skills': parsed.skills?.soft || [],
-                                        },
+                                        sections: mappedSections,
+                                        skills: skillsRecord,
                                         design: DEFAULT_RESUME_DESIGN,
                                         createdAt: new Date().toISOString(),
                                         updatedAt: new Date().toISOString(),
@@ -250,13 +235,26 @@ export function TailoredResumeEditor({
                                     console.log('[FRONTEND] Mapped resume - name:', initialResume.contact.name);
                                     console.log('[FRONTEND] Mapped resume - experience items:', initialResume.sections[0].items.length);
 
+                                    // Wire missingSkills and autoAddedSkills from new pipeline
+                                    const missingSkills: string[] = parsed.missingSkills || data.missingSkills || [];
+                                    const autoAddedSkills: string[] = parsed.autoAddedSkills || data.autoAddedSkills || [];
+                                    
+                                    let matchedSkills = skillsFlat;
+                                    if (autoAddedSkills.length > 0) {
+                                        matchedSkills = skillsFlat.filter(s => !autoAddedSkills.includes(s));
+                                    }
+
                                     setResume(initialResume);
-                                    setKeywords({ matched: [], missing: [] });
+                                    setKeywords({
+                                        matched: matchedSkills,
+                                        missing: missingSkills,
+                                        autoAdded: autoAddedSkills,
+                                    });
                                     setHasGenerated(true);
                                     setActiveTab('content');
                                     parsingProgress.complete();
                                 } else if (data.final_resume_json) {
-                                    // Legacy format without status field - handle same as above
+                                    // Legacy format without status field
                                     console.log('[FRONTEND] Received legacy done format, using data.final_resume_json');
                                     const finalResumeJson = data.final_resume_json;
 
@@ -266,6 +264,40 @@ export function TailoredResumeEditor({
 
                                     const parsed = finalResumeJson;
 
+                                    let skillsFlat: string[] = [];
+                                    let skillsRecord: Record<string, string[]> = {};
+                                    if (Array.isArray(parsed.skills)) {
+                                        skillsFlat = parsed.skills;
+                                        skillsRecord = { 'Skills': parsed.skills };
+                                    } else if (parsed.skills && typeof parsed.skills === 'object') {
+                                        skillsRecord = parsed.skills;
+                                        skillsFlat = Object.values(parsed.skills).flat() as string[];
+                                    }
+
+                                    const mappedSectionsLegacy = (parsed.sections || []).map((sec: any) => ({
+                                        id: uuidv4(),
+                                        type: sec.name.toLowerCase().replace(/[^a-z]/g, ''),
+                                        title: sec.name,
+                                        items: (sec.entries || []).map((entry: any) => ({
+                                            id: uuidv4(),
+                                            title: entry.title || '',
+                                            subtitle: entry.subtitle || '',
+                                            location: entry.location || '',
+                                            dates: entry.startDate && entry.endDate ? `${entry.startDate} - ${entry.endDate}` : (entry.startDate || entry.dates || ''),
+                                            bullets: (entry.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                                        }))
+                                    }));
+
+                                    if (!mappedSectionsLegacy.some((s: any) => s.type === 'skills')) {
+                                        const eduIndex = mappedSectionsLegacy.findIndex((s: any) => s.type === 'education');
+                                        const stub = { id: uuidv4(), type: 'skills', title: 'Skills', items: [] };
+                                        if (eduIndex !== -1) {
+                                            mappedSectionsLegacy.splice(eduIndex, 0, stub);
+                                        } else {
+                                            mappedSectionsLegacy.push(stub);
+                                        }
+                                    }
+
                                     const initialResume: TailoredResumeData = {
                                         id: uuidv4(),
                                         contact: {
@@ -274,62 +306,11 @@ export function TailoredResumeEditor({
                                             phone: parsed.basics?.phone || '',
                                             linkedin: parsed.basics?.linkedin || '',
                                             location: parsed.basics?.location || '',
-                                            github: parsed.basics?.portfolio ? [parsed.basics.portfolio] : [],
+                                            github: parsed.basics?.website ? [parsed.basics.website] : (parsed.basics?.portfolio ? [parsed.basics.portfolio] : []),
                                         },
                                         summary: parsed.summary || '',
-                                        sections: [
-                                            {
-                                                id: 'exp',
-                                                type: 'experience',
-                                                title: 'Experience',
-                                                items: (parsed.experience || []).map((exp: any) => ({
-                                                    id: uuidv4(),
-                                                    title: exp.title,
-                                                    subtitle: exp.company,
-                                                    location: exp.location,
-                                                    dates: `${exp.start_date || ''} - ${exp.end_date || ''}`,
-                                                    bullets: (exp.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                                }))
-                                            },
-                                            {
-                                                id: 'edu',
-                                                type: 'education',
-                                                title: 'Education',
-                                                items: (parsed.education || []).map((edu: any) => ({
-                                                    id: uuidv4(),
-                                                    title: edu.degree,
-                                                    subtitle: edu.institution,
-                                                    dates: `${edu.start_date || ''} - ${edu.end_date || ''}`,
-                                                    bullets: []
-                                                }))
-                                            },
-                                            {
-                                                id: 'proj',
-                                                type: 'projects',
-                                                title: 'Projects',
-                                                items: (parsed.projects || []).map((proj: any) => ({
-                                                    id: uuidv4(),
-                                                    title: proj.name || proj.title || '',
-                                                    bullets: (proj.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                                }))
-                                            },
-                                            {
-                                                id: 'comm',
-                                                type: 'community',
-                                                title: 'Community',
-                                                items: (parsed.community || []).map((comm: any) => ({
-                                                    id: uuidv4(),
-                                                    title: comm.role || comm.organization || '',
-                                                    subtitle: comm.organization || '',
-                                                    bullets: comm.description ? [{ id: uuidv4(), text: comm.description }] : []
-                                                }))
-                                            },
-                                        ],
-                                        skills: {
-                                            'Technical': parsed.skills?.technical || [],
-                                            'Tools': parsed.skills?.tools || [],
-                                            'Soft Skills': parsed.skills?.soft || [],
-                                        },
+                                        sections: mappedSectionsLegacy,
+                                        skills: skillsRecord,
                                         design: DEFAULT_RESUME_DESIGN,
                                         createdAt: new Date().toISOString(),
                                         updatedAt: new Date().toISOString(),
@@ -337,8 +318,20 @@ export function TailoredResumeEditor({
                                         jobTitle: jobTitle
                                     };
 
+                                    const missingSkills: string[] = parsed.missingSkills || data.missingSkills || [];
+                                    const autoAddedSkills: string[] = parsed.autoAddedSkills || data.autoAddedSkills || [];
+                                    
+                                    let matchedSkills = skillsFlat;
+                                    if (autoAddedSkills.length > 0) {
+                                        matchedSkills = skillsFlat.filter(s => !autoAddedSkills.includes(s));
+                                    }
+
                                     setResume(initialResume);
-                                    setKeywords({ matched: [], missing: [] });
+                                    setKeywords({
+                                        matched: matchedSkills,
+                                        missing: missingSkills,
+                                        autoAdded: autoAddedSkills,
+                                    });
                                     setHasGenerated(true);
                                     setActiveTab('content');
                                     parsingProgress.complete();
@@ -538,68 +531,92 @@ export function TailoredResumeEditor({
         }
     };
 
-    const addKeywordToResume = (keyword: string) => {
-        if (!resume) return;
+    const addKeywordToResume = async (keyword: string) => {
+        if (!resume || isCategorizing) return;
 
-        // Add to 'Other' skills bucket (dynamic Record<string, string[]> shape)
-        const otherSkills = resume.skills?.['Other'] ?? [];
-        setResume({
-            ...resume,
-            skills: {
-                ...resume.skills,
-                'Other': [...otherSkills, keyword],
-            },
-            updatedAt: new Date().toISOString(),
-        });
-
-        // Remove from missing keywords
-        if (keywords) {
-            setKeywords({
-                ...keywords,
-                matched: [...keywords.matched, keyword],
-                missing: keywords.missing.filter(k => k !== keyword),
-                atsScore: keywords.atsScore ? {
-                    ...keywords.atsScore,
-                    matchedCount: keywords.atsScore.matchedCount + 1,
-                    raw: Math.round(((keywords.atsScore.matchedCount + 1) / keywords.atsScore.totalCount) * 100),
-                } : undefined,
+        setIsCategorizing(true);
+        try {
+            const currentSkillsObj = (resume.skills && !Array.isArray(resume.skills)) ? resume.skills : {};
+            
+            const response = await fetch('/api/categorize-skills', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currentSkills: currentSkillsObj,
+                    newSkills: [keyword]
+                })
             });
+            const data = await response.json();
+            const updatedSkills = data.updatedSkills || currentSkillsObj;
+
+            setResume({
+                ...resume,
+                skills: updatedSkills,
+                updatedAt: new Date().toISOString(),
+            });
+
+            // Remove from missing keywords
+            if (keywords) {
+                setKeywords({
+                    ...keywords,
+                    matched: [...keywords.matched, keyword],
+                    missing: keywords.missing.filter(k => k !== keyword),
+                    atsScore: keywords.atsScore ? {
+                        ...keywords.atsScore,
+                        matchedCount: keywords.atsScore.matchedCount + 1,
+                        raw: Math.round(((keywords.atsScore.matchedCount + 1) / keywords.atsScore.totalCount) * 100),
+                    } : undefined,
+                });
+            }
+        } catch (err) {
+            console.error("[addKeywordToResume] Failed to categorize skill via AI:", err);
+        } finally {
+            setIsCategorizing(false);
         }
     };
 
-    const handleAddAllMissingKeywords = () => {
-        if (!resume || !keywords || keywords.missing.length === 0) return;
+    const removeAutoAddedKeyword = (keyword: string) => {
+        if (!resume) return;
 
-        const confirmed = window.confirm(
-            `Add ${keywords.missing.length} missing keywords to the Skills section?`
-        );
+        let updatedSkillsRecord = { ...resume.skills } as Record<string, string[]>;
+        let found = false;
+        if (resume.skills && !Array.isArray(resume.skills)) {
+            const newSkills = { ...resume.skills };
+            let foundInObject = false;
+            
+            for (const category in newSkills) {
+                if (newSkills[category].includes(keyword)) {
+                    newSkills[category] = newSkills[category].filter(k => k !== keyword);
+                    foundInObject = true;
+                    found = true;
+                }
+            }
+            
+            if (foundInObject) {
+                updatedSkillsRecord = newSkills;
+            }
+        }
 
-        if (!confirmed) return;
+        if (found) {
+            setResume({
+                ...resume,
+                skills: updatedSkillsRecord,
+                updatedAt: new Date().toISOString(),
+            });
 
-        // Add all missing keywords to 'Other' skills bucket
-        const otherSkills = resume.skills?.['Other'] ?? [];
-        setResume({
-            ...resume,
-            skills: {
-                ...resume.skills,
-                'Other': [...otherSkills, ...keywords.missing],
-            },
-            updatedAt: new Date().toISOString(),
-        });
-
-        // Update keywords - all are now matched
-        setKeywords({
-            ...keywords,
-            matched: [...keywords.matched, ...keywords.missing],
-            missing: [],
-            matchedCritical: [...(keywords.matchedCritical || []), ...(keywords.missingCritical || [])],
-            missingCritical: [],
-            atsScore: keywords.atsScore ? {
-                ...keywords.atsScore,
-                matchedCount: keywords.atsScore.totalCount,
-                raw: 100,
-            } : undefined,
-        });
+            if (keywords) {
+                setKeywords({
+                    ...keywords,
+                    autoAdded: (keywords.autoAdded || []).filter(k => k !== keyword),
+                    missing: [...keywords.missing, keyword],
+                    atsScore: keywords.atsScore ? {
+                        ...keywords.atsScore,
+                        matchedCount: Math.max(0, keywords.atsScore.matchedCount - 1),
+                        raw: Math.round(((Math.max(0, keywords.atsScore.matchedCount - 1)) / keywords.atsScore.totalCount) * 100),
+                    } : undefined,
+                });
+            }
+        }
     };
 
     if (!isOpen) return null;
@@ -832,33 +849,95 @@ export function TailoredResumeEditor({
                                                 </span>
                                             )}
                                         </div>
+                                        {keywords.autoAdded && keywords.autoAdded.length > 0 && (
+                                            <>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', marginTop: '12px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                                                            Missing Keywords (Added in skills)
+                                                        </span>
+                                                        <div 
+                                                            style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+                                                            onMouseEnter={() => setShowInfoTooltip(true)}
+                                                            onMouseLeave={() => setShowInfoTooltip(false)}
+                                                        >
+                                                            <span 
+                                                                style={{ fontSize: '11px', cursor: 'help', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}
+                                                            >
+                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <circle cx="12" cy="12" r="10"></circle>
+                                                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                                                </svg>
+                                                            </span>
+                                                            
+                                                            {showInfoTooltip && (
+                                                                <div style={{
+                                                                    position: 'absolute',
+                                                                    top: '20px',
+                                                                    left: '0',
+                                                                    width: '240px',
+                                                                    background: 'rgba(30, 41, 59, 0.95)',
+                                                                    backdropFilter: 'blur(8px)',
+                                                                    color: 'white',
+                                                                    padding: '10px 14px',
+                                                                    borderRadius: '8px',
+                                                                    fontSize: '11px',
+                                                                    lineHeight: '1.5',
+                                                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                                                                    zIndex: 100,
+                                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                                                    pointerEvents: 'none',
+                                                                }}>
+                                                                    <div style={{ fontWeight: 600, marginBottom: '4px', color: '#60a5fa' }}>💡 Smart ATS Optimization</div>
+                                                                    These keywords were automatically added to your skills section of the resume to increase the ATS score. You can remove them by clicking on keywords that don't apply to you.
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+                                                    {keywords.autoAdded.map((k, i) => (
+                                                        <button
+                                                            key={`auto-${i}`}
+                                                            onClick={() => removeAutoAddedKeyword(k)}
+                                                            className="badge"
+                                                            style={{
+                                                                fontSize: '10px',
+                                                                background: 'var(--success-muted)',
+                                                                color: 'var(--success)',
+                                                                cursor: 'pointer',
+                                                                border: 'none',
+                                                            }}
+                                                            title="Added via AI mapping. Click to remove from skills."
+                                                        >
+                                                            ✕ {k}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                         {keywords.missing.length > 0 && (
                                             <>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                                     <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>Missing:</span>
-                                                    <button
-                                                        onClick={handleAddAllMissingKeywords}
-                                                        className="btn btn-ghost"
-                                                        style={{ fontSize: '10px', padding: '2px 6px', color: 'var(--accent)' }}
-                                                        title="Add all missing keywords to Skills section"
-                                                    >
-                                                        + Add All to Skills
-                                                    </button>
                                                 </div>
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                                     {keywords.missing.slice(0, 10).map((k, i) => (
                                                         <button
                                                             key={i}
                                                             onClick={() => addKeywordToResume(k)}
+                                                            disabled={isCategorizing}
                                                             className="badge"
                                                             style={{
                                                                 fontSize: '10px',
-                                                                background: 'var(--error-muted)',
-                                                                color: 'var(--error)',
-                                                                cursor: 'pointer',
-                                                                border: 'none',
+                                                                background: 'var(--surface)',
+                                                                color: 'var(--text-secondary)',
+                                                                cursor: isCategorizing ? 'wait' : 'pointer',
+                                                                border: '1px solid var(--border)',
+                                                                opacity: isCategorizing ? 0.5 : 1
                                                             }}
-                                                            title="Click to add to Skills"
+                                                            title="Click to categorize into Skills via AI"
                                                         >
                                                             + {k}
                                                         </button>

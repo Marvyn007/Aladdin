@@ -14,8 +14,8 @@ html, body {
 }
 
 .resume-classic {
-  font-family: var(--resume-font-family, 'Times New Roman', Georgia, serif);
-  font-size: var(--resume-font-size, 11pt);
+  font-family: 'Aptos', 'Aptos Body', 'Open Sans', 'Segoe UI', sans-serif;
+  font-size: var(--resume-font-size, 10.5pt);
   color: #000;
   width: 8.5in;
   margin: 0 auto;
@@ -40,8 +40,7 @@ html, body {
 .resume-classic header h1 {
   font-size: 18pt;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 0px;
   margin: 0 0 4px 0;
   color: #000;
 }
@@ -76,11 +75,10 @@ html, body {
 }
 
 .resume-classic section h2 {
-  font-size: 11pt;
+  font-size: 13pt;
   font-weight: 700;
-  text-transform: uppercase;
   border-bottom: 1px solid #000;
-  padding-bottom: 8px;
+  padding-bottom: 4px;
   margin-bottom: 6px;
   color: #000;
 }
@@ -96,29 +94,31 @@ html, body {
 }
 
 .resume-classic .entry-title {
-  font-weight: 600;
-  font-size: var(--resume-font-size, 11pt);
+  font-weight: 700;
+  font-size: var(--resume-font-size, 10.5pt);
 }
 
 .resume-classic .entry-subtitle {
-  font-style: italic;
-  color: #333;
+  font-style: normal;
+  font-weight: 700;
+  color: #000;
 }
 
 .resume-classic .entry-dates {
-  font-size: 10pt;
-  color: #333;
+  font-size: 10.5pt;
+  color: #000;
 }
 
 .resume-classic .entry-location {
-  font-size: 10pt;
-  color: #333;
+  font-size: 10.5pt;
+  color: #000;
 }
 
 .resume-classic .entry-tech {
-  font-style: italic;
-  font-size: 10pt;
-  color: #333;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 10.5pt;
+  color: #000;
   margin-top: 2px;
 }
 
@@ -315,9 +315,16 @@ function formatDate(dateString: string): string {
   }).join(' - ');
 }
 
+function parseMarkdown(text: string): string {
+  if (!text) return '';
+  // Since we use strict JSON parsing, the string primitive arrives with exactly two asterisks `**` around bold words.
+  // There is no need to handle escaped backslashes since JSON.parse evaluates them into standard string format.
+  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
 function renderEntry(item: ResumeSectionItem, template: 'classic' | 'modern'): string {
   const bulletsHtml = (item.bullets ?? []).map(b =>
-    `<li class="${b.isSuggested ? 'suggested-bullet' : ''}">${b.isSuggested ? '⚠️ ' : ''}${b.text}</li>`
+    `<li class="${b.isSuggested ? 'suggested-bullet' : ''}">${b.isSuggested ? '⚠️ ' : ''}${parseMarkdown(b.text)}</li>`
   ).join('');
 
   // Primary link icon (Project style)
@@ -337,9 +344,9 @@ function renderEntry(item: ResumeSectionItem, template: 'classic' | 'modern'): s
 <div class="entry">
   <div class="entry-header" style="display: flex; justify-content: space-between; align-items: baseline;">
     <div style="flex: 1; margin-right: 16px;">
-        <span class="entry-title">${item.title}</span>
+        <span class="entry-title">${parseMarkdown(item.title)}</span>
         ${linkIconHtml}
-        ${item.subtitle ? ` — <span class="entry-subtitle">${item.subtitle}</span>` : ''}
+        ${item.subtitle ? ` — <span class="entry-subtitle">${parseMarkdown(item.subtitle)}</span>` : ''}
         ${techInlineHtml}
     </div>
     ${dateDisplay ? `<span class="entry-dates" style="white-space: nowrap;">${dateDisplay}</span>` : ''}
@@ -351,23 +358,21 @@ function renderEntry(item: ResumeSectionItem, template: 'classic' | 'modern'): s
 }
 
 function renderSkillsSection(skills: TailoredResumeData['skills'], template: 'classic' | 'modern'): string {
-  // Flatten all unique skills from dynamic categories
-  const allSkills: string[] = [];
-  if (skills && typeof skills === 'object') {
-    for (const [, values] of Object.entries(skills)) {
-      if (Array.isArray(values)) {
-        allSkills.push(...values);
-      }
-    }
-  }
-
-  // Dedup just in case
-  const uniqueSkills = [...new Set(allSkills)];
-  const skillsString = uniqueSkills.join(', ');
-
-  if (!skillsString) return '';
+  if (!skills) return '';
 
   if (template === 'modern') {
+    // Flatten for modern
+    const allSkills: string[] = [];
+    if (typeof skills === 'object') {
+      for (const [, values] of Object.entries(skills)) {
+        if (Array.isArray(values)) allSkills.push(...values);
+      }
+    }
+    const uniqueSkills = [...new Set(allSkills)];
+    const skillsString = uniqueSkills.join(', ');
+
+    if (!skillsString) return '';
+
     return `
 <section>
   <h2>TECHNICAL SKILLS</h2>
@@ -378,12 +383,27 @@ function renderSkillsSection(skills: TailoredResumeData['skills'], template: 'cl
     `;
   }
 
-  // Classic
+  // Classic - Categorized layout
+  let skillsHtml = '';
+  if (skills && typeof skills === 'object' && !Array.isArray(skills)) {
+     const entries = Object.entries(skills);
+     if (entries.length === 0) return '';
+     
+     skillsHtml = entries.map(([category, items]) => {
+         if (!items || !Array.isArray(items) || items.length === 0) return '';
+         return `<div style="margin-bottom: 4px;"><strong>${category}:</strong> ${items.join(', ')}</div>`;
+     }).join('');
+  } else if (Array.isArray(skills) && skills.length > 0) {
+     skillsHtml = `<div>${skills.join(', ')}</div>`;
+  }
+
+  if (!skillsHtml) return '';
+
   return `
 <section>
-  <h2>TECHNICAL SKILLS</h2>
+  <h2>Skills</h2>
   <div style="padding-left: 0; line-height: 1.4;">
-    ${skillsString}
+    ${skillsHtml}
   </div>
 </section>
   `;
@@ -477,11 +497,36 @@ function renderSection(section: ResumeSection, template: 'classic' | 'modern'): 
     certifications: 'CERTIFICATIONS',
   };
 
+  const isLeadership = section.title?.toLowerCase().includes('leadership') || section.type.toLowerCase().includes('leadership');
+
+  // If leadership, render as CSV
+  if (isLeadership) {
+    const allLeadershipText: string[] = [];
+    section.items.forEach(item => {
+      // Collect titles and bullets
+      if (item.title) allLeadershipText.push(item.title);
+      if (item.bullets) {
+        item.bullets.forEach(b => allLeadershipText.push(b.text));
+      }
+    });
+    
+    const csvString = parseMarkdown([...new Set(allLeadershipText)].join(', '));
+    
+    return `
+<section>
+  <h2>${titleMap[section.type] || section.title.toUpperCase()}</h2>
+  <div style="font-size: var(--resume-font-size, 11px); color: #374151; line-height: 1.4;">
+    ${csvString}
+  </div>
+</section>
+  `;
+  }
+
   const entriesHtml = section.items.map(item => renderEntry(item, template)).join('');
 
   return `
 <section>
-  <h2>${titleMap[section.type] || section.title}</h2>
+  <h2>${titleMap[section.type] || section.title.toUpperCase()}</h2>
   ${entriesHtml}
 </section>
   `;

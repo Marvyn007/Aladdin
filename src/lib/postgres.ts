@@ -1,34 +1,82 @@
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
 let pool: Pool | null = null;
+let poolInitialized = false;
+
+function getConnectionString(): string {
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+        throw new Error('DATABASE_URL is not defined');
+    }
+    return dbUrl;
+}
+
+function getConnectionType(connectionString: string): 'pooled' | 'direct' | 'local' {
+    if (connectionString.includes('localhost') || connectionString.includes('127.0.0.1')) {
+        return 'local';
+    }
+    if (connectionString.includes('-pooler')) {
+        return 'pooled';
+    }
+    return 'direct';
+}
 
 export function getPostgresPool(): Pool {
     if (pool) return pool;
 
-    const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) {
-        throw new Error('DATABASE_URL is not defined');
+    const connectionString = getConnectionString();
+    const connType = getConnectionType(connectionString);
+
+    if (!poolInitialized) {
+        const maskedUrl = connectionString.replace(/:([^@]+)@/, ':***@');
+        console.log(`[Postgres] Initializing connection: type=${connType}, url=${maskedUrl}`);
+        poolInitialized = true;
     }
 
-    // Parse the connection string to check for SSL needs or just force it for cloud DBs
-    const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
+    const isLocal = connType === 'local';
 
-    pool = new Pool({
+    const poolConfig: any = {
         connectionString,
-        max: 20,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 20000,
-        // Force SSL for non-local connections (Supabase/Neon/etc usually require this)
-        // rejectUnauthorized: false allows self-signed certs which is common in some hosted envs or proxies
-        ssl: isLocal ? false : { rejectUnauthorized: false }
-    });
+        max: 10,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
+        allowExitOnIdle: true,
+    };
+
+    if (!isLocal) {
+        poolConfig.ssl = {
+            rejectUnauthorized: true,
+        };
+    }
+
+    pool = new Pool(poolConfig);
 
     pool.on('error', (err, client) => {
-        console.error('Unexpected error on idle client', err);
-        // process.exit(-1); // Don't exit process, just let pool handle it or reconnect
+        console.error('[Postgres] Unexpected error on idle client', err);
+    });
+
+    pool.on('connect', () => {
+        console.log('[Postgres] Client connected to pool');
+    });
+
+    pool.on('acquire', () => {
+        console.log('[Postgres] Client acquired from pool');
     });
 
     return pool;
+}
+
+export async function checkPostgresConnection(): Promise<{ healthy: boolean; error?: string }> {
+    try {
+        const p = getPostgresPool();
+        const result = await p.query('SELECT 1 as health_check');
+        if (result.rows[0]?.health_check === 1) {
+            return { healthy: true };
+        }
+        return { healthy: false, error: 'Unexpected health check result' };
+    } catch (error: any) {
+        return { healthy: false, error: error.message || String(error) };
+    }
 }
 
 export function isPostgresConfigured(): boolean {
@@ -75,25 +123,20 @@ export async function executeWithUser<T>(userId: string, callback: (client: Pool
     const pool = getPostgresPool();
     const client = await pool.connect();
     try {
-        // Set the user ID for RLS policies (Supabase/Postgres compatible)
-        // 1. Ensure user exists (Fix FK constraint)
-        // Note: Some DB schemas have both id and user_id columns, so we set both
         await client.query(`
             INSERT INTO users (id, created_at) 
             VALUES ($1, NOW()) 
             ON CONFLICT (id) DO NOTHING
         `, [userId]);
 
-        // 2. Set the user ID for RLS policies
-        // is_local=true means it applies ONLY to the current transaction (safer for pooling)
         await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [userId]);
 
-        // Execute the actual query callback
         return await callback(client);
     } finally {
-        // Clean up session variables to be safe
-        // Setting to NULL effectively clears it
-        await client.query("SELECT set_config('request.jwt.claim.sub', NULL, false)");
+        try {
+            await client.query("SELECT set_config('request.jwt.claim.sub', NULL, false)");
+        } catch {
+        }
         client.release();
     }
 }

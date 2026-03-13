@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pipeline:test": "vitest src/lib/resumePipeline/ --run",
     "daily-fetch": "node --loader ts-node/esm scripts/seed-data.ts"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "form-data": "^4.0.5",
+    "fuse.js": "^7.1.0",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.13.0",
     "ioredis": "^5.9.2",
@@ -57,6 +59,7 @@
     "react-leaflet-cluster": "^4.0.0",
     "rss-parser": "^3.13.0",
     "uuid": "^13.0.0",
+    "zod-to-json-schema": "^3.25.1",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

@@ -100,6 +100,13 @@ OLLAMA_MODEL=phi3:mini
 # Reactive Resume Intergration
 REACTIVE_RESUME_HOST=your_host
 REACTIVE_RESUME_API_KEY=your_key
+REACTIVE_RESUME_API=http://localhost:4000/api
+USE_REACTIVE_PARSER=true
+
+# Python Parsers & JD Analyzer
+PDF_PARSER_SERVICE_URL=http://localhost:5000
+KEYBERT_SERVICE_URL=http://localhost:6000
+MAX_LLM_CONCURRENCY=2
 
 # OCR Settings
 PADDLE_OCR_API_KEY=your_key        # (if using hosted service; optional)
@@ -109,6 +116,27 @@ OPENROUTER_MAX_CALLS_PER_DAY=50
 ```
 
 **Note**: You should paste these keys into your `.env.local` file at the root of the project.
+
+### Starting Backend Services
+
+Aladdin leverages robust Python microservices and the Reactive Resume architecture.
+
+#### Python Parser (PDF & KeyBert)
+Start the local python PDF/Job Parser using docker or natively:
+```bash
+# Via Docker
+docker run -p 5000:5000 pdf-parser
+
+# Natively
+python python/pdf_parser_service.py
+```
+
+#### Reactive Resume
+Run the local `docker-compose` instance inside the cloned subfolder:
+```bash
+cd reactive-resume
+docker compose up -d
+```
 
 ### Database Setup
 
@@ -262,6 +290,9 @@ Aladdin/
 - Never commit `.env.local` or `.env` files
 - SQLite databases (`.db`, `.sqlite`) are gitignored
 - Logs and error files are gitignored
+
+### Production Scale Note
+For robust production operations, avoid relying purely on local limits. Use **Redis + BullMQ** for enterprise queueing instead of the in-memory semaphore, and scale Reactive Resume workers natively via `docker-compose`. Use an automated managed database for Postgres and any S3 compatible engine for blob file storage.
 
 ---
 

@@ -1,5 +1,6 @@
 import { getPostgresPool } from '../src/lib/postgres';
-import { generateEmbedding } from '../src/lib/embeddings';
+import { generateEmbedding } from '../src/lib/resume-generation/embeddings';
+
 import dotenv from 'dotenv';
 import path from 'path';
 

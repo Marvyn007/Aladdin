@@ -161,7 +161,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
         });
     };
 
-    const updateSkills = (category: 'languages' | 'frameworks' | 'tools' | 'databases', value: string) => {
+    const updateSkills = (category: string, value: string) => {
         onChange({
             ...resume,
             skills: {
@@ -291,48 +291,25 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                     {!collapsedSections.has(section.id) && (
                         <div style={{ marginTop: '12px' }}>
                             {section.type === 'skills' ? (
-                                // Skills section - special rendering
+                                /* Skills section - fully dynamic categories mapping */
                                 <div style={{ display: 'grid', gap: '8px' }}>
-                                    <div>
-                                        <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Languages</label>
-                                        <input
-                                            type="text"
-                                            value={(resume.skills.languages || []).join(', ')}
-                                            onChange={(e) => updateSkills('languages', e.target.value)}
-                                            className="input"
-                                            style={{ fontSize: '12px' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Frameworks</label>
-                                        <input
-                                            type="text"
-                                            value={(resume.skills.frameworks || []).join(', ')}
-                                            onChange={(e) => updateSkills('frameworks', e.target.value)}
-                                            className="input"
-                                            style={{ fontSize: '12px' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Tools</label>
-                                        <input
-                                            type="text"
-                                            value={(resume.skills.tools || []).join(', ')}
-                                            onChange={(e) => updateSkills('tools', e.target.value)}
-                                            className="input"
-                                            style={{ fontSize: '12px' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Databases</label>
-                                        <input
-                                            type="text"
-                                            value={(resume.skills.databases || []).join(', ')}
-                                            onChange={(e) => updateSkills('databases', e.target.value)}
-                                            className="input"
-                                            style={{ fontSize: '12px' }}
-                                        />
-                                    </div>
+                                    {Object.entries(resume.skills || {}).map(([category, items]) => (
+                                        <div key={category}>
+                                            <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', textTransform: 'capitalize' }}>
+                                                {category}
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={Array.isArray(items) ? items.join(', ') : ''}
+                                                onChange={(e) => updateSkills(category, e.target.value)}
+                                                className="input"
+                                                style={{ fontSize: '12px' }}
+                                            />
+                                        </div>
+                                    ))}
+                                    {Object.keys(resume.skills || {}).length === 0 && (
+                                        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>No categorized skills found.</div>
+                                    )}
                                 </div>
                             ) : (
                                 // Regular section items

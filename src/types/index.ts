@@ -282,7 +282,7 @@ export interface ResumeSectionItem {
 
 export interface ResumeSection {
   id: string;
-  type: 'education' | 'experience' | 'projects' | 'community' | 'skills' | 'volunteer' | 'certifications';
+  type: string; // Dynamic section types allowed
   title: string;
   isCollapsed?: boolean;
   items: ResumeSectionItem[];
@@ -320,6 +320,7 @@ export interface TailoredResumeData {
 export interface KeywordAnalysis {
   matched: string[];
   missing: string[];
+  autoAdded?: string[];
   matchedCritical?: string[];
   missingCritical?: string[];
   atsScore?: {
