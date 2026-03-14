@@ -1,17 +1,10 @@
-/**
- * TailoredResumeEditor - Main two-panel resume editing component
- * Features: Content tab, Design tab, Live preview, PDF export, Draft saving
- */
-
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { ContentPanel } from './ContentPanel';
-import { DesignPanel } from './DesignPanel';
-import { ResumePreview, getResumePreviewHtml } from './ResumePreview';
-import { type TailoredResumeData, type KeywordAnalysis, DEFAULT_RESUME_DESIGN } from '@/types';
 import { ParsingProgress, useParsingProgress } from './ParsingProgress';
+import type { TailoredResumeData } from '@/types';
+import { DEFAULT_RESUME_DESIGN } from '@/types';
 
 interface TailoredResumeEditorProps {
     isOpen: boolean;
@@ -25,8 +18,6 @@ interface TailoredResumeEditorProps {
     linkedinData?: string;
 }
 
-type ActiveTab = 'content' | 'design';
-
 export function TailoredResumeEditor({
     isOpen,
     onClose,
@@ -38,38 +29,23 @@ export function TailoredResumeEditor({
     linkedinProfileUrl,
     linkedinData,
 }: TailoredResumeEditorProps) {
-    const [activeTab, setActiveTab] = useState<ActiveTab>('content');
     const [jobDescription, setJobDescription] = useState(initialJobDescription || '');
-    const [resume, setResume] = useState<TailoredResumeData | null>(null);
-    const [keywords, setKeywords] = useState<KeywordAnalysis | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [isCategorizing, setIsCategorizing] = useState(false);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasGenerated, setHasGenerated] = useState(false);
-    const [generationStep, setGenerationStep] = useState<string>('');
-    const [hasSavedToDocuments, setHasSavedToDocuments] = useState(false);
-    const [showDownloadModal, setShowDownloadModal] = useState(false);
-    const [showDebugPanel, setShowDebugPanel] = useState(false);
-    const [debugData, setDebugData] = useState<any>(null);
-    const [showInfoTooltip, setShowInfoTooltip] = useState(false);
     const parsingProgress = useParsingProgress();
     const abortControllerRef = useRef<AbortController | null>(null);
 
-    const previewRef = useRef<HTMLDivElement>(null);
-
-    // Sync job description
     useEffect(() => {
         if (initialJobDescription) {
             setJobDescription(initialJobDescription);
         }
     }, [initialJobDescription]);
 
-    // Reset on open
     useEffect(() => {
         if (isOpen && !hasGenerated) {
             setError(null);
+            parsingProgress.reset();
         }
     }, [isOpen, hasGenerated]);
 
@@ -81,9 +57,7 @@ export function TailoredResumeEditor({
 
         setIsGenerating(true);
         setError(null);
-        setShowDebugPanel(false);
         parsingProgress.reset();
-
         abortControllerRef.current = new AbortController();
 
         try {
@@ -99,16 +73,10 @@ export function TailoredResumeEditor({
                 signal: abortControllerRef.current.signal
             });
 
-            if (!response.ok) {
-                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
             const reader = response.body?.getReader();
-            if (!reader) {
-                throw new Error('Failed to read response stream');
-            }
-
-            console.log('[FRONTEND] SSE stream started');
+            if (!reader) throw new Error('Failed to read response stream');
 
             const decoder = new TextDecoder();
             let buffer = '';
@@ -124,256 +92,116 @@ export function TailoredResumeEditor({
 
                 for (const line of lines) {
                     const trimmed = line.trim();
-                    if (!trimmed) {
-                        currentEvent = 'message';
-                        continue;
-                    }
-
-                    if (trimmed.startsWith('event: ')) {
-                        currentEvent = trimmed.slice(7).trim();
-                        console.log('[FRONTEND] Event type:', currentEvent);
-                        continue;
-                    }
-
+                    if (!trimmed) { currentEvent = 'message'; continue; }
+                    if (trimmed.startsWith('event: ')) { currentEvent = trimmed.slice(7).trim(); continue; }
+                    
                     if (trimmed.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(trimmed.slice(6));
                             const eventType = currentEvent;
 
-                            if (eventType === 'open') {
-                                console.log('[FRONTEND] SSE connection opened');
-                            } else if (eventType === 'stage') {
+                            if (eventType === 'stage') {
                                 parsingProgress.updateStage(data.stageId);
                             } else if (eventType === 'log') {
                                 parsingProgress.addLog(data.stageId, data.log);
                             } else if (eventType === 'complete') {
                                 parsingProgress.completeStage(data.stageId);
                             } else if (eventType === 'done') {
-                                console.log('[FRONTEND] Received done event');
-                                console.log('[FRONTEND] Done payload keys:', Object.keys(data));
-                                console.log('[FRONTEND] Done payload size:', JSON.stringify(data).length);
+                                const parsed = data.status === 'success' ? data.final_resume_json : data.final_resume_json;
+                                
+                                if (!parsed) throw new Error('Empty resume returned');
 
-                                // Handle new format with status field
-                                if (data.status === 'success' && data.final_resume_json) {
-                                    console.log('[FRONTEND] Final resume JSON keys:', Object.keys(data.final_resume_json));
-                                    console.log('[FRONTEND] Final resume JSON size:', JSON.stringify(data.final_resume_json).length);
-
-                                    const finalResumeJson = data.final_resume_json;
-
-                                    // Validate required fields
-                                    const missingFields: string[] = [];
-                                    if (!finalResumeJson.summary) missingFields.push('summary');
-                                    if (!finalResumeJson.skills) missingFields.push('skills');
-                                    if (!finalResumeJson.sections || !Array.isArray(finalResumeJson.sections)) missingFields.push('sections');
-
-                                    if (missingFields.length > 0) {
-                                        const errorMsg = `CRITICAL: Frontend received incomplete data. Missing: ${missingFields.join(', ')}`;
-                                        console.error('[FRONTEND]', errorMsg);
-                                        throw new Error(errorMsg);
-                                    }
-
-                                    console.log('[FRONTEND] All required fields validated ✓');
-
-                                    const parsed = finalResumeJson;
-
-                                    // Skills: dynamically nested format preservation
-                                    let skillsFlat: string[] = [];
-                                    let skillsRecord: Record<string, string[]> = {};
-                                    if (Array.isArray(parsed.skills)) {
-                                        skillsFlat = parsed.skills;
-                                        skillsRecord = { 'Skills': parsed.skills };
-                                    } else if (parsed.skills && typeof parsed.skills === 'object') {
-                                        skillsRecord = parsed.skills;
-                                        skillsFlat = Object.values(parsed.skills).flat() as string[];
-                                    }
-
-                                    const mappedSections = (parsed.sections || []).map((sec: any) => ({
-                                        id: uuidv4(),
-                                        type: sec.name.toLowerCase().replace(/[^a-z]/g, ''),
-                                        title: sec.name,
-                                        items: (sec.entries || []).map((entry: any) => ({
-                                            id: uuidv4(),
-                                            title: entry.title || '',
-                                            subtitle: entry.subtitle || '',
-                                            location: entry.location || '',
-                                            dates: entry.startDate && entry.endDate ? `${entry.startDate} - ${entry.endDate}` : (entry.startDate || entry.dates || ''),
-                                            bullets: (entry.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                        }))
-                                    }));
-
-                                    // Ensure the skills anchor stub exists so ContentPanel renders the editor
-                                    if (!mappedSections.some((s: any) => s.type === 'skills')) {
-                                        const eduIndex = mappedSections.findIndex((s: any) => s.type === 'education');
-                                        const stub = { id: uuidv4(), type: 'skills', title: 'Skills', items: [] };
-                                        if (eduIndex !== -1) {
-                                            mappedSections.splice(eduIndex, 0, stub);
-                                        } else {
-                                            mappedSections.push(stub);
-                                        }
-                                    }
-
-                                    const initialResume: TailoredResumeData = {
-                                        id: uuidv4(),
-                                        contact: {
-                                            name: parsed.basics?.name || parsed.basics?.full_name || '',
-                                            email: parsed.basics?.email || '',
-                                            phone: parsed.basics?.phone || '',
-                                            linkedin: parsed.basics?.linkedin || '',
-                                            location: parsed.basics?.location || '',
-                                            github: parsed.basics?.website ? [parsed.basics.website] : (parsed.basics?.portfolio ? [parsed.basics.portfolio] : []),
-                                        },
-                                        summary: parsed.summary || '',
-                                        sections: mappedSections,
-                                        skills: skillsRecord,
-                                        design: DEFAULT_RESUME_DESIGN,
-                                        createdAt: new Date().toISOString(),
-                                        updatedAt: new Date().toISOString(),
-                                        jobId: jobId,
-                                        jobTitle: jobTitle
-                                    };
-
-                                    console.log('[FRONTEND] Mapped resume - name:', initialResume.contact.name);
-                                    console.log('[FRONTEND] Mapped resume - experience items:', initialResume.sections[0].items.length);
-
-                                    // Wire missingSkills and autoAddedSkills from new pipeline
-                                    const missingSkills: string[] = parsed.missingSkills || data.missingSkills || [];
-                                    const autoAddedSkills: string[] = parsed.autoAddedSkills || data.autoAddedSkills || [];
-                                    
-                                    let matchedSkills = skillsFlat;
-                                    if (autoAddedSkills.length > 0) {
-                                        matchedSkills = skillsFlat.filter(s => !autoAddedSkills.includes(s));
-                                    }
-
-                                    setResume(initialResume);
-                                    setKeywords({
-                                        matched: matchedSkills,
-                                        missing: missingSkills,
-                                        autoAdded: autoAddedSkills,
-                                    });
-                                    setHasGenerated(true);
-                                    setActiveTab('content');
-                                    parsingProgress.complete();
-                                } else if (data.final_resume_json) {
-                                    // Legacy format without status field
-                                    console.log('[FRONTEND] Received legacy done format, using data.final_resume_json');
-                                    const finalResumeJson = data.final_resume_json;
-
-                                    if (!finalResumeJson || Object.keys(finalResumeJson).length === 0) {
-                                        throw new Error('final_resume_json is empty');
-                                    }
-
-                                    const parsed = finalResumeJson;
-
-                                    let skillsFlat: string[] = [];
-                                    let skillsRecord: Record<string, string[]> = {};
-                                    if (Array.isArray(parsed.skills)) {
-                                        skillsFlat = parsed.skills;
-                                        skillsRecord = { 'Skills': parsed.skills };
-                                    } else if (parsed.skills && typeof parsed.skills === 'object') {
-                                        skillsRecord = parsed.skills;
-                                        skillsFlat = Object.values(parsed.skills).flat() as string[];
-                                    }
-
-                                    const mappedSectionsLegacy = (parsed.sections || []).map((sec: any) => ({
-                                        id: uuidv4(),
-                                        type: sec.name.toLowerCase().replace(/[^a-z]/g, ''),
-                                        title: sec.name,
-                                        items: (sec.entries || []).map((entry: any) => ({
-                                            id: uuidv4(),
-                                            title: entry.title || '',
-                                            subtitle: entry.subtitle || '',
-                                            location: entry.location || '',
-                                            dates: entry.startDate && entry.endDate ? `${entry.startDate} - ${entry.endDate}` : (entry.startDate || entry.dates || ''),
-                                            bullets: (entry.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
-                                        }))
-                                    }));
-
-                                    if (!mappedSectionsLegacy.some((s: any) => s.type === 'skills')) {
-                                        const eduIndex = mappedSectionsLegacy.findIndex((s: any) => s.type === 'education');
-                                        const stub = { id: uuidv4(), type: 'skills', title: 'Skills', items: [] };
-                                        if (eduIndex !== -1) {
-                                            mappedSectionsLegacy.splice(eduIndex, 0, stub);
-                                        } else {
-                                            mappedSectionsLegacy.push(stub);
-                                        }
-                                    }
-
-                                    const initialResume: TailoredResumeData = {
-                                        id: uuidv4(),
-                                        contact: {
-                                            name: parsed.basics?.name || parsed.basics?.full_name || '',
-                                            email: parsed.basics?.email || '',
-                                            phone: parsed.basics?.phone || '',
-                                            linkedin: parsed.basics?.linkedin || '',
-                                            location: parsed.basics?.location || '',
-                                            github: parsed.basics?.website ? [parsed.basics.website] : (parsed.basics?.portfolio ? [parsed.basics.portfolio] : []),
-                                        },
-                                        summary: parsed.summary || '',
-                                        sections: mappedSectionsLegacy,
-                                        skills: skillsRecord,
-                                        design: DEFAULT_RESUME_DESIGN,
-                                        createdAt: new Date().toISOString(),
-                                        updatedAt: new Date().toISOString(),
-                                        jobId: jobId,
-                                        jobTitle: jobTitle
-                                    };
-
-                                    const missingSkills: string[] = parsed.missingSkills || data.missingSkills || [];
-                                    const autoAddedSkills: string[] = parsed.autoAddedSkills || data.autoAddedSkills || [];
-                                    
-                                    let matchedSkills = skillsFlat;
-                                    if (autoAddedSkills.length > 0) {
-                                        matchedSkills = skillsFlat.filter(s => !autoAddedSkills.includes(s));
-                                    }
-
-                                    setResume(initialResume);
-                                    setKeywords({
-                                        matched: matchedSkills,
-                                        missing: missingSkills,
-                                        autoAdded: autoAddedSkills,
-                                    });
-                                    setHasGenerated(true);
-                                    setActiveTab('content');
-                                    parsingProgress.complete();
-                                } else {
-                                    // Missing final_resume_json - try to fetch from compose_response_path
-                                    console.error('[FRONTEND] CRITICAL: No final_resume_json in done event!');
-                                    console.log('[FRONTEND] Available data keys:', Object.keys(data));
-                                    console.log('[FRONTEND] compose_response_path:', data.compose_response_path);
-
-                                    if (data.compose_response_path) {
-                                        try {
-                                            const debugResponse = await fetch(`/api/debug-compose-response?path=${encodeURIComponent(data.compose_response_path)}`);
-                                            if (debugResponse.ok) {
-                                                const debugJson = await debugResponse.json();
-                                                console.log('[FRONTEND] Fetched debug data from server:', Object.keys(debugJson));
-                                                setDebugData(debugJson);
-                                                setShowDebugPanel(true);
-                                                setError('Received empty final_resume_json. Debug data loaded below.');
-                                            }
-                                        } catch (fetchErr) {
-                                            console.error('[FRONTEND] Failed to fetch debug data:', fetchErr);
-                                            throw new Error('CRITICAL: No final resume JSON returned from orchestrator. Failed to load debug data.');
-                                        }
-                                    } else {
-                                        throw new Error('CRITICAL: No final resume JSON returned from orchestrator and no debug path available.');
-                                    }
+                                let skillsFlat: string[] = [];
+                                let skillsRecord: Record<string, string[]> = {};
+                                if (Array.isArray(parsed.skills)) {
+                                    skillsFlat = parsed.skills;
+                                    skillsRecord = { 'Skills': parsed.skills };
+                                } else if (parsed.skills && typeof parsed.skills === 'object') {
+                                    skillsRecord = parsed.skills;
+                                    skillsFlat = Object.values(parsed.skills).flat() as string[];
                                 }
+
+                                const mappedSections = (parsed.sections || []).map((sec: any) => ({
+                                    id: uuidv4(),
+                                    type: sec.name.toLowerCase().replace(/[^a-z]/g, ''),
+                                    title: sec.name,
+                                    items: (sec.entries || []).map((entry: any) => ({
+                                        id: uuidv4(),
+                                        title: entry.title || '',
+                                        subtitle: entry.subtitle || '',
+                                        location: entry.location || '',
+                                        dates: entry.startDate && entry.endDate ? `${entry.startDate} - ${entry.endDate}` : (entry.startDate || entry.dates || ''),
+                                        bullets: (entry.bullets || []).map((b: string) => ({ id: uuidv4(), text: b }))
+                                    }))
+                                }));
+
+                                if (!mappedSections.some((s: any) => s.type === 'skills')) {
+                                    const dev = { id: uuidv4(), type: 'skills', title: 'Skills', items: [] };
+                                    mappedSections.push(dev);
+                                }
+
+                                const initialResume: TailoredResumeData = {
+                                    id: uuidv4(),
+                                    contact: {
+                                        name: parsed.basics?.name || parsed.basics?.full_name || '',
+                                        email: parsed.basics?.email || '',
+                                        phone: parsed.basics?.phone || '',
+                                        linkedin: parsed.basics?.linkedin || '',
+                                        location: parsed.basics?.location || '',
+                                        github: parsed.basics?.website ? [parsed.basics.website] : (parsed.basics?.portfolio ? [parsed.basics.portfolio] : []),
+                                    },
+                                    summary: parsed.summary || '',
+                                    sections: mappedSections,
+                                    skills: skillsRecord,
+                                    design: DEFAULT_RESUME_DESIGN,
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
+                                    jobId: jobId,
+                                    jobTitle: jobTitle
+                                };
+
+                                const missingSkills: string[] = parsed.missingSkills || data.missingSkills || [];
+                                const autoAddedSkills: string[] = parsed.autoAddedSkills || data.autoAddedSkills || [];
+                                
+                                let matchedSkills = skillsFlat;
+                                if (autoAddedSkills.length > 0) {
+                                    matchedSkills = skillsFlat.filter(s => !autoAddedSkills.includes(s));
+                                }
+
+                                setHasGenerated(true);
+                                parsingProgress.complete();
+
+                                // Automatically save the newly generated resume to the DB
+                                try {
+                                    await fetch('/api/tailored-resume', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            jobId,
+                                            resumeData: initialResume,
+                                            keywordsData: { matched: matchedSkills, missing: missingSkills, autoAdded: autoAddedSkills }
+                                        }),
+                                    });
+                                } catch (err) {
+                                    console.error('Auto-save failed:', err);
+                                }
+
+                                // Snappier redirect to the editor
+                                setTimeout(() => {
+                                    window.location.href = `/resume-editor/${jobId}`;
+                                }, 300);
+
                             } else if (eventType === 'error') {
-                                console.error('[FRONTEND] Received error event:', data);
                                 throw new Error(data.message || 'Stream error');
                             }
                         } catch (e) {
-                            console.error('[FRONTEND] Failed to parse SSE data:', e);
+                            console.error('Stream parse error:', e);
                         }
                     }
                 }
             }
         } catch (err: any) {
-            if (err.name === 'AbortError') {
-                console.log('[FRONTEND] Request cancelled');
-            } else {
-                console.error('[FRONTEND] Initialization error:', err);
+            if (err.name !== 'AbortError') {
                 setError(err.message || 'Failed to parse resume from PDF.');
             }
         } finally {
@@ -393,814 +221,190 @@ export function TailoredResumeEditor({
         parsingProgress.reset();
     };
 
-    const handleRegenerate = () => {
-        handleGenerate();
-    };
-
-    const getDownloadFilename = () => {
-        if (!resume?.contact?.name) return 'Resume.pdf';
-
-        const nameParts = resume.contact.name.split(' ');
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.slice(1).join('_') || '';
-        const companyName = (company || '').replace(/[^a-zA-Z0-9]/g, '');
-
-        const filename = `${firstName}_${lastName}_${companyName}_resume.pdf`.toLowerCase();
-        return filename.replace(/__/g, '_').replace(/^_|_$/g, '') || 'Resume.pdf';
-    };
-
-    const handleDownloadClick = () => {
-        if (!hasSavedToDocuments) {
-            setShowDownloadModal(true);
-        } else {
-            handleDownloadPdf();
-        }
-    };
-
-    const handleDownloadAfterSave = async () => {
-        await handleSaveToDocuments();
-        setShowDownloadModal(false);
-        await handleDownloadPdf();
-    };
-
-    const handleDownloadWithoutSaving = async () => {
-        setShowDownloadModal(false);
-        await handleDownloadPdf();
-    };
-
-    const handleDownloadPdf = async () => {
-        if (!resume) return;
-
-        setIsDownloading(true);
-
-        try {
-            const response = await fetch('/api/resume-export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resume }),
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Failed to generate PDF');
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = getDownloadFilename();
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-        } catch (err: any) {
-            console.error('PDF generation error:', err);
-            alert('Failed to generate PDF. Please try again.');
-        } finally {
-            setIsDownloading(false);
-        }
-    };
-
-    const handleSaveToDocuments = async () => {
-        if (!resume) return;
-
-        setIsSaving(true);
-        const btn = document.getElementById('save-documents-btn');
-        if (btn) btn.textContent = 'Saving...';
-
-        try {
-            const response = await fetch('/api/save-tailored-resume', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    resume,
-                    jobTitle: jobTitle
-                }),
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                setHasSavedToDocuments(true);
-                if (btn) {
-                    btn.textContent = '✓ Saved!';
-                    setTimeout(() => {
-                        if (btn) btn.textContent = '💾 Save to Documents';
-                    }, 3000);
-                }
-            } else {
-                alert('Failed to save resume: ' + (data.error || 'Unknown error'));
-                if (btn) btn.textContent = '💾 Save to Documents';
-            }
-        } catch (err) {
-            console.error('Save error:', err);
-            alert('Failed to save resume');
-            if (btn) btn.textContent = '💾 Save to Documents';
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleDesignChange = (newDesign: TailoredResumeData['design']) => {
-        if (resume) {
-            setResume({
-                ...resume,
-                design: newDesign,
-                updatedAt: new Date().toISOString(),
-            });
-        }
-    };
-
-    const handleResetDesign = () => {
-        if (resume) {
-            setResume({
-                ...resume,
-                design: {
-                    template: 'classic',
-                    fontFamily: "'Times New Roman', Georgia, serif",
-                    fontSize: 12,
-                    accentColor: '#1a365d',
-                    margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
-                },
-                updatedAt: new Date().toISOString(),
-            });
-        }
-    };
-
-    const addKeywordToResume = async (keyword: string) => {
-        if (!resume || isCategorizing) return;
-
-        setIsCategorizing(true);
-        try {
-            const currentSkillsObj = (resume.skills && !Array.isArray(resume.skills)) ? resume.skills : {};
-            
-            const response = await fetch('/api/categorize-skills', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    currentSkills: currentSkillsObj,
-                    newSkills: [keyword]
-                })
-            });
-            const data = await response.json();
-            const updatedSkills = data.updatedSkills || currentSkillsObj;
-
-            setResume({
-                ...resume,
-                skills: updatedSkills,
-                updatedAt: new Date().toISOString(),
-            });
-
-            // Remove from missing keywords
-            if (keywords) {
-                setKeywords({
-                    ...keywords,
-                    matched: [...keywords.matched, keyword],
-                    missing: keywords.missing.filter(k => k !== keyword),
-                    atsScore: keywords.atsScore ? {
-                        ...keywords.atsScore,
-                        matchedCount: keywords.atsScore.matchedCount + 1,
-                        raw: Math.round(((keywords.atsScore.matchedCount + 1) / keywords.atsScore.totalCount) * 100),
-                    } : undefined,
-                });
-            }
-        } catch (err) {
-            console.error("[addKeywordToResume] Failed to categorize skill via AI:", err);
-        } finally {
-            setIsCategorizing(false);
-        }
-    };
-
-    const removeAutoAddedKeyword = (keyword: string) => {
-        if (!resume) return;
-
-        let updatedSkillsRecord = { ...resume.skills } as Record<string, string[]>;
-        let found = false;
-        if (resume.skills && !Array.isArray(resume.skills)) {
-            const newSkills = { ...resume.skills };
-            let foundInObject = false;
-            
-            for (const category in newSkills) {
-                if (newSkills[category].includes(keyword)) {
-                    newSkills[category] = newSkills[category].filter(k => k !== keyword);
-                    foundInObject = true;
-                    found = true;
-                }
-            }
-            
-            if (foundInObject) {
-                updatedSkillsRecord = newSkills;
-            }
-        }
-
-        if (found) {
-            setResume({
-                ...resume,
-                skills: updatedSkillsRecord,
-                updatedAt: new Date().toISOString(),
-            });
-
-            if (keywords) {
-                setKeywords({
-                    ...keywords,
-                    autoAdded: (keywords.autoAdded || []).filter(k => k !== keyword),
-                    missing: [...keywords.missing, keyword],
-                    atsScore: keywords.atsScore ? {
-                        ...keywords.atsScore,
-                        matchedCount: Math.max(0, keywords.atsScore.matchedCount - 1),
-                        raw: Math.round(((Math.max(0, keywords.atsScore.matchedCount - 1)) / keywords.atsScore.totalCount) * 100),
-                    } : undefined,
-                });
-            }
-        }
-    };
-
     if (!isOpen) return null;
 
-    const isSetupMode = !hasGenerated;
-
-    // Conditional Styles
-    const containerStyle: React.CSSProperties = isSetupMode ? {
-        // Setup Mode (Match CoverLetterSetupModal)
-        maxWidth: '600px',
-        width: '95%',
-        maxHeight: '85vh',
-        display: 'flex',
-        flexDirection: 'column',
-    } : {
-        // Editor Mode (Full Screen)
-        width: '95vw',
-        maxWidth: '1400px',
-        height: '90vh',
-        padding: 0, // Override class padding
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--background)',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-    };
-
-    const headerStyle: React.CSSProperties = isSetupMode ? {
-        paddingBottom: '16px',
-        borderBottom: '1px solid var(--border)',
-        marginBottom: '16px'
-    } : {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '16px 20px',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--surface)',
-    };
-
     return (
-        <div
-            className="modal-backdrop"
-            onClick={(e) => e.target === e.currentTarget && !isGenerating && onClose()}
-            style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'rgba(0, 0, 0, 0.7)',
-                zIndex: 1000,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-            }}
-        >
-            <div
-                className="modal-content"
-                style={containerStyle}
-            >
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0, 0, 0, 0.45)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: '20px'
+        }}>
+            <div style={{
+                background: '#ffffff', borderRadius: '12px',
+                width: '90%', maxWidth: '600px', maxHeight: '90vh',
+                display: 'flex', flexDirection: 'column',
+                boxShadow: '0 20px 60px rgba(12,24,40,0.35)',
+                overflow: 'hidden', border: '1px solid #e6e9ee'
+            }}>
                 {/* Header */}
-                {!isGenerating && (
-                    <div style={headerStyle}>
-                        <div style={isSetupMode ? { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } : undefined}>
-                            <div>
-                                <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    Resume Parser (Strict JSON)
-                                </h2>
-                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                    Parse your default resume into a strict standardized JSON layout.
-                                </p>
-                            </div>
-                            {isSetupMode && (
-                                <button onClick={onClose} className="btn btn-ghost btn-icon">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <line x1="18" y1="6" x2="6" y2="18" />
-                                        <line x1="6" y1="6" x2="18" y2="18" />
-                                    </svg>
-                                </button>
-                            )}
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid #e6e9ee' }}>
+                    <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between' }}>
+                        <div>
+                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b', margin: 0 }}>Tailored Resume Editor</h2>
+                            <p style={{ marginTop: '4px', fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+                                {jobTitle} {company && `at ${company}`}
+                            </p>
                         </div>
-
-                        {!isSetupMode && (
-                            <button onClick={onClose} className="btn btn-ghost btn-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                            </button>
-                        )}
+                        <button 
+                            onClick={onClose} 
+                            style={{ 
+                                padding: '8px', 
+                                marginTop: '-4px', 
+                                marginRight: '-4px',
+                                color: '#94a3b8', 
+                                background: 'transparent',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                            }}
+                            onMouseOver={(e) => {
+                                e.currentTarget.style.color = '#64748b';
+                                e.currentTarget.style.background = '#f1f5f9';
+                            }}
+                            onMouseOut={(e) => {
+                                e.currentTarget.style.color = '#94a3b8';
+                                e.currentTarget.style.background = 'transparent';
+                            }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
                     </div>
-                )}
+                </div>
 
-                {/* Main Content */}
-                <div style={{ flex: 1, display: 'flex', overflow: 'hidden', flexDirection: 'column' }}>
-                    {isSetupMode ? (
-                        // Initial Setup View - Match CoverLetterSetupModal content structure
+                {/* Setup / Loading Area */}
+                <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
+                    {error && (
                         <div style={{
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            overflowY: isGenerating ? 'hidden' : 'auto',
-                            justifyContent: isGenerating ? 'center' : 'flex-start',
-                            padding: isGenerating ? '40px' : '0'
+                            padding: '12px 16px', background: '#fef2f2',
+                            color: '#dc2626', borderRadius: '8px',
+                            marginBottom: '20px', fontSize: '14px',
+                            border: '1px solid #fecaca'
                         }}>
-                            {!isGenerating ? (
-                                <div style={{ marginBottom: '20px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                                        Job Description <span style={{ color: 'var(--error)' }}>*</span>
-                                    </label>
-                                    <textarea
-                                        value={jobDescription}
-                                        onChange={(e) => setJobDescription(e.target.value)}
-                                        placeholder="Paste the full job description here..."
-                                        style={{
-                                            width: '100%',
-                                            minHeight: '200px',
-                                            padding: '12px',
-                                            fontSize: '14px',
-                                            borderRadius: 'var(--radius-md)',
-                                            border: '1px solid var(--border)',
-                                            resize: 'vertical',
-                                            background: 'var(--background)',
-                                            color: 'var(--text-primary)'
-                                        }}
-                                        disabled={isGenerating}
-                                    />
-                                    {error && (
-                                        <p style={{ color: 'var(--error)', fontSize: '13px', marginTop: '8px' }}>
-                                            ⚠️ {error}
-                                        </p>
-                                    )}
-                                </div>
-                            ) : (
-                                <ParsingProgress
-                                    stages={parsingProgress.stages}
-                                    currentStageIndex={parsingProgress.currentStageIndex}
-                                    onCancel={handleCancelParsing}
-                                />
-                            )}
+                            {error}
                         </div>
-                    ) : resume ? (
-                        // Two-Panel Editor View
-                        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100%' }}>
-                            {/* Left Panel */}
-                            <div style={{
-                                width: '400px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                borderRight: '1px solid var(--border)',
-                            }}>
-                                {/* Tabs */}
-                                <div style={{
-                                    display: 'flex',
-                                    borderBottom: '1px solid var(--border)',
-                                    background: 'var(--surface)',
-                                }}>
-                                    <button
-                                        onClick={() => setActiveTab('content')}
-                                        style={{
-                                            flex: 1,
-                                            padding: '12px',
-                                            background: 'transparent',
-                                            border: 'none',
-                                            borderBottom: activeTab === 'content' ? '2px solid var(--accent)' : '2px solid transparent',
-                                            color: activeTab === 'content' ? 'var(--accent)' : 'var(--text-secondary)',
-                                            fontWeight: 500,
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        📝 Content
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('design')}
-                                        style={{
-                                            flex: 1,
-                                            padding: '12px',
-                                            background: 'transparent',
-                                            border: 'none',
-                                            borderBottom: activeTab === 'design' ? '2px solid var(--accent)' : '2px solid transparent',
-                                            color: activeTab === 'design' ? 'var(--accent)' : 'var(--text-secondary)',
-                                            fontWeight: 500,
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        🎨 Design
-                                    </button>
-                                </div>
+                    )}
 
-                                {/* Keywords */}
-                                {keywords && (
-                                    <div style={{
-                                        padding: '12px 16px',
-                                        borderBottom: '1px solid var(--border)',
-                                        background: 'var(--background-secondary)',
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                            <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                                                🔑 Keywords
-                                            </span>
-                                            {keywords.atsScore && (
-                                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                                    <span
-                                                        className="badge"
-                                                        style={{
-                                                            fontSize: '11px',
-                                                            fontWeight: 600,
-                                                            background: keywords.atsScore.raw >= 80 ? 'var(--success-muted)' : keywords.atsScore.raw >= 50 ? 'var(--warning-muted)' : 'var(--error-muted)',
-                                                            color: keywords.atsScore.raw >= 80 ? 'var(--success)' : keywords.atsScore.raw >= 50 ? 'var(--warning)' : 'var(--error)',
-                                                        }}
-                                                    >
-                                                        ATS: {keywords.atsScore.raw}%
-                                                    </span>
-                                                    <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                                                        ({keywords.atsScore.matchedCount}/{keywords.atsScore.totalCount})
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
-                                            {keywords.matched.slice(0, 8).map((k, i) => (
-                                                <span key={i} className="badge" style={{ fontSize: '10px', background: 'var(--success-muted)', color: 'var(--success)' }}>
-                                                    ✓ {k}
-                                                </span>
-                                            ))}
-                                            {keywords.matched.length > 8 && (
-                                                <span className="badge" style={{ fontSize: '10px', background: 'var(--surface)', color: 'var(--text-secondary)' }}>
-                                                    +{keywords.matched.length - 8} more
-                                                </span>
-                                            )}
-                                        </div>
-                                        {keywords.autoAdded && keywords.autoAdded.length > 0 && (
-                                            <>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', marginTop: '12px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-                                                            Missing Keywords (Added in skills)
-                                                        </span>
-                                                        <div 
-                                                            style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-                                                            onMouseEnter={() => setShowInfoTooltip(true)}
-                                                            onMouseLeave={() => setShowInfoTooltip(false)}
-                                                        >
-                                                            <span 
-                                                                style={{ fontSize: '11px', cursor: 'help', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}
-                                                            >
-                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <circle cx="12" cy="12" r="10"></circle>
-                                                                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                                                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                                                                </svg>
-                                                            </span>
-                                                            
-                                                            {showInfoTooltip && (
-                                                                <div style={{
-                                                                    position: 'absolute',
-                                                                    top: '20px',
-                                                                    left: '0',
-                                                                    width: '240px',
-                                                                    background: 'rgba(30, 41, 59, 0.95)',
-                                                                    backdropFilter: 'blur(8px)',
-                                                                    color: 'white',
-                                                                    padding: '10px 14px',
-                                                                    borderRadius: '8px',
-                                                                    fontSize: '11px',
-                                                                    lineHeight: '1.5',
-                                                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                                                                    zIndex: 100,
-                                                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                                                    pointerEvents: 'none',
-                                                                }}>
-                                                                    <div style={{ fontWeight: 600, marginBottom: '4px', color: '#60a5fa' }}>💡 Smart ATS Optimization</div>
-                                                                    These keywords were automatically added to your skills section of the resume to increase the ATS score. You can remove them by clicking on keywords that don't apply to you.
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
-                                                    {keywords.autoAdded.map((k, i) => (
-                                                        <button
-                                                            key={`auto-${i}`}
-                                                            onClick={() => removeAutoAddedKeyword(k)}
-                                                            className="badge"
-                                                            style={{
-                                                                fontSize: '10px',
-                                                                background: 'var(--success-muted)',
-                                                                color: 'var(--success)',
-                                                                cursor: 'pointer',
-                                                                border: 'none',
-                                                            }}
-                                                            title="Added via AI mapping. Click to remove from skills."
-                                                        >
-                                                            ✕ {k}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </>
-                                        )}
-                                        {keywords.missing.length > 0 && (
-                                            <>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                                    <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>Missing:</span>
-                                                </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                    {keywords.missing.slice(0, 10).map((k, i) => (
-                                                        <button
-                                                            key={i}
-                                                            onClick={() => addKeywordToResume(k)}
-                                                            disabled={isCategorizing}
-                                                            className="badge"
-                                                            style={{
-                                                                fontSize: '10px',
-                                                                background: 'var(--surface)',
-                                                                color: 'var(--text-secondary)',
-                                                                cursor: isCategorizing ? 'wait' : 'pointer',
-                                                                border: '1px solid var(--border)',
-                                                                opacity: isCategorizing ? 0.5 : 1
-                                                            }}
-                                                            title="Click to categorize into Skills via AI"
-                                                        >
-                                                            + {k}
-                                                        </button>
-                                                    ))}
-                                                    {keywords.missing.length > 10 && (
-                                                        <span className="badge" style={{ fontSize: '10px', background: 'var(--surface)', color: 'var(--text-secondary)' }}>
-                                                            +{keywords.missing.length - 10} more
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Content Panel */}
-                                <div style={{ flex: 1, overflow: 'auto' }}>
-                                    {activeTab === 'content' ? (
-                                        <ContentPanel resume={resume} onChange={setResume} />
-                                    ) : (
-                                        <DesignPanel
-                                            design={resume.design}
-                                            onChange={handleDesignChange}
-                                            onReset={handleResetDesign}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Right Panel - Preview */}
-                            <ResumePreview
-                                resume={resume}
-                                onDownloadPdf={handleDownloadPdf}
-                                isDownloading={isDownloading}
+                    {!isGenerating && !hasGenerated ? (
+                        <div className="flex flex-col gap-2">
+                            <label style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                Job Description <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <textarea
+                                style={{ 
+                                    width: '100%', 
+                                    background: '#fff', 
+                                    border: '1px solid #e6e9ee', 
+                                    borderRadius: '8px', 
+                                    padding: '12px 14px', 
+                                    fontSize: '14px', 
+                                    resize: 'vertical',
+                                    color: '#334155',
+                                    lineHeight: 1.6,
+                                    outline: 'none',
+                                    minHeight: '200px',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                value={jobDescription}
+                                onChange={(e) => setJobDescription(e.target.value)}
+                                placeholder="Paste the target job description here..."
                             />
                         </div>
-                    ) : null}
+                    ) : (
+                        <div style={{ padding: '20px 0' }}>
+                            <ParsingProgress 
+                                stages={parsingProgress.stages}
+                                currentStageIndex={parsingProgress.currentStageIndex}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer Actions */}
-                {isSetupMode ? (
-                    <div style={{
-                        paddingTop: isGenerating ? '0' : '16px',
-                        borderTop: isGenerating ? 'none' : '1px solid var(--border)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '16px',
-                        overflow: isGenerating ? 'hidden' : 'auto' // Hide scrollbar part 1
-                    }}>
-                        {/* Hide scrollbar part 2 */}
-                        <style>{`
-                            .modal-content::-webkit-scrollbar { display: none; }
-                            .modal-content { -ms-overflow-style: none; scrollbar-width: none; }
-                        `}</style>
-
-                        {isGenerating && (
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                paddingTop: '16px',
-                                marginTop: 'auto'
-                            }}>
-                                <button
-                                    onClick={handleCancelParsing}
-                                    className="btn btn-ghost"
-                                    style={{ fontSize: '13px' }}
+                <div style={{ padding: '16px 24px', borderTop: '1px solid #e6e9ee', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {isGenerating ? (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                            <button 
+                                onClick={handleCancelParsing} 
+                                style={{ 
+                                    padding: '8px 16px',
+                                    fontSize: '13px', 
+                                    fontWeight: 600, 
+                                    color: '#dc2626', 
+                                    background: '#fef2f2', 
+                                    border: '1px solid #fecaca',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                Stop Generation
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{ flex: 1 }}>
+                                {jobUrl && (
+                                    <a 
+                                        href={jobUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        style={{ 
+                                            fontSize: '13px', 
+                                            fontWeight: 600, 
+                                            color: '#3b82f6', 
+                                            textDecoration: 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+                                        View Original Job 
+                                    </a>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <button 
+                                    onClick={onClose} 
+                                    style={{ 
+                                        padding: '10px 16px',
+                                        fontSize: '13px', 
+                                        fontWeight: 600, 
+                                        color: '#64748b', 
+                                        background: 'transparent',
+                                        border: '1px solid #e6e9ee',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
+                                    }}
                                 >
                                     Cancel
                                 </button>
-                            </div>
-                        )}
-
-                        {!isGenerating && (
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                {jobUrl ? (
-                                    <a
-                                        href={jobUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="btn btn-ghost"
-                                        style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                                            <polyline points="15 3 21 3 21 9" />
-                                            <line x1="10" y1="14" x2="21" y2="3" />
-                                        </svg>
-                                        View Original Job
-                                    </a>
-                                ) : <div></div>}
-
-                                <div style={{ display: 'flex', gap: '12px' }}>
-                                    <button onClick={onClose} className="btn btn-ghost">
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleGenerate}
-                                        disabled={isGenerating || !jobDescription.trim()}
-                                        className="btn btn-primary"
-                                    >
-                                        Parse & Edit Resume
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    hasGenerated && resume && (
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '12px 20px',
-                            borderTop: '1px solid var(--border)',
-                            background: 'var(--surface)',
-                        }}>
-                            <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                                Last updated: {new Date(resume.updatedAt).toLocaleTimeString()}
-                            </span>
-                            <div style={{ display: 'flex', gap: '12px' }}>
                                 <button
-                                    onClick={handleRegenerate}
-                                    disabled={isGenerating}
-                                    className="btn btn-secondary"
+                                    onClick={handleGenerate}
+                                    disabled={!jobDescription.trim()}
+                                    style={{ 
+                                        padding: '10px 20px',
+                                        background: jobDescription.trim() ? '#3b82f6' : '#94a3b8',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontSize: '13px',
+                                        fontWeight: 700,
+                                        cursor: jobDescription.trim() ? 'pointer' : 'not-allowed',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: jobDescription.trim() ? '0 4px 12px rgba(59, 130, 246, 0.25)' : 'none'
+                                    }}
                                 >
-                                    🔄 Regenerate
-                                </button>
-                                <button
-                                    id="save-documents-btn"
-                                    onClick={handleSaveToDocuments}
-                                    disabled={isSaving}
-                                    className="btn btn-secondary"
-                                >
-                                    {isSaving ? '...' : '💾 Save to Documents'}
-                                </button>
-                                <button
-                                    onClick={handleDownloadClick}
-                                    disabled={isDownloading}
-                                    className="btn btn-primary"
-                                >
-                                    {isDownloading ? '...' : '📄 Download PDF'}
+                                    Parse & Edit Resume
                                 </button>
                             </div>
-                        </div>
-                    )
-                )}
+                        </>
+                    )}
+                </div>
             </div>
-
-            {/* Download Confirmation Modal */}
-            {showDownloadModal && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0, 0, 0, 0.7)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 2000,
-                    }}
-                    onClick={() => setShowDownloadModal(false)}
-                >
-                    <div
-                        style={{
-                            background: 'var(--surface)',
-                            borderRadius: '12px',
-                            padding: '24px',
-                            maxWidth: '400px',
-                            width: '90%',
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h3 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 600 }}>
-                            Save Before Downloading?
-                        </h3>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '14px' }}>
-                            Would you like to save your resume to Documents before downloading? This helps keep your files organized.
-                        </p>
-                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                            <button
-                                onClick={handleDownloadWithoutSaving}
-                                className="btn btn-ghost"
-                            >
-                                Download Only
-                            </button>
-                            <button
-                                onClick={handleDownloadAfterSave}
-                                className="btn btn-primary"
-                            >
-                                Save & Download
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Debug Panel */}
-            {showDebugPanel && debugData && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0, 0, 0, 0.9)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 3000,
-                    }}
-                    onClick={() => setShowDebugPanel(false)}
-                >
-                    <div
-                        style={{
-                            background: 'var(--surface)',
-                            borderRadius: '12px',
-                            padding: '24px',
-                            maxWidth: '90%',
-                            maxHeight: '90%',
-                            width: '800px',
-                            overflow: 'auto',
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h3 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 600, color: 'var(--error)' }}>
-                            ⚠️ Debug Data Loaded
-                        </h3>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '14px' }}>
-                            The done event was received but final_resume_json was empty. This debug data was loaded from the server.
-                        </p>
-                        <pre style={{ 
-                            background: 'var(--background-secondary)', 
-                            padding: '16px', 
-                            borderRadius: '8px', 
-                            overflow: 'auto',
-                            fontSize: '12px',
-                            maxHeight: '400px',
-                            textWrap: 'wrap'
-                        }}>
-                            {JSON.stringify(debugData, null, 2)}
-                        </pre>
-                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
-                            <button
-                                onClick={() => {
-                                    setShowDebugPanel(false);
-                                    onClose();
-                                }}
-                                className="btn btn-ghost"
-                            >
-                                Close & Go Back
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

@@ -285,13 +285,14 @@ export interface ResumeSection {
   type: string; // Dynamic section types allowed
   title: string;
   isCollapsed?: boolean;
+  visible?: boolean; // For hide/unhide functionality
   items: ResumeSectionItem[];
 }
 
 export type ResumeSkillsSection = Record<string, string[]>;
 
 export interface ResumeDesign {
-  template: 'classic' | 'modern';
+  template: 'classic' | 'modern' | 'executive' | 'professional' | 'minimal';
   fontFamily: string;
   fontSize: number;
   accentColor: string;

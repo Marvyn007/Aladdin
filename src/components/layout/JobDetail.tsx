@@ -472,11 +472,29 @@ export function JobDetail({
 }: JobDetailProps) {
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingResume, setIsGeneratingResume] = useState(false);
+    const [hasTailoredResume, setHasTailoredResume] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const { toggleJobStatus } = useStoreActions();
 
     // The DB row spreads posted_by_user_id (snake_case); postedByUserId (camelCase) is only set in some mappers.
     const jobPosterId = job?.posted_by_user_id || job?.postedByUserId || job?.postedBy?.id || null;
+
+    useEffect(() => {
+        if (!job?.id) {
+            setHasTailoredResume(false);
+            return;
+        }
+        let mounted = true;
+        fetch(`/api/tailored-resume?jobId=${job.id}`)
+            .then(res => res.json())
+            .then(data => {
+                if (mounted && data.resume) {
+                    setHasTailoredResume(true);
+                }
+            })
+            .catch(err => console.error("Error checking for tailored resume:", err));
+        return () => { mounted = false; };
+    }, [job?.id]);
 
     // Temporary debug log – remove after validation
     if (process.env.NODE_ENV === 'development' && job) {
@@ -841,29 +859,51 @@ export function JobDetail({
                             )}
                         </button>
 
-                        <button
-                            onClick={handleGenerateTailoredResume}
-                            disabled={isGeneratingResume}
-                            className="btn btn-secondary"
-                            style={gatedStyle}
-                        >
-                            {isGeneratingResume ? (
-                                <>
-                                    <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                                    Loading...
-                                </>
-                            ) : (
-                                <>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                                        <polyline points="14 2 14 8 20 8" />
-                                        <path d="M16 13H8M16 17H8M10 9H8" />
-                                    </svg>
-                                    Tailor Resume
-                                    {gatedIcon}
-                                </>
-                            )}
-                        </button>
+                        {hasTailoredResume ? (
+                            <Link
+                                href={`/resume-editor/${job.id}`}
+                                className="btn"
+                                style={{
+                                    ...gatedStyle,
+                                    backgroundColor: 'var(--success)',
+                                    color: 'white',
+                                    border: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                    <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                View Tailored Resume
+                                {gatedIcon}
+                            </Link>
+                        ) : (
+                            <button
+                                onClick={handleGenerateTailoredResume}
+                                disabled={isGeneratingResume}
+                                className="btn btn-secondary"
+                                style={gatedStyle}
+                            >
+                                {isGeneratingResume ? (
+                                    <>
+                                        <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%' }} />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                                            <polyline points="14 2 14 8 20 8" />
+                                            <path d="M16 13H8M16 17H8M10 9H8" />
+                                        </svg>
+                                        Tailor Resume
+                                        {gatedIcon}
+                                    </>
+                                )}
+                            </button>
+                        )}
 
                         <button
                             onClick={() => onApply(job.id)}

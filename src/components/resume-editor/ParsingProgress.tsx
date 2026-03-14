@@ -135,22 +135,23 @@ function StageItem({ stage, index, isActive, isCompleted, isRevealing, hasNext, 
                             width: '20px',
                             height: '20px',
                             borderRadius: '50%',
-                            background: '#22c55e',
+                            background: '#10b981', // Sharper success color
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.1)'
                         }}>
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                <path d="M2.5 6L5 8.5L9.5 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M2.5 6L5 8.5L9.5 4" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </div>
                     ) : isActive ? (
                         <div style={{
-                            width: '10px',
-                            height: '10px',
+                            width: '12px',
+                            height: '12px',
                             borderRadius: '50%',
                             background: 'var(--accent)',
-                            boxShadow: '0 0 0 4px rgba(var(--accent-rgb, 59, 130, 246), 0.2)',
+                            boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.25)', // Slightly tighter shadow
                         }} />
                     ) : (
                         <div style={{

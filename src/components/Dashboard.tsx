@@ -983,6 +983,20 @@ export function Dashboard({
 
         if (!job) return;
 
+        // Check if there's already a saved tailored resume for this job
+        try {
+            const res = await fetch(`/api/tailored-resume?jobId=${jobId}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.exists) {
+                    window.location.href = `/resume-editor/${jobId}`;
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Error checking for existing tailored resume:', error);
+        }
+
         setTailoredResumeModal({
             isOpen: true,
             jobId,

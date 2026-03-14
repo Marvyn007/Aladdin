@@ -32,6 +32,7 @@ model User {
   castVotes           UserReputationVote[]   @relation("CastVotes")
   receivedVotes       UserReputationVote[]   @relation("ReceivedVotes")
   interviewExperiences InterviewExperience[]
+  tailoredResumes      TailoredResume[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -104,6 +105,7 @@ model Job {
   searchAnalytics        SearchAnalytics[]
   userInteractions       UserInteraction[]
   userJobs               UserJob[]
+  tailoredResumes         TailoredResume[]
 
   @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
   @@index([contentHash], map: "idx_jobs_content_hash")
@@ -382,5 +384,22 @@ model InterviewExperience {
   @@index([companyName], map: "idx_interview_exp_company")
   @@index([userId], map: "idx_interview_exp_user")
   @@map("interview_experiences")
+}
+
+model TailoredResume {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id")
+  jobId        String    @map("job_id") @db.Uuid
+  resumeData   Json      @map("resume_data")
+  keywordsData Json?     @map("keywords_data")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId], map: "uniq_tailored_resume_user_job")
+  @@index([userId], map: "idx_tailored_resume_user_id")
+  @@map("tailored_resumes")
 }
 

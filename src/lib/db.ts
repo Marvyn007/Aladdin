@@ -3152,3 +3152,68 @@ export async function recordSearchClick(
         console.error('[DB] Failed to record search click:', error);
     }
 }
+
+// ============================================================================
+// TAILORED RESUME OPERATIONS
+// ============================================================================
+
+/**
+ * Save or update a tailored resume for a user+job combination.
+ * Uses upsert on the unique (user_id, job_id) constraint.
+ */
+export async function saveTailoredResume(
+    userId: string,
+    jobId: string,
+    resumeData: any,
+    keywordsData?: any
+): Promise<{ id: string }> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        const pool = getPostgresPool();
+        const id = uuidv4();
+        const res = await pool.query(`
+            INSERT INTO tailored_resumes (id, user_id, job_id, resume_data, keywords_data, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            ON CONFLICT (user_id, job_id)
+            DO UPDATE SET resume_data = $4, keywords_data = $5, updated_at = NOW()
+            RETURNING id
+        `, [id, userId, jobId, JSON.stringify(resumeData), keywordsData ? JSON.stringify(keywordsData) : null]);
+        return { id: res.rows[0].id };
+    } else {
+        throw new Error('Tailored resume save only supported on Postgres');
+    }
+}
+
+/**
+ * Get a saved tailored resume for a user+job combination.
+ * Returns null if none exists.
+ */
+export async function getTailoredResumeByUserJob(
+    userId: string,
+    jobId: string
+): Promise<{ id: string; resumeData: any; keywordsData: any; createdAt: string; updatedAt: string } | null> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        const pool = getPostgresPool();
+        const res = await pool.query(`
+            SELECT id, resume_data, keywords_data, created_at, updated_at
+            FROM tailored_resumes
+            WHERE user_id = $1 AND job_id = $2
+        `, [userId, jobId]);
+
+        if (res.rows.length === 0) return null;
+
+        const row = res.rows[0];
+        return {
+            id: row.id,
+            resumeData: row.resume_data,
+            keywordsData: row.keywords_data,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+        };
+    } else {
+        throw new Error('Tailored resume load only supported on Postgres');
+    }
+}
