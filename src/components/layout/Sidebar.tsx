@@ -157,16 +157,15 @@ export function Sidebar({
 
                 {/* Navigation */}
                 <nav style={{ flex: 1, padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto' }}>
-                    {/* Find Jobs (Public) */}
+                    {/* Search/Filter */}
                     <NavItem
                         icon={<SearchIcon />}
-                        label="Find Jobs"
-                        onClick={() => handleNavClick(onFindNow)}
-                        loading={isLoading}
-                        active={false}
+                        label="Search"
+                        onClick={() => handleNavClick(onFilter)}
+                        loading={isFiltering}
                         collapsed={isEffectivelyCollapsed}
+                        style={{ minHeight: '48px' }}
                     />
-
 
                     {/* Import Job (Protected) */}
                     <NavItem
@@ -175,27 +174,6 @@ export function Sidebar({
                         onClick={() => handleNavClick(() => useStore.getState().setActiveModal('import-job-selection'), true, "Sign in to import jobs.")}
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
-                    />
-
-                    {/* Score Jobs (Protected) */}
-                    <NavItem
-                        icon={<img src="/icons/score.png" alt="Score" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
-                        label="Score Jobs"
-                        onClick={() => handleNavClick(onScoreJobs, true, "Sign in to score jobs.")}
-                        loading={isScoring}
-                        collapsed={isEffectivelyCollapsed}
-                        style={{ minHeight: '48px' }}
-                        disabled={!isSignedIn}
-                    />
-
-                    {/* Filter (Protected/Public?) - Let's allow filter if it's local, but user asked for auth gating for 'features'. If filter saves, it's auth. Assuming public for now as list filter logic is client side often. BUT user prompt mentioned 'Score jobs' explicitly. Filter might be public. Let's keep it public for now unless it breaks. Actually, Filters usually helpful for public searching. */}
-                    <NavItem
-                        icon={<img src="/icons/broom.png" alt="Filter" style={{ width: 36, height: 36, objectFit: 'contain' }} />}
-                        label="Filter"
-                        onClick={() => handleNavClick(onFilter)}
-                        loading={isFiltering}
-                        collapsed={isEffectivelyCollapsed}
-                        style={{ minHeight: '48px' }}
                     />
 
 

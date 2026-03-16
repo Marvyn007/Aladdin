@@ -46,7 +46,7 @@ interface AppState {
         totalPages: number;
     };
     sorting: {
-        by: 'time' | 'imported' | 'score' | 'relevance';
+            by: 'time' | 'imported' | 'score';
         dir: 'asc' | 'desc';
     };
 
@@ -159,7 +159,7 @@ export const useStore = create<AppState>()(
 
             // Initial Pagination & Sorting
             pagination: { page: 1, limit: 50, total: 0, totalPages: 0 },
-            sorting: { by: 'relevance', dir: 'desc' },
+            sorting: { by: 'time', dir: 'desc' },
 
             sidebarOpen: true,
             viewMode: 'list',

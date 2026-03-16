@@ -22,6 +22,7 @@ interface ContentPanelProps {
 export function ContentPanel({ resume, onChange }: ContentPanelProps) {
     const [editingContact, setEditingContact] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+    const [bulletToDelete, setBulletToDelete] = useState<{ sectionId: string, itemId: string, bulletId: string } | null>(null);
 
     const toggleSection = (sectionId: string) => {
         const newCollapsed = new Set(collapsedSections);
@@ -38,6 +39,44 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
             ...resume,
             sections: resume.sections.map(s =>
                 s.id === sectionId ? { ...s, visible: s.visible === false ? true : false } : s
+            ),
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const toggleItemVisibility = (sectionId: string, itemId: string) => {
+        onChange({
+            ...resume,
+            sections: resume.sections.map(s =>
+                s.id === sectionId
+                    ? {
+                        ...s, items: s.items.map(item =>
+                            item.id === itemId ? { ...item, visible: item.visible === false ? true : false } : item
+                        )
+                    }
+                    : s
+            ),
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const toggleBulletVisibility = (sectionId: string, itemId: string, bulletId: string) => {
+        onChange({
+            ...resume,
+            sections: resume.sections.map(s =>
+                s.id === sectionId
+                    ? {
+                        ...s, items: s.items.map(item =>
+                            item.id === itemId
+                                ? {
+                                    ...item, bullets: (item.bullets || []).map(b =>
+                                        b.id === bulletId ? { ...b, visible: b.visible === false ? true : false } : b
+                                    )
+                                }
+                                : item
+                        )
+                    }
+                    : s
             ),
             updatedAt: new Date().toISOString(),
         });
@@ -124,6 +163,12 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
     };
 
     const removeBullet = (sectionId: string, itemId: string, bulletId: string) => {
+        setBulletToDelete({ sectionId, itemId, bulletId });
+    };
+
+    const confirmDeleteBullet = () => {
+        if (!bulletToDelete) return;
+        const { sectionId, itemId, bulletId } = bulletToDelete;
         onChange({
             ...resume,
             sections: resume.sections.map(s =>
@@ -139,6 +184,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
             ),
             updatedAt: new Date().toISOString(),
         });
+        setBulletToDelete(null);
     };
 
     const deleteSectionItem = (sectionId: string, itemId: string) => {
@@ -260,7 +306,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 2 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         </div>
                         Contact Information
                     </h3>
@@ -583,7 +629,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
                                 )}
                                 {section.type === 'community' && (
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 2 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                                 )}
                                 {section.type === 'skills' && (
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="m6.8 14-3.5 2"/><path d="m20.7 16-3.5-2"/><path d="M6.8 10 3.3 8"/><path d="m20.7 8-3.5 2"/><path d="m9 22 3-8 3 8"/><path d="M8 6h8"/></svg>
@@ -739,32 +785,60 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                             e.target.style.boxShadow = 'none';
                                                         }}
                                                     />
-                                                    <button
-                                                        onClick={() => deleteSectionItem(section.id, item.id)}
-                                                        style={{
-                                                            padding: '4px',
-                                                            color: '#9ca3af',
-                                                            background: 'transparent',
-                                                            border: 'none',
-                                                            borderRadius: '4px',
-                                                            cursor: 'pointer',
-                                                            opacity: 0,
-                                                            transition: 'all 0.15s ease'
-                                                        }}
-                                                        title="Delete item"
-                                                        onMouseOver={(e) => {
-                                                            e.currentTarget.style.color = '#ef4444';
-                                                            e.currentTarget.style.background = '#fef2f2';
-                                                            e.currentTarget.style.opacity = '1';
-                                                        }}
-                                                        onMouseOut={(e) => {
-                                                            e.currentTarget.style.color = '#9ca3af';
-                                                            e.currentTarget.style.background = 'transparent';
-                                                            e.currentTarget.style.opacity = '0';
-                                                        }}
-                                                    >
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
-                                                    </button>
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        <button
+                                                            onClick={() => toggleItemVisibility(section.id, item.id)}
+                                                            title={item.visible === false ? 'Show in resume' : 'Hide from resume'}
+                                                            aria-label={item.visible === false ? 'Show item in resume' : 'Hide item from resume'}
+                                                            style={{
+                                                                padding: '4px 8px',
+                                                                height: '28px',
+                                                                borderRadius: '14px',
+                                                                border: '1px solid #e5e7eb',
+                                                                background: item.visible === false ? '#fef3c7' : '#f3f4f6',
+                                                                color: item.visible === false ? '#b45309' : '#6b7280',
+                                                                fontSize: '11px',
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s ease',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
+                                                            }}
+                                                        >
+                                                            {item.visible === false ? (
+                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/></svg>
+                                                            ) : (
+                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => deleteSectionItem(section.id, item.id)}
+                                                            style={{
+                                                                padding: '4px',
+                                                                color: '#9ca3af',
+                                                                background: 'transparent',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                opacity: 0,
+                                                                transition: 'all 0.15s ease'
+                                                            }}
+                                                            title="Delete item"
+                                                            onMouseOver={(e) => {
+                                                                e.currentTarget.style.color = '#ef4444';
+                                                                e.currentTarget.style.background = '#fef2f2';
+                                                                e.currentTarget.style.opacity = '1';
+                                                            }}
+                                                            onMouseOut={(e) => {
+                                                                e.currentTarget.style.color = '#9ca3af';
+                                                                e.currentTarget.style.background = 'transparent';
+                                                                e.currentTarget.style.opacity = '0';
+                                                            }}
+                                                        >
+                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -867,8 +941,9 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                             gap: '8px', 
                                                             padding: '6px 8px',
                                                             borderRadius: '6px',
-                                                            background: bullet.isSuggested ? '#fffbeb' : '#f9fafb',
-                                                            border: bullet.isSuggested ? '1px dashed #fcd34d' : '1px solid transparent',
+                                                            background: bullet.isSuggested ? '#fffbeb' : (bullet.visible === false ? '#fef3c7' : '#f9fafb'),
+                                                            border: bullet.isSuggested ? '1px dashed #fcd34d' : (bullet.visible === false ? '1px dashed #fbbf24' : '1px solid transparent'),
+                                                            opacity: bullet.visible === false ? 0.7 : 1,
                                                             transition: 'all 0.15s ease'
                                                         }}
                                                     >
@@ -885,36 +960,53 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                                 fontWeight: 400, 
                                                                 color: '#4b5563',
                                                                 outline: 'none',
-                                                                resize: 'none',
+                                                                resize: 'vertical', // User can pull down or up
                                                                 lineHeight: 1.5,
                                                                 fontFamily: 'inherit'
                                                             }}
                                                             rows={1}
                                                         />
-                                                        <button
-                                                            onClick={() => removeBullet(section.id, item.id, bullet.id)}
-                                                            style={{
-                                                                padding: '2px',
-                                                                color: '#d1d5db',
-                                                                background: 'transparent',
-                                                                border: 'none',
-                                                                borderRadius: '2px',
-                                                                cursor: 'pointer',
-                                                                opacity: 0,
-                                                                transition: 'all 0.15s ease',
-                                                                flexShrink: 0
-                                                            }}
-                                                            onMouseOver={(e) => {
-                                                                e.currentTarget.style.color = '#ef4444';
-                                                                e.currentTarget.style.opacity = '1';
-                                                            }}
-                                                            onMouseOut={(e) => {
-                                                                e.currentTarget.style.color = '#d1d5db';
-                                                                e.currentTarget.style.opacity = '0';
-                                                            }}
-                                                        >
-                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                                        </button>
+                                                        <div style={{ display: 'flex', gap: '2px' }}>
+                                                            <button
+                                                                onClick={() => toggleBulletVisibility(section.id, item.id, bullet.id)}
+                                                                title={bullet.visible === false ? 'Show bullet' : 'Hide bullet'}
+                                                                aria-label={bullet.visible === false ? 'Show bullet in resume' : 'Hide bullet from resume'}
+                                                                style={{
+                                                                    padding: '2px 6px',
+                                                                    height: '24px',
+                                                                    borderRadius: '12px',
+                                                                    border: 'none',
+                                                                    background: 'transparent',
+                                                                    color: bullet.visible === false ? '#f59e0b' : '#d1d5db',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s ease',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center'
+                                                                }}
+                                                            >
+                                                                {bullet.visible === false ? (
+                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/></svg>
+                                                                ) : (
+                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                                )}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => removeBullet(section.id, item.id, bullet.id)}
+                                                                style={{
+                                                                    padding: '2px',
+                                                                    color: '#ef4444', // Always red
+                                                                    background: 'transparent',
+                                                                    border: 'none',
+                                                                    borderRadius: '2px',
+                                                                    cursor: 'pointer',
+                                                                    opacity: 1, // Always visible
+                                                                    transition: 'all 0.15s ease',
+                                                                    flexShrink: 0
+                                                                }}
+                                                            >
+                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                                 <button
@@ -923,28 +1015,26 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         gap: '6px',
-                                                        padding: '6px 10px',
+                                                        padding: '6px 12px',
                                                         fontSize: '12px',
-                                                        fontWeight: 500,
-                                                        color: '#9ca3af',
-                                                        background: '#f3f4f6',
-                                                        border: '1px solid #e5e7eb',
-                                                        borderRadius: '6px',
+                                                        fontWeight: 600,
+                                                        color: '#2563eb',
+                                                        background: '#e8f4ff',
+                                                        border: '1px solid #bfdbfe',
+                                                        borderRadius: '20px',
                                                         cursor: 'pointer',
                                                         transition: 'all 0.15s ease',
                                                         alignSelf: 'flex-start'
                                                     }}
                                                     onMouseOver={(e) => {
-                                                        e.currentTarget.style.background = '#e5e7eb';
-                                                        e.currentTarget.style.color = '#3b82f6';
+                                                        e.currentTarget.style.background = '#dbeafe';
                                                     }}
                                                     onMouseOut={(e) => {
-                                                        e.currentTarget.style.background = '#f3f4f6';
-                                                        e.currentTarget.style.color = '#9ca3af';
+                                                        e.currentTarget.style.background = '#e8f4ff';
                                                     }}
                                                 >
                                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                                    Add Achievement
+                                                    Add Bullet
                                                 </button>
                                             </div>
                                         </div>
@@ -953,36 +1043,36 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                         onClick={() => addSectionItem(section.id, section.type)}
                                         style={{
                                             width: '100%',
-                                            padding: '12px',
-                                            border: '2px dashed #e5e7eb',
-                                            borderRadius: '8px',
-                                            fontSize: '13px',
-                                            fontWeight: 500,
-                                            color: '#9ca3af',
-                                            background: 'transparent',
+                                            padding: '14px 20px',
+                                            border: '2px dashed #bfdbfe',
+                                            borderRadius: '12px',
+                                            fontSize: '14px',
+                                            fontWeight: 600,
+                                            color: '#2563eb',
+                                            background: '#eff6ff',
                                             cursor: 'pointer',
-                                            transition: 'all 0.15s ease',
+                                            transition: 'all 0.2s ease',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            gap: '8px'
+                                            gap: '8px',
+                                            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.08)'
                                         }}
                                         onMouseOver={(e) => {
-                                            e.currentTarget.style.borderColor = '#3b82f6';
-                                            e.currentTarget.style.color = '#3b82f6';
-                                            e.currentTarget.style.background = '#f0f9ff';
+                                            e.currentTarget.style.borderColor = '#2563eb';
+                                            e.currentTarget.style.background = '#dbeafe';
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.15)';
                                         }}
                                         onMouseOut={(e) => {
-                                            e.currentTarget.style.borderColor = '#e5e7eb';
-                                            e.currentTarget.style.color = '#9ca3af';
-                                            e.currentTarget.style.background = 'transparent';
+                                            e.currentTarget.style.borderColor = '#bfdbfe';
+                                            e.currentTarget.style.background = '#eff6ff';
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(37, 99, 235, 0.08)';
                                         }}
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                        Add {section.type === 'education' ? 'School' :
-                                            section.type === 'experience' ? 'Position' :
-                                                section.type === 'projects' ? 'Project' :
-                                                    section.type === 'community' ? 'Experience' : 'Entry'}
+                                        Add Title
                                     </button>
                                 </div>
                             )}
@@ -990,6 +1080,81 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                     )}
                 </div>
             ))}
+            {/* Delete Confirmation Modal */}
+            {bulletToDelete && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    backdropFilter: 'blur(2px)'
+                }}>
+                    <div style={{
+                        background: '#fff',
+                        padding: '24px',
+                        borderRadius: '16px',
+                        width: '320px',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '24px',
+                            background: '#fef2f2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px',
+                            color: '#ef4444'
+                        }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                        </div>
+                        <h4 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', marginBottom: '8px' }}>Delete Bullet?</h4>
+                        <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '24px' }}>Are you sure you want to remove this bullet point? This action cannot be undone.</p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setBulletToDelete(null)}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e5e7eb',
+                                    background: '#fff',
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDeleteBullet}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: '#ef4444',
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    color: '#fff',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

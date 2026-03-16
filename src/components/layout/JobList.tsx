@@ -2,18 +2,59 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useStore, useStoreActions } from '@/store/useStore';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { Pagination } from './Pagination';
 import { useAuth } from '@clerk/nextjs';
-import { SearchBar } from '@/components/common/SearchBar';
 import { SearchEmptyState } from '@/components/common/SearchEmptyState';
 import { JobLoadingState } from '@/components/common/JobLoadingState';
 import { ImageWithRetry } from '@/components/common/ImageWithRetry';
 import { trackJobInteraction } from '@/lib/actions';
+import { useFilters, jobMatchesFilters, checkJobMatchFields, type MatchField } from '@/contexts/FilterContext';
+
+const FIELD_LABELS: Record<MatchField, string> = {
+    title: 'Title Match',
+    company: 'Company Match',
+    location: 'Location Match',
+    skills: 'Skills Match',
+    description: 'Description Match'
+};
+
+function MatchBadge({ matchedFields }: { matchedFields: MatchField[] }) {
+    const primaryField = matchedFields[0];
+    const label = FIELD_LABELS[primaryField];
+    const allMatches = matchedFields.map(f => FIELD_LABELS[f]).join(', ');
+    
+    return (
+        <div
+            title={allMatches}
+            style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)',
+                color: '#4f46e5',
+                fontSize: '9px',
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: '12px',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                cursor: 'help',
+                letterSpacing: '0.3px',
+                textTransform: 'uppercase' as const,
+                boxShadow: '0 2px 4px rgba(99, 102, 241, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+            }}
+        >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                <polyline points="20 6 9 17 4 12" />
+            </svg>
+            {label}
+        </div>
+    );
+}
 
 interface JobListProps {
     onJobClick: (job: Job) => void;
@@ -80,8 +121,31 @@ export function JobList({ onJobClick }: JobListProps) {
     const selectedJob = useStore(state => state.selectedJob);
     const isLoadingJobs = useStore(state => state.isLoadingJobs);
 
+    const { activeFilters, removeFilter, clearFilters, checkJobMatch } = useFilters();
+
+    const filteredJobs = useMemo(() => {
+        if (activeFilters.length === 0) return jobs;
+        
+        return jobs.filter(job => {
+            const result = checkJobMatchFields(job, activeFilters);
+            return result.matches;
+        });
+    }, [jobs, activeFilters, checkJobMatch]);
+
+    const jobMatchResults = useMemo(() => {
+        if (activeFilters.length === 0) return new Map<string, MatchField[]>();
+        const results = new Map<string, MatchField[]>();
+        jobs.forEach(job => {
+            const result = checkJobMatchFields(job, activeFilters);
+            if (result.matches) {
+                results.set(job.id, result.matchedFields);
+            }
+        });
+        return results;
+    }, [jobs, activeFilters, checkJobMatch]);
+
     // Determine which jobs to display
-    let displayedJobs = searchMode ? searchResults : jobs;
+    let displayedJobs = searchMode ? searchResults : filteredJobs;
 
     // Apply Client-Side Pagination & Sorting for Search Results
     if (searchMode) {
@@ -106,15 +170,7 @@ export function JobList({ onJobClick }: JobListProps) {
         displayedJobs = displayedJobs.slice(start, end);
     }
 
-    const { setPagination, setSorting, setJobStatus, toggleJobStatus } = useStoreActions();
-    const [isSortOpen, setIsSortOpen] = useState(false);
-
-    const handleSortChange = (by: 'time' | 'imported' | 'score' | 'relevance') => {
-        setSorting({ by, dir: 'desc' }); // Default desc
-        setPagination({ page: 1 }); // Reset to page 1
-        setIsSortOpen(false);
-    };
-
+    const { setPagination, setJobStatus, toggleJobStatus } = useStoreActions();
 
     const getScoreColor = (score: number) => {
         if (score >= 90) return '#10b981'; // Green-500
@@ -200,133 +256,77 @@ export function JobList({ onJobClick }: JobListProps) {
                                 border: '1px solid var(--border)',
                             }}
                         >
-                            {pagination.total}
+                            {searchMode ? pagination.total : (activeFilters.length > 0 ? filteredJobs.length : pagination.total)}
                         </span>
                     </div>
                 </div>
 
-                {/* Search Bar Row */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px' }}>
-                    <SearchBar />
-                </div>
-
-                {/* Pagination & Sort Row - below search bar, aligned left with flex-start */}
-                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    {/* Sort Dropdown */}
-                    <div style={{ position: 'relative' }}>
-                        <button
-                            onClick={() => setIsSortOpen(!isSortOpen)}
-                            onBlur={() => setTimeout(() => setIsSortOpen(false), 200)}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '6px 12px',
-                                background: 'var(--surface)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '6px',
-                                color: 'var(--text-secondary)',
-                                fontSize: '12px',
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                            }}
-                        >
-                            <span>Sort by: {sorting.by === 'time' ? 'Time' : sorting.by === 'score' ? 'Score' : sorting.by === 'relevance' ? 'Relevance' : 'Imported'}</span>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: isSortOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                                <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                        </button>
-
-                        {isSortOpen && (
-                            <div
+                {/* Filter Pills Row - Below Fresh/Saved/Archived */}
+                {activeFilters.length > 0 && (
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '6px', 
+                        flexWrap: 'wrap',
+                        marginBottom: '12px',
+                        padding: '8px',
+                        background: 'var(--surface)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)'
+                    }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
+                            Search:
+                        </span>
+                        {activeFilters.map(filter => (
+                            <span
+                                key={filter}
                                 style={{
-                                    position: 'absolute',
-                                    top: '100%',
-                                    left: 0,
-                                    marginTop: '4px',
-                                    background: 'var(--surface)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '8px',
-                                    boxShadow: 'var(--shadow-lg)',
-                                    zIndex: 20,
-                                    width: '160px',
-                                    overflow: 'hidden',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    fontSize: '11px',
+                                    background: 'rgba(59, 130, 246, 0.1)',
+                                    color: '#3b82f6',
+                                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontWeight: 500
                                 }}
                             >
+                                {filter}
                                 <button
-                                    onClick={() => handleSortChange('time')}
+                                    onClick={() => removeFilter(filter)}
                                     style={{
-                                        display: 'block',
-                                        width: '100%',
-                                        textAlign: 'left',
-                                        padding: '8px 12px',
-                                        fontSize: '13px',
-                                        background: sorting.by === 'time' ? 'var(--accent-light)' : 'transparent',
-                                        color: sorting.by === 'time' ? 'var(--accent)' : 'var(--text-primary)',
                                         border: 'none',
+                                        background: 'transparent',
+                                        color: 'inherit',
+                                        marginLeft: '4px',
                                         cursor: 'pointer',
+                                        padding: 0,
+                                        display: 'flex',
+                                        fontSize: '12px',
+                                        fontWeight: 700
                                     }}
                                 >
-                                    Time (Newest)
+                                    ×
                                 </button>
-                                <button
-                                    onClick={() => handleSortChange('relevance')}
-                                    disabled={!isSignedIn}
-                                    title={!isSignedIn ? "Sign in for personalized ranking" : ""}
-                                    style={{
-                                        display: 'block',
-                                        width: '100%',
-                                        textAlign: 'left',
-                                        padding: '8px 12px',
-                                        fontSize: '13px',
-                                        background: sorting.by === 'relevance' ? 'var(--accent-light)' : 'transparent',
-                                        color: !isSignedIn ? 'var(--text-tertiary)' : (sorting.by === 'relevance' ? 'var(--accent)' : 'var(--text-primary)'),
-                                        border: 'none',
-                                        cursor: isSignedIn ? 'pointer' : 'not-allowed',
-                                        opacity: isSignedIn ? 1 : 0.6
-                                    }}
-                                >
-                                    Relevance (Recommended)
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange('score')}
-                                    disabled={!isSignedIn}
-                                    title={!isSignedIn ? "Sign in to sort by match score" : ""}
-                                    style={{
-                                        display: 'block',
-                                        width: '100%',
-                                        textAlign: 'left',
-                                        padding: '8px 12px',
-                                        fontSize: '13px',
-                                        background: sorting.by === 'score' ? 'var(--accent-light)' : 'transparent',
-                                        color: !isSignedIn ? 'var(--text-tertiary)' : (sorting.by === 'score' ? 'var(--accent)' : 'var(--text-primary)'),
-                                        border: 'none',
-                                        cursor: isSignedIn ? 'pointer' : 'not-allowed',
-                                        opacity: isSignedIn ? 1 : 0.6
-                                    }}
-                                >
-                                    Score (High to Low)
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange('imported')}
-                                    style={{
-                                        display: 'block',
-                                        width: '100%',
-                                        textAlign: 'left',
-                                        padding: '8px 12px',
-                                        fontSize: '13px',
-                                        background: sorting.by === 'imported' ? 'var(--accent-light)' : 'transparent',
-                                        color: sorting.by === 'imported' ? 'var(--accent)' : 'var(--text-primary)',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    Imported First
-                                </button>
-                            </div>
-                        )}
+                            </span>
+                        ))}
+                        <button
+                            onClick={clearFilters}
+                            style={{
+                                fontSize: '11px',
+                                color: 'var(--error)',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontWeight: 500,
+                                marginLeft: 'auto'
+                            }}
+                        >
+                            Clear all
+                        </button>
                     </div>
-                </div>
+                )}
             </div>
 
             <div
@@ -381,6 +381,12 @@ export function JobList({ onJobClick }: JobListProps) {
                                     position: 'relative',
                                 }}
                             >
+                                {/* Match Badge - Show which field matched */}
+                                {activeFilters.length > 0 && jobMatchResults.get(job.id) && (
+                                    <div style={{ marginBottom: '8px' }}>
+                                        <MatchBadge matchedFields={jobMatchResults.get(job.id)!} />
+                                    </div>
+                                )}
                                 {/* Header with score */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
                                     <h3
@@ -552,8 +558,8 @@ export function JobList({ onJobClick }: JobListProps) {
 
                         <Pagination
                             currentPage={pagination.page}
-                            totalPages={pagination.totalPages}
-                            totalItems={pagination.total}
+                            totalPages={searchMode ? pagination.totalPages : (activeFilters.length > 0 ? Math.ceil(filteredJobs.length / pagination.limit) : pagination.totalPages)}
+                            totalItems={searchMode ? pagination.total : (activeFilters.length > 0 ? filteredJobs.length : pagination.total)}
                             limit={pagination.limit}
                             onPageChange={(page) => setPagination({ page })}
                         />

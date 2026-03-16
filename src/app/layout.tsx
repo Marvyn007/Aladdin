@@ -6,6 +6,7 @@ import "./globals.css";
 import { ClerkProvider } from '@clerk/nextjs';
 import { ThemeRegistry } from "@/components/theme/ThemeRegistry";
 import { Analytics } from '@vercel/analytics/next';
+import { FilterProvider } from "@/contexts/FilterContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -36,7 +37,9 @@ export default function RootLayout({
       <html lang="en" className={inter.variable} suppressHydrationWarning>
         <body className={inter.className} suppressHydrationWarning>
           <ThemeRegistry>
-            {children}
+            <FilterProvider>
+              {children}
+            </FilterProvider>
           </ThemeRegistry>
           <Analytics />
         </body>

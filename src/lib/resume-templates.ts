@@ -323,7 +323,8 @@ function parseMarkdown(text: string): string {
 }
 
 function renderEntry(item: ResumeSectionItem, template: 'classic' | 'modern'): string {
-  const bulletsHtml = (item.bullets ?? []).map(b =>
+  const visibleBullets = (item.bullets ?? []).filter(b => b.visible !== false);
+  const bulletsHtml = visibleBullets.map(b =>
     `<li class="${b.isSuggested ? 'suggested-bullet' : ''}">${b.isSuggested ? '<span style="color: #f59e0b;">●</span> ' : ''}${parseMarkdown(b.text)}</li>`
   ).join('');
 
@@ -528,7 +529,8 @@ function renderSection(section: ResumeSection, template: 'classic' | 'modern'): 
   `;
   }
 
-  const entriesHtml = section.items.map(item => renderEntry(item, template)).join('');
+  const visibleItems = section.items.filter(item => item.visible !== false);
+  const entriesHtml = visibleItems.map(item => renderEntry(item, template)).join('');
 
   return `
 <section>

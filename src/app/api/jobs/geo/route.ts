@@ -2,15 +2,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPostgresPool } from '@/lib/postgres';
 import { resolveLocation } from '@/lib/geocoding';
+import { auth } from '@clerk/nextjs/server';
 
 // GET: Fast, read-only map data (resolved jobs only)
 export async function GET(req: NextRequest) {
     try {
         const pool = getPostgresPool();
         const { searchParams } = new URL(req.url);
+        const { userId } = await auth();
 
         let queryText = `
-            SELECT 
+            SELECT DISTINCT ON (j.id)
                 p.latitude, 
                 p.longitude, 
                 p.id as point_id,
@@ -20,14 +22,45 @@ export async function GET(req: NextRequest) {
                 j.source_url as "sourceUrl", 
                 j.posted_at as "postedAt",
                 j.status,
-                p.location_label as location
-            FROM job_geo_points p
-            JOIN jobs j ON p.job_id = j.id
+                j.location as raw_location_text,
+                p.location_label as location,
+                p.confidence as location_confidence,
+                j.location_raw,
+                COALESCE(j.geo_source, 'unknown') as location_source,
+                c.logo_url as "companyLogo"
         `;
 
+        // Add saved status if user is authenticated
+        if (userId) {
+            queryText += `,
+                CASE WHEN uj.id IS NOT NULL THEN true ELSE false END as saved
+            `;
+        } else {
+            queryText += `,
+                false as saved
+            `;
+        }
+
+        queryText += `
+            FROM job_geo_points p
+            JOIN jobs j ON p.job_id = j.id
+            LEFT JOIN companies c ON c.name = j.company_normalized OR c.name = j.company
+        `;
+
+        // Left join for saved status (must come before other joins for DISTINCT ON)
+        if (userId) {
+            queryText += `
+                LEFT JOIN user_jobs uj ON uj.job_id = j.id AND uj.user_id = $1
+            `;
+        }
+
         const conditions: string[] = [];
-        const values: any[] = [];
-        let paramCount = 1;
+        const values: (string | number)[] = [];
+        let paramCount = userId ? 2 : 1;
+
+        if (userId) {
+            values.push(userId);
+        }
 
         if (searchParams.has('minLat')) {
             conditions.push(`p.latitude >= $${paramCount++}`);
@@ -51,22 +84,28 @@ export async function GET(req: NextRequest) {
 
         const { rows } = await pool.query(queryText, values);
 
-        // Transform to GeoJSON
-        const features = rows.map(row => ({
+        // Transform to GeoJSON with all required properties per spec
+        const features = rows.map((row, index) => ({
             type: 'Feature',
+            id: index,
             geometry: {
                 type: 'Point',
                 coordinates: [row.longitude, row.latitude]
             },
             properties: {
-                id: row.job_id,
-                point_id: row.point_id,
+                jobId: row.job_id,
+                pointId: row.point_id,
                 title: row.title,
                 company: row.company,
+                companyLogo: row.companyLogo || null,
                 location: row.location,
+                rawLocationText: row.location_raw || row.raw_location_text || row.location,
                 postedAt: row.postedAt,
                 sourceUrl: row.sourceUrl,
-                status: row.status
+                status: row.status,
+                saved: row.saved || false,
+                locationConfidence: row.location_confidence ?? 0.5,
+                locationSource: row.location_source || 'unknown'
             }
         }));
 
@@ -82,7 +121,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: Trigger background resolution for unresolved jobs
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
     triggerBackgroundGeocoding();
     return NextResponse.json({ success: true, message: 'Geocoding triggered' });
 }

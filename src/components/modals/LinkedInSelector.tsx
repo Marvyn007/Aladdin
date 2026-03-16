@@ -84,6 +84,14 @@ export function LinkedInSelector({ onClose }: LinkedInSelectorProps) {
         setPreviewTitle(profile.filename);
     };
 
+    const handleUploadClick = () => {
+        if (profiles.length > 0) {
+            alert('You can only upload 1 LinkedIn profile. Please delete your existing profile first to upload a new one.');
+            return;
+        }
+        fileInputRef.current?.click();
+    };
+
     return (
         <div
             style={{
@@ -238,7 +246,7 @@ export function LinkedInSelector({ onClose }: LinkedInSelectorProps) {
                         style={{ display: 'none' }}
                     />
                     <button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={handleUploadClick}
                         disabled={isUploading}
                         className="btn btn-primary"
                         style={{ width: '100%' }}

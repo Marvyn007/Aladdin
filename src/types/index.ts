@@ -52,6 +52,8 @@ export interface Job {
     imageUrl: string | null;
     votes: number;
   } | null;
+  companyAddress?: string | null;
+  recipientName?: string | null;
 }
 
 export interface JobWithPostedBy extends Job {
@@ -267,6 +269,7 @@ export interface ResumeBullet {
   id: string;
   text: string;
   isSuggested?: boolean; // "Suggested (add if true)" for unverified skills
+  visible?: boolean; // For hide/unhide functionality
 }
 
 export interface ResumeSectionItem {
@@ -278,6 +281,7 @@ export interface ResumeSectionItem {
   technologies?: string;
   bullets: ResumeBullet[];
   links?: { label: string; url: string }[];
+  visible?: boolean; // For hide/unhide functionality
 }
 
 export interface ResumeSection {
@@ -363,6 +367,89 @@ export const DEFAULT_RESUME_DESIGN: ResumeDesign = {
   accentColor: '#1a365d',
   margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },
 };
+
+// ============================================================================
+// SCORE JOBS PIPELINE TYPES
+// ============================================================================
+
+export type SeniorityLevel = 'intern' | 'entry' | 'junior' | 'associate' | 'mid' | 'senior' | 'staff' | 'lead' | 'manager' | 'director' | 'executive';
+
+export interface ExtractedSkill {
+  skill_name: string;
+  original_phrase: string;
+  importance: 'required' | 'preferred';
+  confidence: number;
+}
+
+export interface JobExtractionResult {
+  job_title: string | null;
+  industry: string[] | null;
+  seniority: string | null;
+  seniority_confidence: number;
+  skills: ExtractedSkill[];
+  parsed_summary: string;
+}
+
+export interface CandidateSkill {
+  skill_name: string;
+  confidence: number;
+  years: number | null;
+  level: 'junior' | 'intermediate' | 'senior' | null;
+  source: 'resume' | 'linkedin';
+}
+
+export interface CandidateProfile {
+  candidate_name: string | null;
+  contact: {
+    email: string | null;
+    phone: string | null;
+    linkedin: string | null;
+  };
+  candidate_skills: CandidateSkill[];
+  primary_industry: string[] | null;
+  seniority_by_experience: string | null;
+  years_experience_total: number | null;
+  source_flags: {
+    has_resume: boolean;
+    has_linkedin: boolean;
+  };
+}
+
+export interface ScoreBreakdownV2 {
+  skills_score: number;
+  seniority_score: number;
+  industry_score: number;
+  experience_score: number;
+  education_score: number;
+  location_score: number;
+}
+
+export interface MatchedSkill {
+  skill_name: string;
+  job_skill_importance: 'required' | 'preferred';
+  candidate_level: 'junior' | 'intermediate' | 'senior' | null;
+  match_confidence: number;
+}
+
+export interface ScoreResultV2 {
+  job_id: string;
+  score: number;
+  confidence: number;
+  breakdown: ScoreBreakdownV2;
+  matched_skills: MatchedSkill[];
+  reasons: string[];
+  extraction_meta: {
+    job_extraction_confidence: number;
+    resume_extraction_confidence: number;
+  };
+}
+
+export interface CachedExtraction {
+  job_id: string;
+  user_id: string;
+  extraction: JobExtractionResult;
+  cached_at: string;
+}
 
 // ============================================================================
 // CANONICAL RESUME PARSER TYPES (with confidence scoring)

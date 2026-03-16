@@ -3,6 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ParsingProgress, useParsingProgress, ParsingStage } from '@/components/resume-editor/ParsingProgress';
 
 interface CoverLetterModalProps {
     isOpen: boolean;
@@ -16,6 +17,8 @@ interface CoverLetterModalProps {
     onRegenerate?: () => void;
     onQueue?: () => void;
     isGenerating?: boolean;
+    progressStages?: ParsingStage[];
+    progressCurrentStage?: number;
 }
 
 export function CoverLetterModal({
@@ -30,6 +33,8 @@ export function CoverLetterModal({
     onRegenerate,
     onQueue,
     isGenerating = false,
+    progressStages,
+    progressCurrentStage = 0,
 }: CoverLetterModalProps) {
     // Editable state - this is what the user can edit
     const [editedText, setEditedText] = useState<string>(coverLetterText || '');
@@ -92,7 +97,7 @@ export function CoverLetterModal({
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: 'rgba(255, 255, 255, 0.9)',
+                        background: 'rgba(255, 255, 255, 0.95)',
                         backdropFilter: 'blur(4px)',
                         zIndex: 20,
                         display: 'flex',
@@ -100,10 +105,28 @@ export function CoverLetterModal({
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderRadius: 'var(--radius-lg)',
+                        padding: '20px',
                     }}>
-                        <div className="loading-pulse" style={{ width: 60, height: 60, borderRadius: '50%', marginBottom: '16px' }} />
-                        <p style={{ fontWeight: 600, color: 'var(--accent)' }}>Generating Cover Letter (cloud AI)…</p>
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Analyzing your resume and job requirements</p>
+                        {progressStages && progressStages.length > 0 ? (
+                            <>
+                                <p style={{ fontWeight: 600, color: 'var(--accent)', marginBottom: '20px' }}>
+                                    Generating Your Cover Letter
+                                </p>
+                                <ParsingProgress 
+                                    stages={progressStages} 
+                                    currentStageIndex={progressCurrentStage}
+                                />
+                                <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '20px', maxWidth: '400px', textAlign: 'center' }}>
+                                    This usually takes 10-20 seconds. We're analyzing your experience and crafting a personalized letter.
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <div className="loading-pulse" style={{ width: 60, height: 60, borderRadius: '50%', marginBottom: '16px' }} />
+                                <p style={{ fontWeight: 600, color: 'var(--accent)' }}>Generating Cover Letter (cloud AI)…</p>
+                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Analyzing your resume and job requirements</p>
+                            </>
+                        )}
                     </div>
                 )}
 

@@ -8,7 +8,7 @@ import {
     insertCoverLetter,
     getCoverLetterById // Added this check? No, used in service.
 } from '@/lib/db';
-import { generateCoverLetter, parseResumeFromPdf } from '@/lib/gemini';
+// No direct AI imports needed here as they are handled in cover-letter-service.ts
 import { performCoverLetterGeneration, queueCoverLetterGeneration } from '@/lib/cover-letter-service';
 
 import { auth } from '@clerk/nextjs/server';

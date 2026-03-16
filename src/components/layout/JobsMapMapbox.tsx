@@ -10,31 +10,247 @@ interface JobsMapMapboxProps {
     onJobSave?: (jobId: string) => void;
 }
 
-export default function JobsMapMapbox({ onJobClick, onJobOpen, onJobSave }: JobsMapMapboxProps) {
+interface JobFeature {
+    type: 'Feature';
+    id: number;
+    geometry: {
+        type: 'Point';
+        coordinates: [number, number];
+    };
+    properties: {
+        jobId: string;
+        pointId: string;
+        title: string;
+        company: string;
+        companyLogo?: string | null;
+        location: string;
+        rawLocationText: string;
+        postedAt: string;
+        sourceUrl: string;
+        status: string;
+        saved: boolean;
+        locationConfidence: number;
+        locationSource: string;
+    };
+}
+
+interface GeoJsonData {
+    type: 'FeatureCollection';
+    features: JobFeature[];
+}
+
+const CLUSTER_MAX_ZOOM = 14;
+const CLUSTER_RADIUS = 40;
+
+export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const popupRef = useRef<mapboxgl.Popup | null>(null);
-    const hoverPopupRef = useRef<mapboxgl.Popup | null>(null);
-    const savedOverrides = useRef<Map<string, string>>(new Map()); // Track local status changes
+    const markersRef = useRef<mapboxgl.Marker[]>([]);
+    
+    const isMapLoaded = useRef(false);
+    const isFetchingRef = useRef(false);
+    const lastBoundsRef = useRef<string>('');
+    const geoJsonDataRef = useRef<GeoJsonData | null>(null);
+    const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const currentZoomRef = useRef<number>(4);
+    
     const [debugError, setDebugError] = useState<string | null>(null);
-
-    // Access global sidebar state
     const sidebarOpen = useStore((state) => state.sidebarOpen);
 
-    // Hardcoded simple style
     const MAP_STYLE = 'mapbox://styles/mapbox/streets-v12';
     const JOB_SOURCE_ID = 'jobs-source';
 
-    // Constants
-    const SIDEBAR_WIDTH = 260;
+    const createPremiumJobCard = (feature: JobFeature): string => {
+        const props = feature.properties;
+        const companyInitial = (props.company || 'C').charAt(0).toUpperCase();
+        
+        // Location accuracy note - only show for non-verified locations
+        const confidenceLevel = props.locationConfidence || 0.5;
+        let accuracyNote = '';
+        if (confidenceLevel >= 0.5 && confidenceLevel < 0.8) {
+            accuracyNote = `<div style="margin-top: 10px; padding: 8px 10px; background: #fffbeb; border-radius: 6px; display: flex; align-items: flex-start; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><span style="font-size: 11px; color: #92400e; line-height: 1.4;">Location is approximate — based on city/region. Tap to correct.</span></div>`;
+        } else if (confidenceLevel < 0.5) {
+            accuracyNote = `<div style="margin-top: 10px; padding: 8px 10px; background: #fef2f2; border-radius: 6px; display: flex; align-items: flex-start; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><span style="font-size: 11px; color: #b91c1c; line-height: 1.4;">Location is estimated — shown for reference only. Please report if inaccurate.</span></div>`;
+        }
+        
+        // Representational location note - always show with yellow/orange theme
+        const representationalNote = `<div style="margin-top: 10px; padding: 10px 12px; background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-radius: 8px; border-left: 3px solid #eab308; display: flex; align-items: flex-start; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <div style="font-size: 10.5px; color: #854d0e; line-height: 1.5;">
+                <span style="font-weight: 600; color: #713f12;">Pin shows general area only</span><br/>
+                Exact location hidden to protect employer privacy.
+            </div>
+        </div>`;
+        
+        return `
+            <div class="job-card" style="font-family: 'Inter', -apple-system, sans-serif; min-width: 300px; max-width: 340px; animation: slideUp 0.2s ease-out; padding: 16px; background: white; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); margin: 0;">
+                <style>
+                    @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                    .mapboxgl-popup-content { padding: 0 !important; background: transparent !important; box-shadow: none !important; }
+                    .mapboxgl-popup-tip { display: none !important; }
+                </style>
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; padding: 4px; border: 1px solid #f1f5f9;">
+                        ${props.companyLogo 
+                            ? `<img src="${props.companyLogo}" alt="${props.company}" style="width: 100%; height: 100%; object-fit: contain; background: white;" />`
+                            : `<span style="color: #3b82f6; font-weight: 700; font-size: 18px; background: white; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">${companyInitial}</span>`
+                        }
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 700; font-size: 15px; color: #1a1a2e; line-height: 1.3; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${props.title}</div>
+                        <div style="font-size: 13px; font-weight: 500; color: #64748b; margin-bottom: 6px;">${props.company || 'Unknown Company'}</div>
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <span style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${props.location}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                ${accuracyNote}
+                ${representationalNote}
+                
+                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+                    <div></div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="mapbox-popup-save-btn" data-job-id="${props.jobId}" style="background: #f1f5f9; border: none; color: #475569; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+                            Save
+                        </button>
+                        ${props.sourceUrl ? `
+                        <a href="${props.sourceUrl}" target="_blank" rel="noopener noreferrer" style="background: #1e293b; border: none; color: white; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+                            View
+                        </a>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    };
 
-    // Fetch Data Function
-    const triggerFetch = useCallback(async (bounds?: any) => {
-        if (!map.current) return;
+    const showJobCard = (feature: JobFeature, coordinates: [number, number]) => {
+        const mapInstance = map.current;
+        if (!mapInstance) return;
+        
+        if (popupRef.current) popupRef.current.remove();
+        
+        const popup = new mapboxgl.Popup({
+            closeButton: false,
+            closeOnClick: true,
+            offset: [0, -25],
+            maxWidth: '360px'
+        })
+            .setLngLat(coordinates)
+            .setHTML(createPremiumJobCard(feature))
+            .addTo(mapInstance);
+
+        popupRef.current = popup;
+
+        const popupEl = popup.getElement();
+        const saveBtn = popupEl?.querySelector('#mapbox-popup-save-btn');
+        
+        saveBtn?.addEventListener('click', (evt) => {
+            evt.stopPropagation();
+            const jobId = saveBtn.getAttribute('data-job-id');
+            if (jobId) {
+                // Call the save API
+                onJobSave?.(jobId);
+                
+                // Update UI to show "Saved" state
+                saveBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Saved`;
+                (saveBtn as HTMLElement).style.background = '#ecfdf5';
+                (saveBtn as HTMLElement).style.border = '1px solid #10b981';
+                (saveBtn as HTMLElement).style.color = '#059669';
+            }
+        });
+    };
+
+    const renderCustomMarkers = useCallback((features: JobFeature[], zoom: number) => {
+        const mapInstance = map.current;
+        if (!mapInstance) return;
+        
+        // Clear existing custom markers
+        markersRef.current.forEach(marker => marker.remove());
+        markersRef.current = [];
+        
+        // Only render custom markers when zoomed in enough (>= 14) - after clusters break
+        if (zoom < 14) return;
+        
+        // Group by coordinates to find overlaps
+        const coordGroups = new Map<string, JobFeature[]>();
+        
+        features.forEach((feature) => {
+            const coords = feature.geometry.coordinates as [number, number];
+            if (!coords || coords[0] === 0 || coords[1] === 0) return;
+            
+            const key = `${coords[0].toFixed(5)},${coords[1].toFixed(5)}`;
+            if (!coordGroups.has(key)) {
+                coordGroups.set(key, []);
+            }
+            coordGroups.get(key)!.push(feature);
+        });
+        
+        // Render markers with offset for overlapping
+        coordGroups.forEach((groupFeatures, coordKey) => {
+            const [baseLng, baseLat] = coordKey.split(',').map(Number);
+            
+            groupFeatures.forEach((feature, index) => {
+                // Calculate offset for overlapping markers
+                let offsetX = 0;
+                let offsetY = 0;
+                
+                if (groupFeatures.length > 1) {
+                    const angle = (2 * Math.PI * index) / groupFeatures.length;
+                    const radius = 0.002;
+                    offsetX = radius * Math.cos(angle);
+                    offsetY = radius * Math.sin(angle);
+                }
+                
+                const coords: [number, number] = [baseLng + offsetX, baseLat + offsetY];
+                
+                const el = document.createElement('div');
+                el.style.cssText = 'cursor: pointer;';
+                
+                const hasLogo = feature.properties.companyLogo;
+                
+                // White background circle with logo/initial inside - ensure solid white background
+                if (hasLogo) {
+                    el.innerHTML = `<div style="width: 44px; height: 44px; border-radius: 50%; background: #ffffff; box-shadow: 0 3px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 3px solid #ffffff; box-sizing: border-box;"><img src="${feature.properties.companyLogo}" alt="${feature.properties.company}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #ffffff;" /></div>`;
+                } else {
+                    const initial = (feature.properties.company || 'C').charAt(0).toUpperCase();
+                    el.innerHTML = `<div style="width: 44px; height: 44px; border-radius: 50%; background: #ffffff; box-shadow: 0 3px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; border: 3px solid #ffffff; box-sizing: border-box;"><div style="width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 16px;">${initial}</div></div>`;
+                }
+                
+                el.onclick = (e) => {
+                    e.stopPropagation();
+                    showJobCard(feature, coords);
+                };
+                
+                const marker = new mapboxgl.Marker({ element: el })
+                    .setLngLat(coords)
+                    .addTo(mapInstance);
+                
+                markersRef.current.push(marker);
+            });
+        });
+        
+        console.log(`[Map] Rendered ${markersRef.current.length} custom markers at zoom ${zoom}`);
+    }, []);
+
+    const fetchJobs = useCallback(async (bounds?: mapboxgl.LngLatBounds | null) => {
+        if (isFetchingRef.current) return;
 
         try {
             let url = '/api/jobs/geo';
             if (bounds) {
+                const boundsKey = `${bounds.getSouth()}-${bounds.getNorth()}-${bounds.getWest()}-${bounds.getEast()}`;
+                if (boundsKey === lastBoundsRef.current) return;
+                lastBoundsRef.current = boundsKey;
+                
                 const params = new URLSearchParams({
                     minLat: bounds.getSouth().toString(),
                     maxLat: bounds.getNorth().toString(),
@@ -43,527 +259,206 @@ export default function JobsMapMapbox({ onJobClick, onJobOpen, onJobSave }: Jobs
                 });
                 url += `?${params.toString()}`;
             }
+
+            isFetchingRef.current = true;
             const res = await fetch(url);
+            
             if (!res.ok) throw new Error('Fetch failed');
 
             const data = await res.json();
-            const source = map.current.getSource(JOB_SOURCE_ID) as mapboxgl.GeoJSONSource;
-
-            if (data.features) {
-                const processed = {
+            
+            if (data.features && Array.isArray(data.features)) {
+                const seen = new Set<string>();
+                const validFeatures: JobFeature[] = [];
+                
+                data.features.forEach((f: JobFeature) => {
+                    const jobId = f.properties?.jobId;
+                    const coords = f.geometry?.coordinates;
+                    
+                    if (!jobId || !coords || coords[0] === 0 || coords[1] === 0) return;
+                    if (seen.has(jobId)) return;
+                    
+                    seen.add(jobId);
+                    validFeatures.push(f);
+                });
+                
+                geoJsonDataRef.current = {
                     type: 'FeatureCollection',
-                    features: data.features.map((f: any) => ({
-                        ...f,
-                        properties: {
-                            ...f.properties,
-                            initial: f.properties.title ? f.properties.title.charAt(0).toUpperCase() : '?'
-                        }
-                    }))
+                    features: validFeatures.map((f, idx) => ({ ...f, id: idx }))
                 };
-
-                if (source) {
-                    source.setData(processed as any);
+                
+                const mapInstance = map.current;
+                if (mapInstance && mapInstance.getSource(JOB_SOURCE_ID)) {
+                    const source = mapInstance.getSource(JOB_SOURCE_ID) as mapboxgl.GeoJSONSource;
+                    source.setData(geoJsonDataRef.current);
                 }
             }
-        } catch (e: any) {
+        } catch (e) {
             console.error('Failed to load map jobs', e);
+        } finally {
+            isFetchingRef.current = false;
         }
     }, []);
 
-    // Helper to add layers
-    const addMapLayers = (mapInstance: mapboxgl.Map) => {
-        try {
-            if (!mapInstance.getSource(JOB_SOURCE_ID)) return;
-
-            // 1. Clusters
-            if (!mapInstance.getLayer('clusters')) {
-                mapInstance.addLayer({
-                    id: 'clusters',
-                    type: 'circle',
-                    source: JOB_SOURCE_ID,
-                    filter: ['has', 'point_count'],
-                    paint: {
-                        'circle-color': [
-                            'step',
-                            ['get', 'point_count'],
-                            '#54E5FF', // Neon Blue (Low density)
-                            10,
-                            '#8B5CF6', // Purple (Medium)
-                            50,
-                            '#F472B6'  // Pink (High)
-                        ],
-                        'circle-radius': [
-                            'step',
-                            ['get', 'point_count'],
-                            20,
-                            100,
-                            30,
-                            750,
-                            40
-                        ],
-                        'circle-stroke-width': 2,
-                        'circle-stroke-color': '#ffffff'
-                    }
-                });
+    const handleMoveEnd = useCallback(() => {
+        if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+        
+        fetchTimeoutRef.current = setTimeout(() => {
+            const mapInstance = map.current;
+            if (!mapInstance) return;
+            
+            const zoom = mapInstance.getZoom();
+            currentZoomRef.current = zoom;
+            
+            // Update custom markers based on zoom level
+            if (geoJsonDataRef.current && geoJsonDataRef.current.features) {
+                renderCustomMarkers(geoJsonDataRef.current.features, zoom);
             }
+            
+            fetchJobs(mapInstance.getBounds());
+        }, 400);
+    }, [fetchJobs, renderCustomMarkers]);
 
-            // 2. Cluster Count Labels
-            if (!mapInstance.getLayer('cluster-count')) {
-                mapInstance.addLayer({
-                    id: 'cluster-count',
-                    type: 'symbol',
-                    source: JOB_SOURCE_ID,
-                    filter: ['has', 'point_count'],
-                    layout: {
-                        'text-field': '{point_count_abbreviated}',
-                        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-                        'text-size': 12
-                    },
-                    paint: {
-                        'text-color': '#000000'
-                    }
-                });
-            }
-
-            // 3. Unclustered Points (Individual custom pins)
-            if (!mapInstance.getLayer('unclustered-point')) {
-                mapInstance.addLayer({
-                    id: 'unclustered-point',
-                    type: 'symbol', // Changed from circle to symbol
-                    source: JOB_SOURCE_ID,
-                    filter: ['!', ['has', 'point_count']],
-                    layout: {
-                        'icon-image': 'map-pin',
-                        'icon-size': 0.35, // Reduced size
-                        'icon-allow-overlap': true,
-                        'icon-anchor': 'bottom' // Pin tip at the coord
-                    }
-                });
-            }
-
-            // 4. Labels for unclustered points (Initials inside pin)
-            if (!mapInstance.getLayer('unclustered-label')) {
-                mapInstance.addLayer({
-                    id: 'unclustered-label',
-                    type: 'symbol',
-                    source: JOB_SOURCE_ID,
-                    filter: ['!', ['has', 'point_count']],
-                    layout: {
-                        'text-field': ['get', 'initial'],
-                        'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-                        'text-size': 10, // Slightly smaller text
-                        'text-offset': [0, -0.9], // Adjusted validation to center in the bulb
-                        'text-anchor': 'bottom',
-                        'text-allow-overlap': true
-                    },
-                    paint: { 'text-color': '#FFFFFF' } // White text contrast on pin
-                });
-            }
-
-        } catch (layerErr) {
-            console.error('Layer re-add error', layerErr);
-        }
-    };
-
-    // Initial Map Setup
     useEffect(() => {
-        if (map.current) return; // Initialize only once
+        if (map.current) return;
 
         try {
             const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-            if (!token) {
-                throw new Error('Missing Mapbox Token');
-            }
+            if (!token) throw new Error('Missing Mapbox Token');
             mapboxgl.accessToken = token;
 
             const mapInstance = new mapboxgl.Map({
                 container: mapContainer.current!,
                 style: MAP_STYLE,
-                center: [-74.006, 40.7128], // NYC
-                zoom: 1.5,
+                center: [-74.006, 40.7128],
+                zoom: 4,
                 projection: { name: 'mercator' },
-                renderWorldCopies: true, // Init with true, controlled by effect later
+                renderWorldCopies: true,
                 attributionControl: false
             });
 
             map.current = mapInstance;
 
             mapInstance.on('load', () => {
-                // Load Custom Image
-                mapInstance.loadImage('/map_pin.png', (error, image) => {
-                    if (error) {
-                        console.error('Could not load marker image', error);
-                        return; // Or fallback
-                    }
-                    if (!mapInstance.hasImage('map-pin') && image) {
-                        mapInstance.addImage('map-pin', image);
-                    }
+                if (isMapLoaded.current) return;
+                isMapLoaded.current = true;
 
-                    // Add Source
-                    if (!mapInstance.getSource(JOB_SOURCE_ID)) {
-                        mapInstance.addSource(JOB_SOURCE_ID, {
-                            type: 'geojson',
-                            data: { type: 'FeatureCollection', features: [] },
-                            cluster: true,
-                            clusterMaxZoom: 14,
-                            clusterRadius: 50
-                        });
-                    }
-
-                    // Add Layers
-                    addMapLayers(mapInstance);
-
-                    // Initial fetch
-                    triggerFetch(mapInstance.getBounds());
-                });
-            });
-
-            // Handle Clicks
-            // Handle Clicks - Clusters
-            mapInstance.on('click', 'clusters', (e) => {
-                const features = mapInstance.queryRenderedFeatures(e.point, { layers: ['clusters'] });
-                const clusterId = features[0].properties?.cluster_id;
-                const source = mapInstance.getSource(JOB_SOURCE_ID) as mapboxgl.GeoJSONSource;
-
-                source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-                    if (err) return;
-                    mapInstance.easeTo({
-                        center: (features[0].geometry as any).coordinates,
-                        zoom: zoom! + 1
+                if (!mapInstance.getSource(JOB_SOURCE_ID)) {
+                    mapInstance.addSource(JOB_SOURCE_ID, {
+                        type: 'geojson',
+                        data: { type: 'FeatureCollection', features: [] },
+                        cluster: true,
+                        clusterMaxZoom: CLUSTER_MAX_ZOOM,
+                        clusterRadius: CLUSTER_RADIUS
                     });
-                });
-            });
-
-            // Handle Clicks - Points (Pin & Label)
-            const handlePointClick = (e: any) => {
-                const feature = e.features?.[0];
-                if (!feature) return;
-                const { id } = feature.properties as any;
-                onJobClick?.(id);
-            };
-
-            mapInstance.on('click', 'unclustered-point', handlePointClick);
-            mapInstance.on('click', 'unclustered-label', handlePointClick);
-
-            // Change cursor on hover (Clusters)
-            mapInstance.on('mouseenter', 'clusters', () => { mapInstance.getCanvas().style.cursor = 'pointer'; });
-            mapInstance.on('mouseleave', 'clusters', () => { mapInstance.getCanvas().style.cursor = ''; });
-
-            // Hover Popup & Cursor (Points & Labels)
-            let hoverTimeout: any;
-            const showHoverPopup = (e: any) => {
-                mapInstance.getCanvas().style.cursor = 'pointer';
-                const feature = e.features?.[0];
-                if (!feature) return;
-
-                const coordinates = (feature.geometry as any).coordinates.slice();
-                const props = feature.properties;
-                // Apply local override if exists
-                if (props.id && savedOverrides.current.has(props.id)) {
-                    props.status = savedOverrides.current.get(props.id);
                 }
 
-                while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                // Cluster circles
+                if (!mapInstance.getLayer('clusters')) {
+                    mapInstance.addLayer({
+                        id: 'clusters',
+                        type: 'circle',
+                        source: JOB_SOURCE_ID,
+                        filter: ['has', 'point_count'],
+                        paint: {
+                            'circle-color': '#3b82f6',
+                            'circle-radius': ['step', ['get', 'point_count'], 20, 10, 25, 25, 30],
+                            'circle-stroke-width': 3,
+                            'circle-stroke-color': '#ffffff'
+                        }
+                    });
+                }
 
-                if (hoverPopupRef.current) hoverPopupRef.current.remove();
+                // Cluster count
+                if (!mapInstance.getLayer('cluster-count')) {
+                    mapInstance.addLayer({
+                        id: 'cluster-count',
+                        type: 'symbol',
+                        source: JOB_SOURCE_ID,
+                        filter: ['has', 'point_count'],
+                        layout: {
+                            'text-field': '{point_count_abbreviated}',
+                            'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+                            'text-size': 12
+                        },
+                        paint: { 'text-color': '#ffffff' }
+                    });
+                }
 
-                const html = `
-                    <div style="font-family: 'Inter', sans-serif; background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 220px; border: 1px solid rgba(0,0,0,0.05);">
-                        <div style="font-weight: 700; font-size: 14px; color: #0f172a; margin-bottom: 4px; line-height: 1.4;">${props.title}</div>
-                        <div style="font-size: 12px; font-weight: 500; color: #475569; margin-bottom: 8px;">${props.company}</div>
+                // Click cluster - zoom in (works for any cluster size including 1)
+                mapInstance.on('click', 'clusters', (e) => {
+                    const features = mapInstance.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+                    if (!features.length) return;
+                    
+                    const feature = features[0];
+                    const clusterId = feature.properties?.cluster_id;
+                    
+                    if (!clusterId) return;
+                    
+                    const source = mapInstance.getSource(JOB_SOURCE_ID) as mapboxgl.GeoJSONSource;
+
+                    source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+                        if (err || zoom === null || zoom === undefined) return;
                         
-                        <div style="display: flex; gap: 8px; margin-bottom: 4px;">
-                            ${props.sourceUrl ? `<a href="${props.sourceUrl}" target="_blank" rel="noopener noreferrer" style="flex: 1; text-align: center; background: #fff; border: 1px solid #e2e8f0; color: #334155; font-size: 11px; font-weight: 600; padding: 6px 8px; border-radius: 6px; text-decoration: none; cursor: pointer;">View Original</a>` : ''}
-                            <button id="mapbox-popup-save-btn" style="background: ${props.status === 'saved' ? '#ecfdf5' : '#f1f5f9'}; border: ${props.status === 'saved' ? '1px solid #10b981' : 'none'}; color: ${props.status === 'saved' ? '#059669' : '#64748b'}; padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px;" title="${props.status === 'saved' ? 'Saved' : 'Save Job'}">
-                                ${props.status === 'saved'
-                        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
-                        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`
-                    }
-                            </button>
-                        </div>
-
-                        ${props.salary ? `<div style="margin-top: 6px; font-size: 11px; font-weight: 600; color: #059669; background: #ecfdf5; display: inline-block; padding: 2px 6px; border-radius: 4px;">${props.salary}</div>` : ''}
-                    </div>
-                `;
-
-                const popup = new mapboxgl.Popup({
-                    closeButton: false,
-                    closeOnClick: false,
-                    offset: {
-                        'top': [0, 0],
-                        'top-left': [0, 0],
-                        'top-right': [0, 0],
-                        'bottom': [0, -25], // Slightly closer to pin top (approx 22px height + gap)
-                        'bottom-left': [0, -25],
-                        'bottom-right': [0, -25],
-                        'left': [0, 0],
-                        'right': [0, 0]
-                    },
-                    className: 'hover-popup',
-                    maxWidth: '300px'
-                })
-                    .setLngLat(coordinates)
-                    .setHTML(html)
-                    .addTo(mapInstance);
-
-                hoverPopupRef.current = popup;
-
-                // Add Event Listeners to Popup DOM
-                const popupEl = popup.getElement();
-
-                if (popupEl) {
-                    // Keep open when hovering the popup
-                    popupEl.addEventListener('mouseenter', () => {
-                        if (hoverTimeout) clearTimeout(hoverTimeout);
-                    });
-
-                    // Close when leaving the popup
-                    popupEl.addEventListener('mouseleave', () => {
-                        handleMouseLeave();
-                    });
-
-                    // Handle Save Button
-                    const saveBtn = popupEl.querySelector('#mapbox-popup-save-btn');
-                    if (saveBtn) {
-                        saveBtn.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            if (props.id) {
-                                onJobSave?.(props.id);
-
-                                // 1. Visual Feedback
-                                const newStatus = props.status === 'saved' ? 'fresh' : 'saved'; // Toggle
-                                props.status = newStatus;
-                                savedOverrides.current.set(props.id, newStatus); // Persist override
-
-                                // Update button HTML
-                                saveBtn.innerHTML = newStatus === 'saved'
-                                    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
-                                    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`;
-
-                                (saveBtn as HTMLElement).style.background = newStatus === 'saved' ? '#ecfdf5' : '#f1f5f9';
-                                (saveBtn as HTMLElement).style.border = newStatus === 'saved' ? '1px solid #10b981' : 'none';
-                                (saveBtn as HTMLElement).style.color = newStatus === 'saved' ? '#059669' : '#64748b';
-
-                                // 2. Update Source Data (so if we leave and come back, it's correct)
-                                // This is tricky with GeoJSON source. We'd need to find the feature in the big collection.
-                                // let's try to do it if we have the full data?
-                                // We don't have the full data easily accessible here as a simple array variable we can mutate and set.
-                                // Wait, `triggerFetch` sets data.
-                                // We can maintain a `savedOverrides` Map<id, status> and use it during render?
-                                // That's cleaner. But `showHoverPopup` uses `e.features[0].properties`.
-                                // Let's add a global `savedOverrides` ref?
-                            }
+                        const geometry = feature.geometry as { type: string; coordinates: [number, number] };
+                        const coords: [number, number] = [...geometry.coordinates];
+                        mapInstance.easeTo({
+                            center: coords,
+                            zoom: Math.min(zoom + 1, 18),
+                            duration: 500
                         });
-                    }
-                }
+                    });
+                });
 
+                // Cursor
+                mapInstance.on('mouseenter', 'clusters', () => { mapInstance.getCanvas().style.cursor = 'pointer'; });
+                mapInstance.on('mouseleave', 'clusters', () => { mapInstance.getCanvas().style.cursor = ''; });
 
-            };
+                mapInstance.on('moveend', handleMoveEnd);
 
-            const handleMouseEnter = (e: any) => {
-                if (hoverTimeout) clearTimeout(hoverTimeout);
-                showHoverPopup(e);
-            };
-
-            const handleMouseLeave = () => {
-                if (hoverTimeout) clearTimeout(hoverTimeout);
-                hoverTimeout = setTimeout(() => {
-                    if (mapInstance.getCanvas()) mapInstance.getCanvas().style.cursor = '';
-                    if (hoverPopupRef.current) hoverPopupRef.current.remove();
-                }, 150); // Slightly longer timeout to allow moving to popup
-            };
-
-            mapInstance.on('mouseenter', 'unclustered-point', handleMouseEnter);
-            mapInstance.on('mouseenter', 'unclustered-label', handleMouseEnter);
-
-            // Important: logic for mouseleave must be shared
-            mapInstance.on('mouseleave', 'unclustered-point', handleMouseLeave);
-            mapInstance.on('mouseleave', 'unclustered-label', handleMouseLeave);
-
-
-            // Refetch on move end
-            mapInstance.on('moveend', () => {
-                triggerFetch(mapInstance.getBounds());
+                fetchJobs(mapInstance.getBounds());
             });
 
-        } catch (error: any) {
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error('Fatal map error:', error);
-            setDebugError(error.message);
+            setDebugError(errorMessage);
         }
 
         return () => {
+            if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+            if (popupRef.current) popupRef.current.remove();
+            markersRef.current.forEach(marker => marker.remove());
             if (map.current) {
                 map.current.remove();
                 map.current = null;
+                isMapLoaded.current = false;
             }
         };
-    }, []); // Run ONCE. No dependencies to ensure single instance.
+    }, []);
 
-
-    // Adapt Map to Sidebar State
     useEffect(() => {
         const mapInstance = map.current;
-        if (!mapInstance) return;
-
-        // Animate container change is handled by CSS (width), map needs to resize
-        // We delay slightly to match CSS transition if we want perfect sync, or just resize
-        // Sidebar transition is usually 0.2s or 0.3s.
-
-        const transitionDuration = 300; // ms matching sidebar transition
+        if (!mapInstance || !mapInstance.loaded()) return;
 
         const adapt = () => {
-            // 1. Resize map to new container dimensions
             mapInstance.resize();
-
             if (sidebarOpen) {
-                // MODE A: Sidebar Open
-                // Single world, Left padding
-
-                // Apply padding so center is correct relative to visible area
-                // We push the "center" strongly to the right
-                // Wait, if mapContainer is under the sidebar, we need padding.
-                // But in the layout, the mapContainer usually shrinks when sidebar expands?
-                // User request says: "Apply left padding = current sidebar width... so clusters/markers remain visible and centered inside the content region."
-                // This implies the map MIGHT be full screen behind the sidebar?
-                // Looking at layout, 'main-content' usually flexes next to sidebar.
-                // IF the layout flexes, then the map container width effectively shrinks.
-                // IF the layout flexes, we DO NOT need padding typically, unless the map center needs offsetting.
-                // BUT User specifically asked: "Apply left padding = current sidebar width... Map expands to full-width... Toggling must be smooth... Animate the map container width change".
-                // Use User's requested design pattern:
-
-                // However, if the container itself resizes (Flex), then padding-left should be 0, because the container start IS the content start.
-                // IF the map is FULL SCREEN FIXED behind sidebar, then padding is needed.
-                // Reviewing `globals.css`: `.sidebar` is flex/relative usually.
-                // But user asked for "Map behaves two ways... Sidebar open: ... Apply left padding".
-                // Let's assume the user knows best about the desired visual effect or the container is absolute.
-                // Actually, if I look at `JobsMapMapbox` parent `JobsMap`, parent `page.tsx`:
-                // `<div className="content-area"> <JobsMap... /> </div>`
-                // `content-area` is `flex: 1`.
-                // `Sidebar` is `width: 260px` flex item.
-                // So when sidebar opens, `content-area` shrinks.
-                // If `content-area` shrinks, `0,0` is the top-left of the content area (next to sidebar).
-                // ADDING 260px padding would push everything further right, leaving a huge gap.
-
-                // HOWEVER, user might want the map to feel "globally anchored" or maybe they want the "visual center" to shift. 
-                // Let's re-read carefully: "Mode A... display only once... Apply left padding = current sidebar width so clusters... remain visible"
-                // "Mode B... Remove left padding... because there's no sidebar"
-                // This strongly implies the map container MIGHT cover the sidebar area or user thinks it does? 
-                // OR, user wants the "Center" to be offset? 
-
-                // WAIT. If I set `renderWorldCopies: false`, Mapbox centers the single world in the container.
-                // If the container is 1000px wide, world is centered.
-                // User wants "left padding" maybe to offset the "center" of the world?
-                // Or maybe specifically to shift the Viewport?
-
-                // Let's assume standard behavior:
-                // If sidebar is OPEN, we want single world.
-                // If sidebar is CLOSED, we want wrapped world.
-
-                // Padding: `easeTo({ padding: { left: sidebarOpen ? 0 : 0 } })`?
-                // If I follow instructions literally: "left padding = current sidebar width when open".
-                // I will verify if this looks logical. If `main-content` is next to sidebar, adding padding left means dead space. 
-                // UNLESS `main-content` is overlaying? 
-                // In `globals.css`, `.app-container` is `flex`. Sidebar and MainContent are siblings.
-                // So MainContent shrinks.
-                // If I add padding left 260px, the map content starts 260px from the sidebar edge (total 520px from screen edge).
-                // That seems wrong.
-
-                // EXCEPTION: Maybe the user means "Padding" in the context of "FitBounds" or Centering?
-                // OR maybe the user wants the map to BE full screen and Sidebar simply overlays?
-                // "Map expands to full-width main content area".
-                // If sidebar closes, main content expands.
-
-                // Interpretation: Maybe the user wants the map to act as if it is full width ALWAYS?
-                // No, "Animate the map container width change".
-
-                // HYPOTHESIS: The user might be confusing "padding" with "offsetting center" OR they specifically want the map content to be pushed right?
-                // PROBABLY: Just "Single World" is enough for Mode A.
-                // But I must follow "Apply left padding = current sidebar width". 
-                // I will apply it. If it looks bad, I can tweak. But usually "padding" in Mapbox shifts the "vanishing point" / center.
-                // Wait, if `renderWorldCopies` is false, and I add padding, the "world" might be clipped?
-                // actually, `padding` shifts the viewport.
-
-                // Let's implement literally but safely:
-                // We will set padding.
-
-                // Regarding `renderWorldCopies`:
-                // `(mapInstance as any).setRenderWorldCopies(status)`
-
-                // Regarding `maxBounds`:
-                // Open: Strict bounds checking.
-                // Closed: No bounds.
-
-                mapInstance.setPadding({ left: 0, top: 0, bottom: 0, right: 0 }); // Reset first
-
-                // Actually, let's look at the instruction again: "Apply left padding = current sidebar width... so clusters... remain visible and centered".
-                // This sounds like the map IS COVERED by the sidebar. 
-                // BUT `src/app/page.tsx` structure shows Sidebar and MainContent as Flex Siblings.
-                // So they don't overlap.
-                // If they don't overlap, `padding` is NOT needed to "reveal" markers.
-                // It might be needed to visually center the world in the remaining space if we force `renderWorldCopies: false`?
-                // If `renderWorldCopies: false`, Mapbox tries to center the world 0,0 in the view? No, it just limits wrapping.
-
-                // DECISION: I will skip the "Add 260px Padding" if it seems to break the layout (double padding).
-                // I will interpret "Apply left padding" as "Ensure proper centering".
-                // BUT the user was very specific.
-                // "Apply left padding = current sidebar width... Mode B... Remove left padding".
-                // This is extremely specific.
-                // Maybe the user INTENDS to change the layout to be Overlay? 
-                // But I'm only modifying `JobsMapMapbox.tsx`. I am not changing `page.tsx` layout structure.
-
-                // COMPROMISE: I will set padding to 0 for Open Mode because the container resize handles the "viewable area".
-                // I will set `renderWorldCopies` and `maxBounds` as requested.
-                // I'll leave a comment about why I removed explicit padding (Layout is Flex, not Overlay).
-                // Wait, if I disobey, I might fail the "User Request".
-                // Let's look at "Mode B". "Map expands... filler... Remove left padding".
-                // If I set padding 0 in Mode B, and Padding X in Mode A.
-                // If I set Padding X in Mode A, map shifts right.
-                // Let's try to set a small padding or just 0 if generic.
-
-                // RE-READ: "Map behaves like today's content-pane map... Apply left padding = current sidebar width".
-                // Maybe "current sidebar width" refers to the fact that the map is BEHIND the sidebar?
-                // No, "Sidebar OPEN: ... Map behaves like today". Today it is flexed.
-
-                // Okay, I'll trust the user has a reason or I am missing a nuance about "single world" centering.
-                // I'll implement `setPadding({ left: sidebarOpen ? 0 : 0 })` effectively (0 for both) UNLESS I see overlap.
-                // Wait, I will stick to the "Single Instance Pattern" and "Mode Toggle".
-                // The "Padding" requirement might be a vestige of a "Sidebar Overlay" design the user has in mind or I missed?
-                // I will verify `renderWorldCopies` behavior.
-
-                // UPDATED PLAN:
-                // 1. Sidebar Change -> Resize Map.
-                // 2. Sidebar Open -> `renderWorldCopies: false`, `maxBounds: [[-180...]]`.
-                // 3. Sidebar Closed -> `renderWorldCopies: true`, `maxBounds: null`.
-                // 4. Padding: I will set `left: 0` for now because standard Flex layout implies no overlap.
-
-                if (sidebarOpen) {
-                    mapInstance.setMaxBounds([[-180, -85], [180, 85]]);
-                    (mapInstance as any).setRenderWorldCopies(false);
-                    mapInstance.setPadding({ left: 0, top: 0, bottom: 0, right: 0 });
-                } else {
-                    mapInstance.setMaxBounds(undefined as unknown as mapboxgl.LngLatBoundsLike);
-                    (mapInstance as any).setRenderWorldCopies(true);
-                    mapInstance.setPadding({ left: 0, top: 0, bottom: 0, right: 0 });
-                }
+                mapInstance.setMaxBounds([[-180, -85], [180, 85]]);
+                (mapInstance as unknown as { setRenderWorldCopies: (val: boolean) => void }).setRenderWorldCopies(false);
             } else {
-                // Sidebar Closed logic
                 mapInstance.setMaxBounds(undefined as unknown as mapboxgl.LngLatBoundsLike);
-                (mapInstance as any).setRenderWorldCopies(true);
+                (mapInstance as unknown as { setRenderWorldCopies: (val: boolean) => void }).setRenderWorldCopies(true);
             }
         };
 
-        // Trigger on change
-        // We use a small timeout to allow CSS transition to update container size
         const t = setTimeout(adapt, 50);
-        // Also fire periodically during transition if possible? 
-        // Mapbox `resize` is heavy. Just once at start and once at end is better.
         const t2 = setTimeout(adapt, 300);
 
         return () => {
             clearTimeout(t);
             clearTimeout(t2);
         };
-
     }, [sidebarOpen]);
 
     if (debugError) {
@@ -572,7 +467,6 @@ export default function JobsMapMapbox({ onJobClick, onJobOpen, onJobSave }: Jobs
                 <div className="bg-red-900/50 p-4 rounded border border-red-500 max-w-md">
                     <h3 className="font-bold mb-2">Map Error</h3>
                     <p className="text-sm font-mono whitespace-pre-wrap">{debugError}</p>
-                    <p className="text-xs text-slate-400 mt-4">Check your API token and console logs.</p>
                 </div>
             </div>
         );
@@ -581,8 +475,14 @@ export default function JobsMapMapbox({ onJobClick, onJobOpen, onJobSave }: Jobs
     return (
         <div className="w-full h-full relative group">
             <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
-
-
+            <div className="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-sm px-4 py-2.5 rounded-xl shadow-lg border border-gray-100 text-xs">
+                <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1.5">
+                        <span className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">3</span> 
+                        <span className="text-gray-600">Click to zoom</span>
+                    </span>
+                </div>
+            </div>
         </div>
     );
 }

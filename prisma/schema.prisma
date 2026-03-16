@@ -86,6 +86,9 @@ model Job {
   geoResolved            Boolean                  @default(false) @map("geo_resolved")
   geoConfidence          Float?                   @map("geo_confidence")
   geoSource              String?                  @map("geo_source")
+  locationRaw            String?                  @map("location_raw")
+  geocodedAt             DateTime?                @map("geocoded_at") @db.Timestamptz(6)
+  locationDedupKey       String?                  @map("location_dedup_key")
   user_id                String?
   titleNormalized        String?                  @map("title_normalized")
   companyNormalized      String?                  @map("company_normalized")
@@ -311,14 +314,17 @@ model SearchHistory {
 }
 
 model JobGeoPoint {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  jobId         String    @map("job_id") @db.Uuid
-  locationLabel String?   @map("location_label")
-  latitude      Float
-  longitude     Float
-  confidence    Float?
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId           String    @map("job_id") @db.Uuid
+  locationLabel   String?   @map("location_label")
+  latitude        Float
+  longitude       Float
+  confidence      Float?
+  source          String?   @map("source")
+  rawLocationText String?   @map("raw_location_text")
+  isUserCorrected Boolean   @default(false) @map("is_user_corrected")
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  job             Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId], map: "idx_job_geo_points_job_id")
   @@index([latitude, longitude], map: "idx_job_geo_points_lat_lng")
@@ -401,5 +407,24 @@ model TailoredResume {
   @@unique([userId, jobId], map: "uniq_tailored_resume_user_job")
   @@index([userId], map: "idx_tailored_resume_user_id")
   @@map("tailored_resumes")
+}
+
+model JobScore {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id")
+  jobId           String    @map("job_id") @db.Uuid
+  score           Int
+  confidence      Float     @db.Float
+  breakdown       Json
+  extractedMeta   Json?     @map("extracted_meta")
+  scoredAt        DateTime  @default(now()) @map("scored_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId], map: "uniq_job_score_user_job")
+  @@index([userId], map: "idx_job_score_user_id")
+  @@index([jobId], map: "idx_job_score_job_id")
+  @@map("job_scores")
 }
 

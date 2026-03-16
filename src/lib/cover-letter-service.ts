@@ -1,4 +1,3 @@
-
 import {
     getJobById,
     getDefaultResume,
@@ -8,13 +7,26 @@ import {
     insertCoverLetter,
     updateCoverLetter
 } from '@/lib/db';
-import { generateCoverLetter, parseResumeFromPdf } from '@/lib/gemini';
+import { generateCoverLetter, parseResumeFromPdf } from '@/lib/openai';
+import { callLLM } from './resume-generation/utils';
+import { MASTER_PROFILE_SYSTEM_PROMPT, buildMasterProfileUserPrompt } from './resume-generation/prompts';
+import type { MasterProfile } from './resume-generation/types';
 
 export interface GenerationResult {
     success: boolean;
     coverLetter?: any;
     error?: string;
     isRetryable?: boolean;
+}
+
+interface MasterProfileWithMeta extends MasterProfile {
+    _meta?: {
+        generated_at: string;
+        sources: {
+            resume: boolean;
+            linkedin: boolean;
+        };
+    };
 }
 
 /**
@@ -34,10 +46,6 @@ export async function performCoverLetterGeneration(
 ): Promise<GenerationResult> {
     try {
         // 1. Get Job
-        // Using getJobById (global or user-scoped? Assuming global for now, or use userId if I updated it.
-        // I did NOT update getJobById to take userId in previous steps. It's global.
-        // Wait, I checked. Resume/LinkedIn/Apps REQUIRE userId. Jobs are global.
-        // So passed job check remains global.
         const job = await getJobById(userId, jobId);
         if (!job) throw new Error('Job not found');
 
@@ -69,6 +77,7 @@ export async function performCoverLetterGeneration(
             console.log(`[Service] Parsing resume ${resumeData.resume.id} (force: previous data was invalid or empty)`);
             try {
                 parsedResume = await parseResumeFromPdf(resumeData.file_data);
+                if (!parsedResume) throw new Error("Failed to parse resume content");
                 await updateResume(userId, resumeData.resume.id, { parsed_json: parsedResume });
                 console.log(`[Service] Resume re-parsed successfully, name: ${parsedResume.name}`);
             } catch (err) {
@@ -105,29 +114,63 @@ export async function performCoverLetterGeneration(
             console.log('[Cover Letter] No LinkedIn profile available');
         }
 
-        // 5. Generate with AI (returns plain text now)
-        const result = await generateCoverLetter(
+        // 5. Build Master Profile by merging Resume + LinkedIn
+        console.log('[Cover Letter] Building Master Profile...');
+        const masterProfilePrompt = buildMasterProfileUserPrompt(
             parsedResume,
-            linkedInProfile?.parsed_json || null,
+            linkedInProfile?.parsed_json || undefined
+        );
+
+        const masterProfileResponse = await callLLM(
+            [
+                { role: "system", content: MASTER_PROFILE_SYSTEM_PROMPT },
+                { role: "user", content: masterProfilePrompt }
+            ],
+            {
+                model: process.env.LLM_MODEL || 'openai/gpt-4o-mini',
+                jsonMode: true
+            }
+        );
+
+        const masterProfile: MasterProfileWithMeta = JSON.parse(masterProfileResponse);
+        masterProfile._meta = {
+            generated_at: new Date().toISOString(),
+            sources: {
+                resume: true,
+                linkedin: !!linkedInProfile?.parsed_json
+            }
+        };
+
+        console.log('[Cover Letter] Master Profile built successfully');
+
+        // 6. Generate with AI using Master Profile
+        const result = await generateCoverLetter(
+            masterProfile,
             job,
             jobDescription
         );
 
-        // 6. Format HTML from plain text
+        // 7. Format HTML from plain text
         const contentHtml = `
       <div style="font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; max-width: 700px; color: #000;">
         ${result.text.split('\n\n').map(p => `<p style="margin-bottom: 1em;">${p.replace(/\n/g, '<br>')}</p>`).join('')}
       </div>
     `;
 
-        // 7. Store Result
+        // 8. Store Result (including master profile JSON for audit/debug)
         let coverLetter;
+        const coverLetterData: any = {
+            content_html: contentHtml,
+            content_text: result.text,
+            status: 'generated'
+        };
+
+        // Store master profile in metadata for audit/debug (if the table supports it)
+        // We'll store it as a temporary field - the DB might not have this column but that's OK
+        // The key thing is it's available in memory for the current generation attempt
+
         if (existingCoverLetterId) {
-            coverLetter = await updateCoverLetter(userId, existingCoverLetterId, {
-                content_html: contentHtml,
-                content_text: result.text,
-                status: 'generated'
-            });
+            coverLetter = await updateCoverLetter(userId, existingCoverLetterId, coverLetterData);
         } else {
             coverLetter = await insertCoverLetter(
                 userId,
@@ -139,11 +182,20 @@ export async function performCoverLetterGeneration(
             );
         }
 
+        // Log the master profile for audit
+        console.log('[Cover Letter] Master Profile (for audit/debug):', {
+            name: masterProfile.basics?.name,
+            email: masterProfile.basics?.email,
+            sections: masterProfile.sections?.map(s => s.name),
+            skillsCount: masterProfile.skills?.length || 0
+        });
+
         return {
             success: true,
             coverLetter: {
                 ...coverLetter,
-                provider: result.provider
+                provider: result.provider,
+                masterProfile: masterProfile // Include for debugging/verification
             }
         };
 

@@ -18,6 +18,7 @@ import { CoverLetterSetupModal } from '@/components/modals/CoverLetterSetupModal
 import { TailoredResumeEditor } from '@/components/resume-editor/TailoredResumeEditor';
 import { ResumeSelector } from '@/components/modals/ResumeSelector';
 import { LinkedInSelector } from '@/components/modals/LinkedInSelector';
+import { ParsingProgress, useParsingProgress } from '@/components/resume-editor/ParsingProgress';
 import { ImportJobModal } from '@/components/modals/ImportJobModal';
 import { ImportJobSelectionModal } from '@/components/modals/ImportJobSelectionModal';
 import { ManualImportModal } from '@/components/modals/ManualImportModal';
@@ -29,16 +30,11 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import type { Job, Application, ApplicationColumn } from '@/types';
 import {
-    getCachedJobs,
-    setCachedJobs,
-    appendCachedJobs,
-    invalidateJobsCache,
-    isJobsCacheStale,
     getCachedApplications,
     setCachedApplications,
     isApplicationsCacheStale,
     invalidateApplicationsCache,
-} from '@/lib/job-cache';
+} from '@/lib/application-cache';
 import {
     DndContext,
     DragOverlay,
@@ -423,6 +419,22 @@ export function Dashboard({
         isGenerating: false,
     });
 
+    const [coverLetterProgress, setCoverLetterProgress] = useState<{
+        stages: { id: string; title: string; description: string; logs: string[]; status: 'pending' | 'running' | 'completed' | 'failed' }[];
+        currentStageIndex: number;
+    }>({
+        stages: [
+            { id: 'stage1_load-job', title: 'Loading Job', description: 'Fetching job details from database', logs: [], status: 'pending' },
+            { id: 'stage2_load-resume', title: 'Loading Resume', description: 'Downloading your resume from storage', logs: [], status: 'pending' },
+            { id: 'stage3_parse-resume', title: 'Analyzing Resume', description: 'Extracting and structuring your experience', logs: [], status: 'pending' },
+            { id: 'stage4_load-linkedin', title: 'Checking LinkedIn', description: 'Looking for LinkedIn profile to enhance your profile', logs: [], status: 'pending' },
+            { id: 'stage5_master-profile', title: 'Building Profile', description: 'Merging your resume and LinkedIn data', logs: [], status: 'pending' },
+            { id: 'stage6_generate-coverletter', title: 'Writing Cover Letter', description: 'Crafting a personalized cover letter', logs: [], status: 'pending' },
+            { id: 'stage7_save', title: 'Saving', description: 'Saving your cover letter', logs: [], status: 'pending' },
+        ],
+        currentStageIndex: 0,
+    });
+
     const [tailoredResumeModal, setTailoredResumeModal] = useState<{
         isOpen: boolean;
         jobId: string | null;
@@ -578,26 +590,6 @@ export function Dashboard({
         const { by, dir } = useStore.getState().sorting;
         const status = useStore.getState().jobStatus;
 
-        // Cache-first strategy: Show cached data instantly if available
-        const cached = getCachedJobs();
-        if (cached && !rescore && page === 1) {
-            // Show cached data immediately (no loading spinner)
-            setJobs(cached.jobs);
-            setPagination({
-                total: cached.meta.total,
-                totalPages: cached.meta.totalPages
-            });
-            if (cached.meta.lastUpdated) {
-                setLastUpdated(cached.meta.lastUpdated);
-            }
-
-            // If cache is stale, fetch fresh data in background (without loading state)
-            if (isJobsCacheStale(cached.meta)) {
-                fetchJobsInBackground(page, limit, by, dir, status);
-            }
-            return;
-        }
-
         setIsLoadingJobs(true);
         try {
             const params = new URLSearchParams({
@@ -615,23 +607,6 @@ export function Dashboard({
                 setJobs(data.jobs || []);
                 setPagination({ total: data.total, totalPages: data.totalPages });
                 setLastUpdated(data.lastUpdated);
-
-                // Update cache
-                if (page === 1) {
-                    setCachedJobs(data.jobs || [], {
-                        page,
-                        limit,
-                        total: data.total,
-                        totalPages: data.totalPages
-                    }, data.lastUpdated);
-                } else {
-                    // Append to existing cache for pagination
-                    appendCachedJobs(data.jobs || [], page, {
-                        limit,
-                        total: data.total,
-                        totalPages: data.totalPages
-                    }, data.lastUpdated);
-                }
             } else {
                 console.error("Failed to fetch jobs");
             }
@@ -639,44 +614,6 @@ export function Dashboard({
             console.error('Error loading jobs:', error);
         } finally {
             setIsLoadingJobs(false);
-        }
-    };
-
-    // Background fetch without loading spinner (for stale cache refresh)
-    const fetchJobsInBackground = async (
-        page: number,
-        limit: number,
-        by: string,
-        dir: string,
-        status: string
-    ) => {
-        try {
-            const params = new URLSearchParams({
-                page: page.toString(),
-                limit: limit.toString(),
-                sort_by: by,
-                sort_dir: dir,
-                status: status
-            });
-
-            const res = await fetch(`/api/jobs?${params.toString()}`);
-            if (res.ok) {
-                const data = await res.json();
-                setJobs(data.jobs || []);
-                setPagination({ total: data.total, totalPages: data.totalPages });
-                setLastUpdated(data.lastUpdated);
-
-                // Update cache with fresh data
-                setCachedJobs(data.jobs || [], {
-                    page,
-                    limit,
-                    total: data.total,
-                    totalPages: data.totalPages
-                }, data.lastUpdated);
-            }
-        } catch (error) {
-            console.error('Background job refresh failed:', error);
-            // Silently fail - user still has cached data
         }
     };
 
@@ -750,9 +687,6 @@ export function Dashboard({
 
 
     const handleFindNow = useCallback(async () => {
-        // Invalidate cache to force fresh fetch
-        invalidateJobsCache();
-
         setIsLoadingJobs(true);
         try {
             if (isSignedIn) {
@@ -792,8 +726,6 @@ export function Dashboard({
         if (selectedJob?.id === updatedJob.id) {
             setSelectedJob({ ...selectedJob, ...updatedJob });
         }
-        // Invalidate cache
-        invalidateJobsCache();
     };
 
     const handleDeleteJob = async (jobId: string) => {
@@ -898,79 +830,165 @@ export function Dashboard({
     const handleConfirmGenerateCoverLetter = async (jobId: string, jobDescription: string, queue: boolean = false) => {
         if (!isSignedIn) return;
 
-        // Close setup modal
-        setCoverLetterSetupModal(prev => ({ ...prev, isOpen: false }));
+        if (queue) {
+            try {
+                const res = await fetch('/api/generate-cover-letter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_id: jobId,
+                        queue: true,
+                        job_description: jobDescription
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("Cover letter generation queued successfully.");
+                } else {
+                    alert(data.error || "Failed to queue cover letter");
+                }
+            } catch (err) {
+                console.error("Queue error:", err);
+                alert("Failed to queue cover letter");
+            }
+            return;
+        }
 
         const job = jobs.find(j => j.id === jobId) || (selectedJob?.id === jobId ? selectedJob : null);
 
-        // Update state to show modal immediately with loading state
         setCoverLetterModal(prev => ({
             ...prev,
             isOpen: true,
             jobId,
             isGenerating: true,
             error: null,
-            html: queue ? prev.html : (prev.jobId === jobId ? prev.html : ''),
-            text: queue ? prev.text : (prev.jobId === jobId ? prev.text : ''),
+            html: '',
+            text: '',
             jobTitle: job?.title || prev.jobTitle,
             company: job?.company || prev.company,
         }));
 
+        setCoverLetterProgress(prev => ({
+            ...prev,
+            stages: [
+                { id: 'stage1_load-job', title: 'Loading Job', description: 'Fetching job details from database', logs: ['Initializing...'], status: 'running' as const },
+                { id: 'stage2_load-resume', title: 'Loading Resume', description: 'Downloading your resume from storage', logs: [], status: 'pending' as const },
+                { id: 'stage3_parse-resume', title: 'Analyzing Resume', description: 'Extracting and structuring your experience', logs: [], status: 'pending' as const },
+                { id: 'stage4_load-linkedin', title: 'Checking LinkedIn', description: 'Looking for LinkedIn profile to enhance your profile', logs: [], status: 'pending' as const },
+                { id: 'stage5_master-profile', title: 'Building Profile', description: 'Merging your resume and LinkedIn data', logs: [], status: 'pending' as const },
+                { id: 'stage6_generate-coverletter', title: 'Writing Cover Letter', description: 'Crafting a personalized cover letter', logs: [], status: 'pending' as const },
+                { id: 'stage7_save', title: 'Saving', description: 'Saving your cover letter', logs: [], status: 'pending' as const },
+            ],
+            currentStageIndex: 0,
+        }));
+
         try {
-            const res = await fetch('/api/generate-cover-letter', {
+            const response = await fetch('/api/generate-cover-letter-stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     job_id: jobId,
-                    queue,
                     job_description: jobDescription
                 }),
             });
 
-            const data = await res.json();
-
-            if (data.success) {
-                if (queue) {
-                    setCoverLetterModal(prev => ({
-                        ...prev,
-                        isOpen: false,
-                        isGenerating: false,
-                    }));
-                    alert("Cover letter generation queued successfully.");
-                } else {
-                    setCoverLetterModal(prev => ({
-                        ...prev,
-                        isOpen: true,
-                        isGenerating: false,
-                        html: data.coverLetter.content_html || '',
-                        text: data.coverLetter.content_text || '',
-                        highlights: data.coverLetter.highlights || [],
-                        coverLetterId: data.coverLetter.id,
-                        error: null,
-                    }));
-                }
-            } else {
-                // Handle Error
-                const errorMsg = data.error || 'Failed to generate cover letter';
-                setCoverLetterModal(prev => ({
-                    ...prev,
-                    isOpen: true,
-                    isGenerating: false,
-                    error: errorMsg,
-                }));
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || `Server error: ${response.status}`);
             }
-        } catch (error) {
+
+            const reader = response.body?.getReader();
+            if (!reader) throw new Error('Failed to read response stream');
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let currentEvent = 'message';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) { currentEvent = 'message'; continue; }
+                    if (trimmed.startsWith('event: ')) { currentEvent = trimmed.slice(7).trim(); continue; }
+                    
+                    if (trimmed.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(trimmed.slice(6));
+                            const eventType = currentEvent;
+
+                            if (eventType === 'stage') {
+                                setCoverLetterProgress(prev => {
+                                    const stageIdx = prev.stages.findIndex(s => s.id === data.stageId);
+                                    if (stageIdx === -1) return prev;
+                                    const newStages = [...prev.stages];
+                                    newStages[stageIdx] = { ...newStages[stageIdx], status: 'running', description: data.name || newStages[stageIdx].description };
+                                    return { ...prev, stages: newStages, currentStageIndex: stageIdx };
+                                });
+                            } else if (eventType === 'log') {
+                                setCoverLetterProgress(prev => {
+                                    const stageIdx = prev.stages.findIndex(s => s.id === data.stageId);
+                                    if (stageIdx === -1) return prev;
+                                    const newStages = [...prev.stages];
+                                    newStages[stageIdx] = { ...newStages[stageIdx], logs: [...newStages[stageIdx].logs, data.log] };
+                                    return { ...prev, stages: newStages };
+                                });
+                            } else if (eventType === 'complete') {
+                                setCoverLetterProgress(prev => {
+                                    const stageIdx = prev.stages.findIndex(s => s.id === data.stageId);
+                                    if (stageIdx === -1) return prev;
+                                    const newStages = [...prev.stages];
+                                    newStages[stageIdx] = { ...newStages[stageIdx], status: 'completed' };
+                                    return { ...prev, stages: newStages };
+                                });
+                            } else if (eventType === 'done') {
+                                if (data.status === 'success') {
+                                    setCoverLetterModal(prev => ({
+                                        ...prev,
+                                        isOpen: true,
+                                        isGenerating: false,
+                                        html: data.coverLetter.content_html || '',
+                                        text: data.coverLetter.content_text || '',
+                                        coverLetterId: data.coverLetter.id,
+                                        error: null,
+                                    }));
+                                } else {
+                                    throw new Error(data.message || 'Generation failed');
+                                }
+                            } else if (eventType === 'error') {
+                                throw new Error(data.message || 'Generation failed');
+                            }
+                        } catch (e) {
+                            console.error('SSE parse error:', e);
+                        }
+                    }
+                }
+            }
+
+            setCoverLetterProgress(prev => ({
+                ...prev,
+                stages: prev.stages.map(s => ({ ...s, status: 'completed' as const })),
+            }));
+
+        } catch (error: any) {
             console.error('Error generating cover letter:', error);
+            setCoverLetterProgress(prev => ({
+                ...prev,
+                stages: prev.stages.map(s => ({ ...s, status: 'completed' as const })),
+            }));
             setCoverLetterModal(prev => ({
                 ...prev,
                 isOpen: true,
                 isGenerating: false,
-                error: 'Failed to communicate with server. Please try again.',
+                error: error.message || 'Failed to communicate with server. Please try again.',
             }));
         }
     };
-
-
 
     const handleGenerateTailoredResume = async (jobId: string) => {
         if (!isSignedIn) {
@@ -1091,12 +1109,23 @@ export function Dashboard({
         }
         setIsScoring(true);
         try {
-            const res = await fetch('/api/run-scoring', { method: 'POST' });
+            const res = await fetch('/api/score-jobs', { method: 'POST' });
             const data = await res.json();
-            if (data.success) {
-                loadJobs(false);
+            
+            if (data.scored && data.scored.length > 0) {
+                // Reload jobs to get updated scores
+                await loadJobs(false);
+                
+                // Show success with score info
+                const avgScore = data.summary?.avgScore || 0;
+                const scoredCount = data.scored.length;
+                alert(`Scored ${scoredCount} jobs! Average score: ${avgScore}`);
+            } else if (data.message && data.message.includes('No jobs')) {
+                alert(data.message);
+            } else if (data.errors && data.errors.length > 0) {
+                alert('Scoring errors: ' + data.errors.join(', '));
             } else {
-                alert('Scoring failed: ' + (data.error || 'Unknown error'));
+                alert('No jobs were scored. ' + (data.message || ''));
             }
         } catch (err) {
             alert('Scoring error: ' + (err instanceof Error ? err.message : String(err)));
@@ -1438,6 +1467,8 @@ export function Dashboard({
                 isGenerating={coverLetterModal.isGenerating}
                 onRegenerate={() => handleConfirmGenerateCoverLetter(coverLetterModal.jobId!, coverLetterSetupModal.initialDescription || '')} // Retry with same desc
                 onQueue={() => activeId && handleGenerateCoverLetter(activeId, true)}
+                progressStages={coverLetterProgress.stages}
+                progressCurrentStage={coverLetterProgress.currentStageIndex}
             />
 
             {/* Modals */}
