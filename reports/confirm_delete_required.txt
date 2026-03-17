@@ -1,0 +1,4 @@
+CLEANUP PLAN READY — review reports/cleanup-plan.md.
+Deletion is gated until you run scripts/apply-cleanup.sh.
+To apply, execute the following in your terminal:
+./scripts/apply-cleanup.sh
