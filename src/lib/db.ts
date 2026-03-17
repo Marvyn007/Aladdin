@@ -130,14 +130,10 @@ export async function updateUserEmbedding(userId: string, jobId: string, type: s
  * Get ALL public jobs with pagination (no user filtering)
  * Stable ordering: fetched_at DESC, id for consistent pagination
  */
-/**
- * Get ALL public jobs with pagination (no user filtering)
- * Stable ordering: Primary Sort -> ID (tie-breaker)
- */
 export async function getAllPublicJobs(
     page: number = 1,
     limit: number = 50,
-    sortBy: 'time' | 'imported' | 'score' = 'time',
+    sortBy: 'time' | 'imported' = 'time',
     sortDir: 'asc' | 'desc' = 'desc',
     currentUserId: string | null = null
 ): Promise<Job[]> {
@@ -147,8 +143,7 @@ export async function getAllPublicJobs(
     // Mapping
     const sortColumn = {
         'time': 'fetched_at',
-        'imported': 'scraped_at',
-        'score': 'created_at' // Public jobs don't have match_score usually
+        'imported': 'scraped_at'
     }[sortBy] || 'fetched_at';
 
     if (dbType === 'postgres') {
@@ -191,8 +186,6 @@ export async function getAllPublicJobs(
         return res.rows.map((row) => ({
             ...row,
             status: row.viewer_status || 'fresh',
-            matched_skills: row.matched_skills,
-            missing_skills: row.missing_skills,
             postedBy: row.poster_id ? {
                 id: row.poster_id,
                 firstName: row.poster_first_name || row.first_name, // Fallback to user table if snapshot missing
@@ -260,15 +253,12 @@ export async function getAllPublicJobs(
     }
 }
 
-/**
- * Get jobs filtered by user status
- */
 export async function getJobs(
     userId: string,
     status: JobStatus = 'fresh',
     page: number = 1,
     limit: number = 50,
-    sortBy: 'time' | 'imported' | 'score' | 'relevance' = 'time',
+    sortBy: 'time' | 'imported' = 'time',
     sortDir: 'asc' | 'desc' = 'desc'
 ): Promise<Job[]> {
     const offset = (page - 1) * limit;
@@ -278,9 +268,7 @@ export async function getJobs(
     // We default to created_at for time
     const sortColumn = {
         'time': 'created_at',
-        'imported': 'scraped_at',
-        'score': 'match_score',
-        'relevance': 'match_score'
+        'imported': 'scraped_at'
     }[sortBy] || 'created_at';
 
     if (dbType === 'postgres') {
@@ -301,15 +289,12 @@ export async function getJobs(
             JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
             LEFT JOIN user_jobs poster_uj ON j.id = poster_uj.job_id AND j.posted_by_user_id = poster_uj.user_id
             LEFT JOIN users u ON j.posted_by_user_id = u.id
-            WHERE (uj.status = $2 OR (uj.status IS NULL AND $2 = 'fresh'))
-            ORDER BY ${(sortBy === 'score' || sortBy === 'relevance') ? 'uj.match_score' : 'j.' + sortColumn} ${sortDir.toUpperCase()}
+            ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}
             LIMIT $3 OFFSET $4
         `, [userId, status, limit, offset]);
 
         return res.rows.map((row) => ({
             ...row,
-            matched_skills: row.matched_skills, // Postgres driver parses JSON automatically
-            missing_skills: row.missing_skills,
             postedBy: row.poster_id ? {
                 id: row.poster_id,
                 firstName: row.poster_first_name,
@@ -335,13 +320,8 @@ export async function getJobs(
             `)
             .eq('user_jobs.user_id', userId)
             .eq('user_jobs.status', status)
+            .order(sortColumn, { ascending: sortDir === 'asc' })
             .range(offset, offset + limit - 1);
-
-        if (sortBy === 'score' || sortBy === 'relevance') {
-            query = query.order('match_score', { foreignTable: 'user_jobs', ascending: sortDir === 'asc' });
-        } else {
-            query = query.order(sortColumn, { ascending: sortDir === 'asc' });
-        }
 
         const { data, error } = await query;
         if (error) throw error;
@@ -365,18 +345,16 @@ export async function getJobs(
         const db = getSQLiteDB();
         // Simplified SQLite query - might need adjustment for JOINs if strictly needed but usually local doesn't have users table fully populated same way
         const rows = db.prepare(`
-            SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at
+            SELECT j.*, uj.status, uj.archived_at
             FROM jobs j
             JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
             WHERE (uj.status = ? OR (uj.status IS NULL AND ? = 'fresh'))
-            ORDER BY ${(sortBy === 'score' || sortBy === 'relevance') ? 'uj.match_score' : 'j.' + sortColumn} ${sortDir.toUpperCase()}
+            ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}
             LIMIT ? OFFSET ?
         `).all(userId, status, status, limit, offset) as Record<string, unknown>[];
 
-        return rows.map((row) => ({
+        return rows.map((row: any) => ({
             ...row,
-            matched_skills: row.matched_skills ? JSON.parse(row.matched_skills as string) : null,
-            missing_skills: row.missing_skills ? JSON.parse(row.missing_skills as string) : null,
             postedBy: null // SQLite mostly local, might not have separate user records
         })) as Job[];
     }
@@ -571,11 +549,9 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
         const r = row as any;
         return {
             ...r,
-            matched_skills: r.matched_skills ? JSON.parse(r.matched_skills as string) : null,
-            missing_skills: r.missing_skills ? JSON.parse(r.missing_skills as string) : null,
             isImported: Boolean(r.is_imported),
             date_posted_relative: Boolean(r.date_posted_relative),
-            extraction_confidence: r.extraction_confidence ? JSON.parse(r.extraction_confidence as string) : null,
+            extraction_confidence: r.extraction_confidence ? JSON.parse(r.extraction_confidence as string) : null
         } as Job;
     }
 }
@@ -664,8 +640,8 @@ export async function insertJob(
             
             if (exists.rows.length === 0) {
                 await client.query(`
-                    INSERT INTO user_jobs (user_id, job_id, status, match_score, poster_first_name, poster_last_name, poster_image_url)
-                    VALUES ($1, $2, 'fresh', 0, $3, $4, $5)
+                    INSERT INTO user_jobs (user_id, job_id, status, poster_first_name, poster_last_name, poster_image_url)
+                    VALUES ($1, $2, 'fresh', $3, $4, $5)
                 `, [userId, jobId, posterFirstName, posterLastName, posterImageUrl]);
             }
         });
@@ -676,7 +652,7 @@ export async function insertJob(
             await saveCompanyToDb(job.company, null, (job as any).company_logo_url);
         }
 
-        return { ...job, id: jobId!, status: 'fresh', match_score: 0, matched_skills: null, missing_skills: null, why: null, content_hash: contentHash, fetched_at: new Date().toISOString() };
+        return { ...job, id: jobId!, status: 'fresh', content_hash: contentHash, fetched_at: new Date().toISOString() };
     } else if (dbType === 'supabase') {
         const client = getSupabaseClient();
 
@@ -731,7 +707,6 @@ export async function insertJob(
             user_id: userId,
             job_id: jobId,
             status: 'fresh',
-            match_score: 0,
             poster_first_name: posterFirstName,
             poster_last_name: posterLastName,
             poster_image_url: posterImageUrl
@@ -773,53 +748,18 @@ export async function insertJob(
 
         // Link User
         // SQLite doesn't have ON CONFLICT DO NOTHING for simple INSERT easily without constraint triggers, or use INSERT OR IGNORE
-        db.prepare('INSERT OR IGNORE INTO user_jobs (user_id, job_id, status, match_score) VALUES (?, ?, ?, ?)').run(userId, jobId, 'fresh', 0);
+        db.prepare('INSERT OR IGNORE INTO user_jobs (user_id, job_id, status) VALUES (?, ?, ?)').run(userId, jobId, 'fresh');
 
-        return { ...job, id: jobId!, status: 'fresh', match_score: 0, matched_skills: null, missing_skills: null, why: null, content_hash: contentHash, fetched_at: new Date().toISOString() };
+        return {
+            ...job,
+            id: jobId!,
+            status: 'fresh',
+            content_hash: contentHash,
+            fetched_at: new Date().toISOString()
+        } as Job;
     }
 }
 
-export async function updateJobScore(
-    userId: string,
-    jobId: string,
-    matchScore: number,
-    matchedSkills: string[],
-    missingSkills: string[],
-    why: string
-): Promise<void> {
-    const dbType = getDbType();
-
-    if (dbType === 'postgres') {
-        await executeWithUser(userId, async (client) => {
-            await client.query(`
-                UPDATE user_jobs
-                SET match_score = $1, matched_skills = $2, missing_skills = $3, why = $4, updated_at = NOW()
-                WHERE job_id = $5 AND user_id = $6
-            `, [matchScore, JSON.stringify(matchedSkills), JSON.stringify(missingSkills), why, jobId, userId]);
-        });
-    } else if (dbType === 'supabase') {
-        const client = getSupabaseClient();
-        const { error } = await client
-            .from('user_jobs')
-            .update({
-                match_score: matchScore,
-                matched_skills: matchedSkills,
-                missing_skills: missingSkills,
-                why,
-            })
-            .eq('job_id', jobId)
-            .eq('user_id', userId);
-
-        if (error) throw error;
-    } else {
-        const db = getSQLiteDB();
-        db.prepare(`
-      UPDATE user_jobs 
-      SET match_score = ?, matched_skills = ?, missing_skills = ?, why = ?, updated_at = datetime('now')
-      WHERE job_id = ? AND user_id = ?
-    `).run(matchScore, JSON.stringify(matchedSkills), JSON.stringify(missingSkills), why, jobId, userId);
-    }
-}
 
 export async function updateJobStatus(userId: string, jobId: string, status: JobStatus): Promise<void> {
     const dbType = getDbType();

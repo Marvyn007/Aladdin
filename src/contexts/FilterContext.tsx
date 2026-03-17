@@ -162,25 +162,15 @@ export function checkJobMatchFields(job: Job, filters: string[]): JobMatchResult
         }
         
         if (filterType === 'all' || filterType === 'skills') {
-            if (job.matched_skills && job.matched_skills.length > 0) {
-                const skillsText = job.matched_skills.join(' ').toLowerCase();
-                if (matchTermInText(skillsText, filterValue)) {
-                    if (!matchedFields.includes('skills')) matchedFields.push('skills');
-                    matched = true;
-                }
-            }
+            const descriptionText = [
+                job.raw_text_summary,
+                job.normalized_text,
+                job.job_description_plain
+            ].filter(Boolean).join(' ').toLowerCase();
             
-            if (!matched || filterType === 'all') {
-                const descriptionText = [
-                    job.raw_text_summary,
-                    job.normalized_text,
-                    job.job_description_plain
-                ].filter(Boolean).join(' ').toLowerCase();
-                
-                if (matchTermInText(descriptionText, filterValue)) {
-                    if (!matchedFields.includes('description')) matchedFields.push('description');
-                    matched = true;
-                }
+            if (matchTermInText(descriptionText, filterValue)) {
+                if (!matchedFields.includes('skills')) matchedFields.push('skills');
+                matched = true;
             }
         }
         

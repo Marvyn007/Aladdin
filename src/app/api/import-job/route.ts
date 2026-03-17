@@ -3,12 +3,11 @@ import {
     insertJob,
     getDefaultResume,
     getLinkedInProfile,
-    updateJobScore,
     getResumeById,
     updateResume,
     getPostedByUserInfo,
 } from '@/lib/db';
-import { scoreJob, parseResumeFromPdf, verifyJobAuthenticity } from '@/lib/openai';
+import { parseResumeFromPdf, verifyJobAuthenticity } from '@/lib/openai';
 import type { ParsedResume, ResumeSkill } from '@/types';
 import type { ScrapeResult } from '@/lib/job-scraper-fetch';
 import { scrapeJobPageFetch } from '@/lib/job-scraper-fetch';
@@ -189,61 +188,7 @@ export async function POST(req: NextRequest) {
 
         console.log('[Import] Job inserted:', newJob.id);
 
-        const defaultResume = await getDefaultResume(userId);
-        const linkedinProfile = await getLinkedInProfile(userId);
-        let score = 0;
-        let matchedSkills: string[] = [];
-        let missingSkills: string[] = [];
-        let why = 'Imported job';
-
-        if (defaultResume) {
-            if (!defaultResume.parsed_json || Object.keys(defaultResume.parsed_json).length === 0) {
-                console.log('[Import] Parsing default resume for first time...');
-                const resumeData = await getResumeById(userId, defaultResume.id);
-                if (resumeData?.file_data) {
-                    const parsed = await parseResumeFromPdf(resumeData.file_data);
-                    defaultResume.parsed_json = parsed;
-                    await updateResume(userId, defaultResume.id, { parsed_json: parsed });
-                }
-            }
-
-            const linkedinParsed = linkedinProfile?.parsed_json as ParsedResume | null;
-
-            const resumeParsed = defaultResume.parsed_json as ParsedResume;
-            const resumeSkillNames: string[] = [];
-            if (resumeParsed.skills) {
-                for (const skill of resumeParsed.skills) {
-                    if (typeof skill === 'string') {
-                        resumeSkillNames.push(skill);
-                    } else if (skill && typeof skill === 'object' && 'name' in skill) {
-                        resumeSkillNames.push((skill as ResumeSkill).name);
-                    }
-                }
-            }
-
-            const { analyzeSkills } = await import('@/lib/skill-matcher');
-            const jobText = scrapeResult.job_description_plain || '';
-            const skillAnalysis = analyzeSkills(jobText, resumeSkillNames);
-
-            matchedSkills = skillAnalysis.matched;
-            missingSkills = skillAnalysis.missing;
-
-            console.log('[Import] Deterministic skills:', {
-                matched: matchedSkills.length,
-                missing: missingSkills.length,
-                jobSkillsFound: skillAnalysis.jobSkills.length
-            });
-
-            try {
-                const scoreResult = await scoreJob(resumeParsed, linkedinParsed, newJob);
-                score = scoreResult.match_score;
-                why = scoreResult.why || 'Imported and scored';
-            } catch {
-                console.warn('[Import] AI scoring failed, using skill-based fallback');
-            }
-        }
-
-        await updateJobScore(userId, newJob.id, score, matchedSkills, missingSkills, why);
+        // Scoring and skill matching disabled
 
         const postedByUser = await getPostedByUserInfo(newJob.id);
 

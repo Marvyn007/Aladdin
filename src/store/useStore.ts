@@ -46,7 +46,7 @@ interface AppState {
         totalPages: number;
     };
     sorting: {
-            by: 'time' | 'imported' | 'score';
+            by: 'time' | 'imported';
         dir: 'asc' | 'desc';
     };
 

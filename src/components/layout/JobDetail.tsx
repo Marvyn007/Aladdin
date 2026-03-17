@@ -581,11 +581,6 @@ export function JobDetail({
         }
     };
 
-    const getScoreColor = (score: number): string => {
-        if (score >= 75) return 'var(--success)';
-        if (score >= 50) return 'var(--warning)';
-        return 'var(--text-tertiary)';
-    };
 
     const handleGenerateCoverLetter = async () => {
         if (!job) return;
@@ -732,31 +727,6 @@ export function JobDetail({
                             {/* Poster Card (Profile + Reputation) */}
                             {/* Poster Card (Profile + Reputation) removed from here */}
 
-                            {/* Match Score */}
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    padding: '12px 16px',
-                                    background: 'var(--surface)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    minWidth: '70px',
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        fontSize: '24px',
-                                        fontWeight: 700,
-                                        color: getScoreColor(job.match_score),
-                                    }}
-                                >
-                                    {job.match_score}
-                                </span>
-                                <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
-                                    Match
-                                </span>
-                            </div>
                         </div>
                     </div>
 
@@ -982,57 +952,9 @@ export function JobDetail({
                 {/* Content */}
                 <div style={{ flex: 1, padding: '20px' }}>
 
-                    {(job.matched_skills?.length || job.missing_skills?.length) && (
-                        <div style={{ marginBottom: '24px' }}>
-                            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Skills Analysis
-                            </h3>
-
-                            {job.matched_skills && job.matched_skills.length > 0 && (
-                                <div style={{ marginBottom: '16px' }}>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
-                                        Matched Skills
-                                    </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                        {job.matched_skills.map((skill, i) => (
-                                            <span key={i} className="badge badge-success">
-                                                {skill}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {job.missing_skills && job.missing_skills.length > 0 && (
-                                <div>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
-                                        Missing Skills
-                                    </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                        {job.missing_skills.map((skill, i) => (
-                                            <span key={i} className="badge badge-warning">
-                                                {skill}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )
-                    }
 
                     {/* Why explanation */}
                     {
-                        job.why && (
-                            <div style={{ marginBottom: '24px' }}>
-                                <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                    Match Explanation
-                                </h3>
-                                <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.6, fontStyle: 'italic' }}>
-                                    &ldquo;{job.why}&rdquo;
-                                </p>
-                            </div>
-                        )
                     }
 
                     {/* Job description */}

@@ -12,10 +12,10 @@ export interface Job {
   posted_at: string | null;
   fetched_at: string;
   status: JobStatus;
-  match_score: number;
-  matched_skills: string[] | null;
-  missing_skills: string[] | null;
-  why: string | null;
+  match_score?: number;
+  matched_skills?: string[] | null;
+  missing_skills?: string[] | null;
+  why?: string | null;
   normalized_text: string | null;
   raw_text_summary: string | null;
   content_hash: string | null;

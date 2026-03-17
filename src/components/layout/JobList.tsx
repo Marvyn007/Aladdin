@@ -60,12 +60,6 @@ interface JobListProps {
     onJobClick: (job: Job) => void;
 }
 
-// Get score color class based on score value
-function getScoreClass(score: number): string {
-    if (score >= 75) return 'high';
-    if (score >= 50) return 'medium';
-    return 'low';
-}
 
 // Format posted date
 function formatPostedDate(postedAt: string | null): string {
@@ -152,9 +146,7 @@ export function JobList({ onJobClick }: JobListProps) {
         // Sort
         displayedJobs = [...displayedJobs].sort((a, b) => {
             const dir = sorting.dir === 'asc' ? 1 : -1;
-            if (sorting.by === 'score') {
-                return ((a.match_score || 0) - (b.match_score || 0)) * dir;
-            } else if (sorting.by === 'imported') {
+            if (sorting.by === 'imported') {
                 return (Number(!!a.isImported) - Number(!!b.isImported)) * dir;
             } else {
                 // Time
@@ -172,13 +164,6 @@ export function JobList({ onJobClick }: JobListProps) {
 
     const { setPagination, setJobStatus, toggleJobStatus } = useStoreActions();
 
-    const getScoreColor = (score: number) => {
-        if (score >= 90) return '#10b981'; // Green-500
-        if (score >= 75) return '#34d399'; // Green-400
-        if (score >= 50) return '#fbbf24'; // Amber-400
-        if (score >= 30) return '#f87171'; // Red-400
-        return '#ef4444'; // Red-500
-    };
 
     return (
         <div className="job-list-container">
@@ -455,26 +440,6 @@ export function JobList({ onJobClick }: JobListProps) {
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    {/* Profile Image removed from here */}
-                                    {job.match_score > 0 && (
-                                        <div
-                                            style={{
-                                                background: getScoreColor(job.match_score),
-                                                color: '#fff',
-                                                fontSize: '11px',
-                                                fontWeight: 700,
-                                                padding: '1px 6px',
-                                                borderRadius: '12px',
-                                                minWidth: '28px',
-                                                textAlign: 'center',
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                            }}
-                                        >
-                                            {job.match_score}
-                                        </div>
-                                    )}
-                                </div>
 
                                 {/* Company & Logo */}
                                 {(job.company || job.company_logo_url) && (
@@ -539,20 +504,6 @@ export function JobList({ onJobClick }: JobListProps) {
                                     </span>
                                 </div>
 
-                                {/* Why explanation */}
-                                {job.why && (
-                                    <p
-                                        style={{
-                                            fontSize: '11px',
-                                            color: 'var(--text-secondary)',
-                                            fontStyle: 'italic',
-                                            lineHeight: 1.5,
-                                        }}
-                                        className="truncate-2"
-                                    >
-                                        {job.why}
-                                    </p>
-                                )}
                             </div>
                         ))}
 
