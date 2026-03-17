@@ -19,10 +19,12 @@ interface JobGeo {
         id: string;
         title: string;
         company: string;
+        companyLogo?: string | null;
         location: string;
         postedAt: string;
         sourceUrl: string;
         status?: string;
+        saved?: boolean;
     };
 }
 
@@ -52,22 +54,28 @@ const createClusterCustomIcon = function (cluster: any) {
     });
 }
 
-const createJobIcon = (title: string) => {
+const createJobIcon = (title: string, companyLogo?: string | null) => {
     const letter = title ? title.charAt(0).toUpperCase() : '?';
 
-    // Custom pin HTML with image and centered text
+    // If we have a logo, show it in a nice circular frame. Otherwise show the letter.
+    const innerContent = companyLogo 
+        ? `<img src="${companyLogo}" alt="logo" style="width: 14px; height: 14px; border-radius: 50%; object-fit: cover; background: white;" />`
+        : `<span style="position: relative; z-index: 10; font-family: sans-serif; font-weight: bold; color: white; font-size: 9px; margin-bottom: 4px;">${letter}</span>`;
+
     const html = `
-        <div style="position: relative; width: 22px; height: 22px; display: flex; justify-content: center; align-items: center;">
+        <div style="position: relative; width: 22px; height: 22px; display: flex; justify-content: center; align-items: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
             <img src="/map_pin.png" alt="pin" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;" />
-            <span style="position: relative; z-index: 10; font-family: sans-serif; font-weight: bold; color: white; font-size: 9px; margin-bottom: 4px;">${letter}</span>
+            <div style="position: relative; z-index: 10; width: 14px; height: 14px; display: flex; justify-content: center; align-items: center; margin-bottom: 4px;">
+                ${innerContent}
+            </div>
         </div>
     `;
 
     return L.divIcon({
         html: html,
-        className: '', // Remove default styles if any interfere, or keep 'job-marker' if valid. Using empty to rely on inline styles for now.
+        className: '', 
         iconSize: L.point(22, 22, true),
-        iconAnchor: [11, 22], // Tip of pin (assuming bottom center)
+        iconAnchor: [11, 22], 
         popupAnchor: [0, -22]
     });
 };
@@ -113,9 +121,6 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
 
     return (
         <div style={{ height: '100%', width: '100%', position: 'relative', zIndex: 0 }}>
-            {/* Back Button */}
-
-
             {loading && (
                 <div style={{
                     position: 'absolute', top: 20, right: 20, zIndex: 1000,
@@ -131,11 +136,10 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
             <MapContainer
                 center={[20, 0]}
                 zoom={2}
-                minZoom={2} // Prevent zooming out to see multiple worlds
-                style={{ height: '100%', width: '100%', background: '#f5f5f5' }} // Neutral background
+                minZoom={2} 
+                style={{ height: '100%', width: '100%', background: '#f5f5f5' }} 
                 scrollWheelZoom={true}
             >
-                {/* CartoDB Positron - Modern, clean, minimal */}
                 <TileLayer
                     attribution='&copy; <a href="https://carto.com/">CARTO</a>'
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -146,23 +150,23 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
                 <MarkerClusterGroup
                     chunkedLoading
                     iconCreateFunction={createClusterCustomIcon}
-                    maxClusterRadius={60} // Tweak density
+                    maxClusterRadius={40} // Reduced for less aggressive clustering as requested
                     showCoverageOnHover={false}
                 >
                     {jobs.map((job) => (
                         <Marker
                             key={job.properties.id}
-                            position={[job.geometry.coordinates[1], job.geometry.coordinates[0]]} // Lat, Lng
-                            icon={createJobIcon(job.properties.title)}
+                            position={[job.geometry.coordinates[1], job.geometry.coordinates[0]]} 
+                            icon={createJobIcon(job.properties.title, job.properties.companyLogo)}
                             eventHandlers={{
                                 click: () => onJobClick?.(job.properties.id),
                             }}
                         >
                             <Tooltip
                                 direction="top"
-                                offset={[0, -5]} // Slightly overlap to ensure no gap for hover interaction
+                                offset={[0, -5]} 
                                 opacity={1}
-                                interactive={true} // Allow clicking buttons inside
+                                interactive={true} 
                                 className="custom-tooltip"
                             >
                                 <div style={{
@@ -205,16 +209,16 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
                                                 setJobs(currentStatus =>
                                                     currentStatus.map(j =>
                                                         j.properties.id === job.properties.id
-                                                            ? { ...j, properties: { ...j.properties, status: j.properties.status === 'saved' ? 'fresh' : 'saved' } }
+                                                            ? { ...j, properties: { ...j.properties, saved: !j.properties.saved } }
                                                             : j
                                                     )
                                                 );
                                             }}
-                                            title={job.properties.status === 'saved' ? 'Saved' : 'Save Job'}
+                                            title={job.properties.saved ? 'Saved' : 'Save Job'}
                                             style={{
-                                                background: job.properties.status === 'saved' ? '#ecfdf5' : '#f1f5f9',
-                                                border: job.properties.status === 'saved' ? '1px solid #10b981' : 'none',
-                                                color: job.properties.status === 'saved' ? '#059669' : '#64748b',
+                                                background: job.properties.saved ? '#ecfdf5' : '#f1f5f9',
+                                                border: job.properties.saved ? '1px solid #10b981' : 'none',
+                                                color: job.properties.saved ? '#059669' : '#64748b',
                                                 padding: '4px 8px',
                                                 borderRadius: '4px',
                                                 cursor: 'pointer',
@@ -224,7 +228,7 @@ export default function JobsMapLeaflet({ onJobClick, onJobOpen, onJobSave }: Job
                                                 width: '32px'
                                             }}
                                         >
-                                            {job.properties.status === 'saved' ? (
+                                            {job.properties.saved ? (
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                                             ) : (
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>

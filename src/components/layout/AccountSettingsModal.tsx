@@ -12,6 +12,8 @@ import { useStore, useStoreActions } from '@/store/useStore';
 import { THEMES } from '@/lib/themes';
 import { ActivityGraph } from '@/components/profile/ActivityGraph';
 import { InterviewExperienceModal } from '@/components/modals/InterviewExperienceModal';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
+import { Pencil, Trash2, ExternalLink, AlertCircle, Clock as ClockIcon, CheckCircle2, Plus, Loader2 } from 'lucide-react';
 
 type TabType = 'profile' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
 
@@ -1640,51 +1642,269 @@ function TouchGrassTab() {
 }
 
 function ReviewsTab({ isMobile }: { isMobile?: boolean }) {
+    const [experiences, setExperiences] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingExperience, setEditingExperience] = useState<any | null>(null);
+
+    const fetchExperiences = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/user/interviews');
+            if (res.ok) {
+                const data = await res.json();
+                setExperiences(data.interviews || []);
+            }
+        } catch (error) {
+            console.error('Failed to fetch experiences:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchExperiences();
+    }, []);
+
+    const handleEdit = (exp: any) => {
+        setEditingExperience(exp);
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this interview experience?')) return;
+        
+        try {
+            const res = await fetch(`/api/interview-experiences/${id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                setExperiences(prev => prev.filter(e => e.id !== id));
+            } else {
+                alert('Failed to delete experience');
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+        }
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case 'APPROVED': return <CheckCircle2 size={14} color="#22c55e" />;
+            case 'PENDING': return <ClockIcon size={14} color="#f59e0b" />;
+            case 'REJECTED': return <AlertCircle size={14} color="#ef4444" />;
+            default: return null;
+        }
+    };
 
     return (
         <div style={{
-            padding: isMobile ? '16px' : '24px',
             display: 'flex',
             flexDirection: 'column',
             gap: '24px',
             height: '100%',
-            overflowY: 'auto'
         }}>
-            <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                    Interview Experiences
-                </h3>
-                <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                    Manage and view interview experiences you have shared.
-                </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                        My Interview Experiences
+                    </h3>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        Manage the experiences you've shared with the community.
+                    </p>
+                </div>
+                <button
+                    onClick={() => {
+                        setEditingExperience(null);
+                        setIsModalOpen(true);
+                    }}
+                    style={{
+                        padding: '8px 16px',
+                        background: 'var(--accent)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <Plus size={16} />
+                    {!isMobile && 'Add New'}
+                </button>
             </div>
 
-            <button
-                onClick={() => setIsModalOpen(true)}
-                style={{
-                    padding: '12px 24px',
-                    background: 'var(--accent)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    width: 'fit-content'
-                }}
-            >
-                + Add Interview Experience
-            </button>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '20px' }}>
+                {loading ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                        <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
+                        Loading your experiences...
+                    </div>
+                ) : experiences.length === 0 ? (
+                    <div style={{ 
+                        padding: '48px 24px', 
+                        textAlign: 'center', 
+                        border: '2px dashed var(--border)', 
+                        borderRadius: '16px',
+                        background: 'var(--background-secondary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '12px'
+                    }}>
+                        <div style={{ padding: '16px', borderRadius: '50%', background: 'var(--background-tertiary)' }}>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" color="var(--text-tertiary)">
+                                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p style={{ color: 'var(--text-primary)', fontWeight: 600, margin: '0 0 4px' }}>No experiences yet</p>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', maxWidth: '280px', margin: 0 }}>
+                                Share your interview journey to help others and build your community reputation.
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    experiences.map((exp) => (
+                        <div 
+                            key={exp.id}
+                            style={{
+                                padding: '16px',
+                                borderRadius: '12px',
+                                background: 'var(--background-secondary)',
+                                border: '1px solid var(--border)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '16px',
+                                transition: 'all 0.2s',
+                                position: 'relative'
+                            }}
+                        >
+                            <CompanyLogo 
+                                companyName={exp.companyName} 
+                                logoUrl={exp.company?.logoUrl} 
+                                size={44} 
+                            />
+                            
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                    <h4 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {exp.role} @ {exp.companyName}
+                                    </h4>
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '4px', 
+                                        padding: '2px 8px', 
+                                        borderRadius: '12px', 
+                                        background: 'var(--background-tertiary)',
+                                        fontSize: '11px',
+                                        fontWeight: 500,
+                                        color: 'var(--text-secondary)'
+                                    }}>
+                                        {getStatusIcon(exp.status)}
+                                        {exp.status.charAt(0) + exp.status.slice(1).toLowerCase()}
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                                    <span>{new Date(exp.createdAt).toLocaleDateString()}</span>
+                                    <span>•</span>
+                                    <span>{exp.difficulty} Difficulty</span>
+                                    {exp.isFlagged && (
+                                        <>
+                                            <span>•</span>
+                                            <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                <AlertCircle size={12} /> Flagged
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
 
-            <div style={{ padding: '32px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: '12px' }}>
-                <p style={{ color: 'var(--text-secondary)' }}>
-                    Your submitted reviews will appear here.
-                </p>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    onClick={() => handleEdit(exp)}
+                                    style={{
+                                        padding: '8px',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: 'var(--background-tertiary)',
+                                        color: 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    title="Edit Experience"
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-muted)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'var(--background-tertiary)'}
+                                >
+                                    <Pencil size={15} />
+                                </button>
+                                <button
+                                    onClick={() => handleDelete(exp.id)}
+                                    style={{
+                                        padding: '8px',
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: 'var(--background-tertiary)',
+                                        color: 'var(--text-danger, #ef4444)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    title="Delete Experience"
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'var(--background-tertiary)'}
+                                >
+                                    <Trash2 size={15} />
+                                </button>
+                                <a
+                                    href={`/interview-experiences/${encodeURIComponent(exp.companyName)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        background: 'var(--background-tertiary)',
+                                        color: 'var(--text-secondary)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    title="View Company Page"
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--background-hover)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'var(--background-tertiary)'}
+                                >
+                                    <ExternalLink size={15} />
+                                </a>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
 
             <InterviewExperienceModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setEditingExperience(null);
+                    fetchExperiences(); // Refresh after add/edit
+                }}
+                initialData={editingExperience}
             />
         </div>
     );

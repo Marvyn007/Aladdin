@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import { validateInterviewExperience } from '@/lib/interview-validation';
 
 // POST: Create a new interview experience
 export async function POST(req: Request) {
@@ -11,6 +12,16 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
+        
+        // 1. Validation & Fraud Checks
+        const validation = validateInterviewExperience(body);
+        if (!validation.isValid) {
+            return NextResponse.json({ 
+                error: 'Validation failed', 
+                details: validation.errors 
+            }, { status: 400 });
+        }
+
         const {
             companyName,
             role,
@@ -22,17 +33,27 @@ export async function POST(req: Request) {
             offerDate,
             processSteps,
             interviewDetails,
-            additionalComments
+            additionalComments,
+            outcome,
+            offerDetails,
+            isRemote
         } = body;
 
-        // Basic validation
-        console.log('POST payload:', body);
-        if (!companyName || !role || !location || !workOption || !offerStatus) {
-            console.log('Validation failed:', { companyName, role, location, workOption, offerStatus });
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        // 2. Duplicate Detection (Simplified: Same user, same company, same role, same content)
+        const existing = await prisma.interviewExperience.findFirst({
+            where: {
+                userId,
+                companyName,
+                role,
+                additionalComments: additionalComments || null
+            }
+        });
+
+        if (existing) {
+            return NextResponse.json({ error: 'Duplicate entry detected' }, { status: 409 });
         }
 
-        // Verify company exists
+        // 3. Verify company exists
         const company = await prisma.company.findUnique({
             where: { name: companyName }
         });
@@ -41,6 +62,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Company not found' }, { status: 404 });
         }
 
+        // 4. Create record
         const experience = await prisma.interviewExperience.create({
             data: {
                 userId,
@@ -54,7 +76,15 @@ export async function POST(req: Request) {
                 offerDate: offerDate ? new Date(offerDate) : null,
                 processSteps: processSteps || [],
                 interviewDetails: interviewDetails || {},
-                additionalComments: additionalComments || null
+                additionalComments: additionalComments || null,
+                
+                // New fields
+                outcome: outcome || 'Pending',
+                offerDetails: offerDetails || null,
+                isRemote: isRemote || false,
+                isFlagged: validation.isFlagged,
+                status: 'published',
+                moderationNotes: validation.moderationNotes.join('; ') || null
             }
         });
 
@@ -76,24 +106,31 @@ export async function GET(req: Request) {
 
         const skip = (page - 1) * limit;
 
+        const whereClause = query ? {
+            OR: [
+                { name: { contains: query, mode: 'insensitive' as const } },
+                { 
+                    interviewExperiences: {
+                        some: {
+                            OR: [
+                                { role: { contains: query, mode: 'insensitive' as const } },
+                                { location: { contains: query, mode: 'insensitive' as const } },
+                                { additionalComments: { contains: query, mode: 'insensitive' as const } }
+                            ]
+                        }
+                    }
+                }
+            ]
+        } : {};
+
         // Fetch all matching companies
         const totalCount = await prisma.company.count({
-            where: query ? {
-                name: {
-                    contains: query,
-                    mode: 'insensitive'
-                }
-            } : {}
+            where: whereClause
         });
 
         // Fetch without skipping/limiting here because we need to sort by in-memory computed stats like avgSalary or reviewCount first.
         const allCompaniesFetched = await prisma.company.findMany({
-            where: query ? {
-                name: {
-                    contains: query,
-                    mode: 'insensitive'
-                }
-            } : {},
+            where: whereClause,
             include: {
                 interviewExperiences: {
                     select: {
@@ -145,6 +182,8 @@ export async function GET(req: Request) {
         // Apply pagination after sorting
         const paginatedCompanies = formattedCompanies.slice(skip, skip + limit);
 
+        console.log(`Successfully fetched ${paginatedCompanies.length} companies for page ${page}`);
+
         return NextResponse.json({
             companies: paginatedCompanies,
             pagination: {
@@ -155,7 +194,11 @@ export async function GET(req: Request) {
             }
         });
     } catch (e: any) {
-        console.error("GET interview-experiences error:", e);
+        console.error("GET interview-experiences error detail:", {
+            message: e.message,
+            stack: e.stack,
+            query: req.url
+        });
         return NextResponse.json({ error: e.message || "Failed to fetch companies" }, { status: 500 });
     }
 }

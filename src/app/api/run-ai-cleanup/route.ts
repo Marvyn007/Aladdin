@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { getAllFreshJobsSystem, deleteJobSystem } from '@/lib/db';
-import { batchFilterJobs } from '@/lib/gemini';
+import { batchFilterJobs } from '@/lib/openai';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes max

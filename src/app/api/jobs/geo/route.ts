@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
                 coordinates: [row.longitude, row.latitude]
             },
             properties: {
-                jobId: row.job_id,
+                id: row.job_id,
                 pointId: row.point_id,
                 title: row.title,
                 company: row.company,
@@ -131,9 +131,9 @@ async function triggerBackgroundGeocoding() {
     const pool = getPostgresPool();
     try {
         // Find unresolved jobs with valid location
-        // Excluding failed attempts to avoid loops
+        // Including company name for better cache keys and HQ resolution
         const { rows: unresolvedJobs } = await pool.query(`
-        SELECT id, location 
+        SELECT id, location, company 
         FROM jobs 
         WHERE geo_resolved = false 
           AND location IS NOT NULL 
@@ -147,7 +147,7 @@ async function triggerBackgroundGeocoding() {
             console.log(`[GeoBG] Processing batch of ${unresolvedJobs.length} jobs`);
             for (const job of unresolvedJobs) {
                 if (job.location) {
-                    await resolveLocation(job.id, job.location);
+                    await resolveLocation(job.id, job.location, job.company);
                 }
             }
         }

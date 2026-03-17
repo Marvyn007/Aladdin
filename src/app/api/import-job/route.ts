@@ -8,7 +8,7 @@ import {
     updateResume,
     getPostedByUserInfo,
 } from '@/lib/db';
-import { scoreJob, parseResumeFromPdf, verifyJobAuthenticity } from '@/lib/gemini';
+import { scoreJob, parseResumeFromPdf, verifyJobAuthenticity } from '@/lib/openai';
 import type { ParsedResume, ResumeSkill } from '@/types';
 import type { ScrapeResult } from '@/lib/job-scraper-fetch';
 import { scrapeJobPageFetch } from '@/lib/job-scraper-fetch';

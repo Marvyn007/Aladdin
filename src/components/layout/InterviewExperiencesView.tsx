@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { InterviewExperienceModal } from '@/components/modals/InterviewExperienceModal';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 interface CompanyStats {
     name: string;
@@ -26,7 +27,7 @@ export function InterviewExperiencesView() {
     const [isLoading, setIsLoading] = useState(true);
     const [pagination, setPagination] = useState<PaginationData>({
         page: 1,
-        limit: 15,
+        limit: 20,
         total: 0,
         totalPages: 0
     });
@@ -42,7 +43,7 @@ export function InterviewExperiencesView() {
             setIsLoading(true);
             const params = new URLSearchParams({
                 page: page.toString(),
-                limit: '15',
+                limit: '20',
                 ...(searchQuery ? { q: searchQuery } : {}),
                 sort_by: sortBy
             });
@@ -123,7 +124,7 @@ export function InterviewExperiencesView() {
                     />
                     <input
                         type="text"
-                        placeholder="Search companies..."
+                        placeholder="Search companies, roles, or locations..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{
@@ -194,78 +195,120 @@ export function InterviewExperiencesView() {
                 ) : (
                     <>
                         <div
-                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10"
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(4, 1fr)',
+                                gap: '24px',
+                                maxWidth: '1400px',
+                                margin: '0 auto'
+                            }}
                         >
-                            {companies.map((company) => (
-                                <div
-                                    key={company.name}
-                                    onClick={() => router.push(`/interview-experiences/${encodeURIComponent(company.name)}`)}
-                                    style={{
-                                        background: 'var(--background-secondary)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '16px',
-                                        padding: '24px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '16px',
-                                        position: 'relative',
-                                        overflow: 'hidden'
-                                    }}
-                                    className="company-card"
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.borderColor = 'var(--accent)';
-                                        e.currentTarget.style.boxShadow = '0 0 20px rgba(var(--accent-rgb), 0.15)';
-                                        e.currentTarget.style.background = 'var(--surface)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = 'var(--border)';
-                                        e.currentTarget.style.boxShadow = 'none';
-                                        e.currentTarget.style.background = 'var(--background-secondary)';
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            {companies.map((company) => {
+                                return (
+                                    <div
+                                        key={company.name}
+                                        onClick={() => router.push(`/interview-experiences/${encodeURIComponent(company.name)}`)}
+                                        style={{
+                                            background: 'var(--background-secondary)',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: '16px',
+                                            padding: '24px 16px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            position: 'relative',
+                                            overflow: 'hidden'
+                                        }}
+                                        className="company-card group"
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.borderColor = 'var(--accent)';
+                                            e.currentTarget.style.boxShadow = '0 8px 24px -12px rgba(var(--accent-rgb), 0.3)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.borderColor = 'var(--border)';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        {/* Logo Container - Large white square as in design */}
                                         <div style={{
-                                            width: '56px',
-                                            height: '56px',
+                                            width: '80px',
+                                            height: '80px',
+                                            background: '#FFFFFF',
+                                            borderRadius: '8px',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            flexShrink: 0,
+                                            padding: '12px',
+                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+                                            flexShrink: 0
                                         }}>
-                                            {company.logoUrl ? (
-                                                <img
-                                                    src={company.logoUrl}
-                                                    alt={company.name}
-                                                    style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }}
-                                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                                />
-                                            ) : (
-                                                <div style={{ width: '100%', height: '100%', borderRadius: '12px', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <span style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>{company.name.charAt(0)}</span>
-                                                </div>
-                                            )}
+                                            <CompanyLogo 
+                                                companyName={company.name} 
+                                                logoUrl={company.logoUrl} 
+                                                size={56} 
+                                            />
                                         </div>
-                                        <span style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {company.name}
-                                        </span>
-                                    </div>
 
-                                    <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reviews</p>
-                                            <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{company.reviewCount}</p>
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg. Pay</p>
-                                            <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                                {company.avgSalaryHourly ? `$${company.avgSalaryHourly.toFixed(0)}/hr` : 'N/A'}
-                                            </p>
+                                        {/* Company Name */}
+                                        <h3 style={{ 
+                                            fontSize: '14px', 
+                                            fontWeight: 700, 
+                                            color: 'var(--text-primary)', 
+                                            textAlign: 'center',
+                                            margin: 0,
+                                            lineHeight: 1.2
+                                        }}>
+                                            {company.name}
+                                        </h3>
+
+                                        {/* Stats Row - Horizontal */}
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center', 
+                                            gap: '8px', 
+                                            width: '100%', 
+                                            flexWrap: 'wrap',
+                                            marginTop: '4px'
+                                        }}>
+                                            {/* Salary Pill */}
+                                            <div style={{
+                                                padding: '6px 14px',
+                                                border: '1.5px solid var(--border)',
+                                                borderRadius: '20px',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                color: 'var(--text-primary)',
+                                                whiteSpace: 'nowrap',
+                                                background: 'var(--surface)',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                                                letterSpacing: '0.3px'
+                                            }}>
+                                                {company.avgSalaryHourly ? `$ ${Math.round(company.avgSalaryHourly)} / hr` : 'N/A USD'}
+                                            </div>
+
+                                            {/* Reviews Pill */}
+                                            <div style={{
+                                                padding: '6px 14px',
+                                                border: '1.5px solid var(--border)',
+                                                borderRadius: '20px',
+                                                fontSize: '11px',
+                                                fontWeight: 700,
+                                                color: 'var(--text-secondary)',
+                                                background: 'var(--surface)',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                {company.reviewCount} reviews
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Pagination */}

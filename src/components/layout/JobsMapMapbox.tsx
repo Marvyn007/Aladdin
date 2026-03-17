@@ -18,7 +18,7 @@ interface JobFeature {
         coordinates: [number, number];
     };
     properties: {
-        jobId: string;
+        id: string; // Corrected from jobId
         pointId: string;
         title: string;
         company: string;
@@ -42,7 +42,7 @@ interface GeoJsonData {
 const CLUSTER_MAX_ZOOM = 14;
 const CLUSTER_RADIUS = 40;
 
-export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
+export default function JobsMapMapbox({ onJobClick, onJobOpen, onJobSave }: JobsMapMapboxProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const popupRef = useRef<mapboxgl.Popup | null>(null);
@@ -54,6 +54,8 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
     const geoJsonDataRef = useRef<GeoJsonData | null>(null);
     const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentZoomRef = useRef<number>(4);
+    const stableJobIdRef = useRef<string | null>(null);
+    const stableJobDataRef = useRef<{ feature: JobFeature; coords: [number, number] } | null>(null);
     
     const [debugError, setDebugError] = useState<string | null>(null);
     const sidebarOpen = useStore((state) => state.sidebarOpen);
@@ -102,7 +104,7 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
                         }
                     </div>
                     <div style="flex: 1; min-width: 0;">
-                        <div style="font-weight: 700; font-size: 15px; color: #1a1a2e; line-height: 1.3; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${props.title}</div>
+                                    <div style="font-weight: 700; font-size: 15px; color: #1a1a2e; line-height: 1.3; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${props.title}</div>
                         <div style="font-size: 13px; font-weight: 500; color: #64748b; margin-bottom: 6px;">${props.company || 'Unknown Company'}</div>
                         <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8;">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
@@ -115,24 +117,23 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
                 ${representationalNote}
                 
                 <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
-                    <div></div>
                     <div style="display: flex; gap: 8px;">
-                        <button id="mapbox-popup-save-btn" data-job-id="${props.jobId}" style="background: #f1f5f9; border: none; color: #475569; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
-                            Save
+                        <button id="mapbox-popup-open-btn" data-job-id="${props.id}" style="background: #1e293b; border: none; color: white; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+                            View Details
                         </button>
-                        ${props.sourceUrl ? `
-                        <a href="${props.sourceUrl}" target="_blank" rel="noopener noreferrer" style="background: #1e293b; border: none; color: white; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px;">
-                            View
-                        </a>
-                        ` : ''}
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="mapbox-popup-save-btn" data-job-id="${props.id}" style="background: #f1f5f9; border: none; color: #475569; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+                            ${props.saved ? 'Saved' : 'Save'}
+                        </button>
                     </div>
                 </div>
             </div>
         `;
     };
 
-    const showJobCard = (feature: JobFeature, coordinates: [number, number]) => {
+    const showJobCard = (feature: JobFeature, coordinates: [number, number], isStable: boolean = true) => {
         const mapInstance = map.current;
         if (!mapInstance) return;
         
@@ -140,7 +141,7 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
         
         const popup = new mapboxgl.Popup({
             closeButton: false,
-            closeOnClick: true,
+            closeOnClick: isStable, // Stable ones close on map click, transient ones don't use this but we handle with mouseleave
             offset: [0, -25],
             maxWidth: '360px'
         })
@@ -151,6 +152,21 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
         popupRef.current = popup;
 
         const popupEl = popup.getElement();
+        
+        popupEl?.addEventListener('mouseenter', () => {
+            // Keep popup open if hovering over the card itself
+            if (!isStable) {
+                // We'll effectively make it stay open while hovering the card
+            }
+        });
+
+        const openBtn = popupEl?.querySelector('#mapbox-popup-open-btn');
+        openBtn?.addEventListener('click', (evt) => {
+            evt.stopPropagation();
+            const jobId = openBtn.getAttribute('data-job-id');
+            if (jobId) onJobClick?.(jobId);
+        });
+
         const saveBtn = popupEl?.querySelector('#mapbox-popup-save-btn');
         
         saveBtn?.addEventListener('click', (evt) => {
@@ -165,27 +181,32 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
                 (saveBtn as HTMLElement).style.background = '#ecfdf5';
                 (saveBtn as HTMLElement).style.border = '1px solid #10b981';
                 (saveBtn as HTMLElement).style.color = '#059669';
+                
+                // Update stable data if this was the stable one
+                if (stableJobDataRef.current && stableJobDataRef.current.feature.properties.id === jobId) {
+                    stableJobDataRef.current.feature.properties.saved = true;
+                }
             }
         });
     };
 
-    const renderCustomMarkers = useCallback((features: JobFeature[], zoom: number) => {
+    const renderCustomMarkers = useCallback(() => {
         const mapInstance = map.current;
-        if (!mapInstance) return;
+        if (!mapInstance || !isMapLoaded.current) return;
         
         // Clear existing custom markers
         markersRef.current.forEach(marker => marker.remove());
         markersRef.current = [];
         
-        // Only render custom markers when zoomed in enough (>= 14) - after clusters break
-        if (zoom < 14) return;
+        // Query only the features that are currently rendered in the unclustered layer
+        const features = mapInstance.queryRenderedFeatures({ layers: ['unclustered-point'] });
         
-        // Group by coordinates to find overlaps
-        const coordGroups = new Map<string, JobFeature[]>();
+        // Group by coordinates - but we'll use base coordinates for stability as requested
+        const coordGroups = new Map<string, any[]>();
         
         features.forEach((feature) => {
-            const coords = feature.geometry.coordinates as [number, number];
-            if (!coords || coords[0] === 0 || coords[1] === 0) return;
+            const coords = (feature.geometry as any).coordinates as [number, number];
+            if (!coords) return;
             
             const key = `${coords[0].toFixed(5)},${coords[1].toFixed(5)}`;
             if (!coordGroups.has(key)) {
@@ -194,40 +215,75 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
             coordGroups.get(key)!.push(feature);
         });
         
-        // Render markers with offset for overlapping
         coordGroups.forEach((groupFeatures, coordKey) => {
             const [baseLng, baseLat] = coordKey.split(',').map(Number);
             
             groupFeatures.forEach((feature, index) => {
-                // Calculate offset for overlapping markers
+                const el = document.createElement('div');
+                el.className = 'job-marker-container';
+                
+                // Add radial offset for overlapping jobs at the same location
                 let offsetX = 0;
                 let offsetY = 0;
-                
                 if (groupFeatures.length > 1) {
                     const angle = (2 * Math.PI * index) / groupFeatures.length;
-                    const radius = 0.002;
+                    const radius = 0.0002; // Sparkle/sparse effect
                     offsetX = radius * Math.cos(angle);
                     offsetY = radius * Math.sin(angle);
                 }
-                
+
                 const coords: [number, number] = [baseLng + offsetX, baseLat + offsetY];
                 
-                const el = document.createElement('div');
-                el.style.cssText = 'cursor: pointer;';
+                const props = feature.properties;
+                const hasLogo = props.companyLogo;
                 
-                const hasLogo = feature.properties.companyLogo;
+                // Use an inner element for scaling to avoid conflicting with Mapbox's absolute positioning transform
+                const inner = document.createElement('div');
+                inner.className = 'job-marker-inner';
+                inner.style.cssText = 'cursor: pointer; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: auto;';
                 
-                // White background circle with logo/initial inside - ensure solid white background
                 if (hasLogo) {
-                    el.innerHTML = `<div style="width: 44px; height: 44px; border-radius: 50%; background: #ffffff; box-shadow: 0 3px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 3px solid #ffffff; box-sizing: border-box;"><img src="${feature.properties.companyLogo}" alt="${feature.properties.company}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #ffffff;" /></div>`;
+                    inner.innerHTML = `<div style="width: 44px; height: 44px; border-radius: 50%; background: #ffffff; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2.5px solid #ffffff;"><img src="${props.companyLogo}" alt="${props.company}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: contain; background: #ffffff;" /></div>`;
                 } else {
-                    const initial = (feature.properties.company || 'C').charAt(0).toUpperCase();
-                    el.innerHTML = `<div style="width: 44px; height: 44px; border-radius: 50%; background: #ffffff; box-shadow: 0 3px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; border: 3px solid #ffffff; box-sizing: border-box;"><div style="width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 16px;">${initial}</div></div>`;
+                    const initial = (props.company || 'C').charAt(0).toUpperCase();
+                    inner.innerHTML = `<div style="width: 44px; height: 44px; border-radius: 50%; background: #ffffff; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; border: 2.5px solid #ffffff;"><div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 15px;">${initial}</div></div>`;
                 }
                 
-                el.onclick = (e) => {
+                el.appendChild(inner);
+
+                const featureData = {
+                    type: 'Feature',
+                    properties: props,
+                    geometry: {
+                        type: 'Point',
+                        coordinates: coords
+                    }
+                } as JobFeature;
+
+                inner.onmouseenter = () => {
+                    inner.style.transform = 'scale(1.15)';
+                    if (stableJobIdRef.current !== props.id) {
+                        showJobCard(featureData, coords, false);
+                    }
+                };
+
+                inner.onmouseleave = () => {
+                    inner.style.transform = 'scale(1)';
+                    if (stableJobIdRef.current !== props.id) {
+                        if (popupRef.current) popupRef.current.remove();
+                        popupRef.current = null;
+                        if (stableJobDataRef.current) {
+                            showJobCard(stableJobDataRef.current.feature, stableJobDataRef.current.coords, true);
+                        }
+                    }
+                };
+                
+                inner.onclick = (e) => {
                     e.stopPropagation();
-                    showJobCard(feature, coords);
+                    stableJobIdRef.current = props.id;
+                    stableJobDataRef.current = { feature: featureData, coords };
+                    onJobClick?.(props.id);
+                    showJobCard(featureData, coords, true);
                 };
                 
                 const marker = new mapboxgl.Marker({ element: el })
@@ -237,9 +293,7 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
                 markersRef.current.push(marker);
             });
         });
-        
-        console.log(`[Map] Rendered ${markersRef.current.length} custom markers at zoom ${zoom}`);
-    }, []);
+    }, [onJobClick, showJobCard]);
 
     const fetchJobs = useCallback(async (bounds?: mapboxgl.LngLatBounds | null) => {
         if (isFetchingRef.current) return;
@@ -272,7 +326,7 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
                 const validFeatures: JobFeature[] = [];
                 
                 data.features.forEach((f: JobFeature) => {
-                    const jobId = f.properties?.jobId;
+                    const jobId = f.properties?.id;
                     const coords = f.geometry?.coordinates;
                     
                     if (!jobId || !coords || coords[0] === 0 || coords[1] === 0) return;
@@ -310,10 +364,8 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
             const zoom = mapInstance.getZoom();
             currentZoomRef.current = zoom;
             
-            // Update custom markers based on zoom level
-            if (geoJsonDataRef.current && geoJsonDataRef.current.features) {
-                renderCustomMarkers(geoJsonDataRef.current.features, zoom);
-            }
+            // Update custom markers based on proximity/clustering
+            renderCustomMarkers();
             
             fetchJobs(mapInstance.getBounds());
         }, 400);
@@ -414,6 +466,21 @@ export default function JobsMapMapbox({ onJobSave }: JobsMapMapboxProps) {
                 mapInstance.on('mouseenter', 'clusters', () => { mapInstance.getCanvas().style.cursor = 'pointer'; });
                 mapInstance.on('mouseleave', 'clusters', () => { mapInstance.getCanvas().style.cursor = ''; });
 
+                // Unclustered point layer (invisible, used for custom marker logic)
+                if (!mapInstance.getLayer('unclustered-point')) {
+                    mapInstance.addLayer({
+                        id: 'unclustered-point',
+                        type: 'circle',
+                        source: JOB_SOURCE_ID,
+                        filter: ['!', ['has', 'point_count']],
+                        paint: {
+                            'circle-color': 'transparent',
+                            'circle-radius': 22
+                        }
+                    });
+                }
+
+                mapInstance.on('move', renderCustomMarkers);
                 mapInstance.on('moveend', handleMoveEnd);
 
                 fetchJobs(mapInstance.getBounds());

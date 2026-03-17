@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { CompanyLogo } from './CompanyLogo'; // Added CompanyLogo import
 
 // Get dynamic color based on company name
 export function getCompanyColor(companyName: string | null): string {
@@ -209,17 +210,7 @@ export function CompanyAutocomplete({
             {!isCustomCompany ? (
                 <div style={{ position: 'relative' }}>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                        {(companyLogoUrl || (!isCustomCompany && company)) ? (
-                            companyLogoUrl ? (
-                                <img src={companyLogoUrl} alt="" style={{ position: 'absolute', left: '12px', width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }} onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    if (e.currentTarget.nextElementSibling) {
-                                        (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
-                                    }
-                                }} />
-                            ) : null
-                        ) : null}
-                        {(companyLogoUrl || (!isCustomCompany && company)) && (
+                        {company && (
                             <div
                                 style={{
                                     position: 'absolute',
@@ -227,16 +218,19 @@ export function CompanyAutocomplete({
                                     width: '20px',
                                     height: '20px',
                                     borderRadius: '4px',
-                                    display: companyLogoUrl ? 'none' : 'flex',
+                                    display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    backgroundColor: getCompanyColor(company),
-                                    color: '#fff',
-                                    fontSize: '12px',
-                                    fontWeight: 'bold'
+                                    background: 'var(--background)',
+                                    border: '1px solid var(--border)',
+                                    overflow: 'hidden'
                                 }}
                             >
-                                {getCompanyInitial(company)}
+                                <CompanyLogo
+                                    companyName={company}
+                                    logoUrl={companyLogoUrl}
+                                    size={16}
+                                />
                             </div>
                         )}
                         <input
@@ -249,7 +243,7 @@ export function CompanyAutocomplete({
                             style={{
                                 ...inputStyle,
                                 borderColor: error ? '#ef4444' : undefined,
-                                paddingLeft: (companyLogoUrl || (!isCustomCompany && company)) ? '40px' : '12px'
+                                paddingLeft: company ? '40px' : '12px'
                             }}
                             placeholder={placeholder}
                             autoComplete="off"
@@ -274,30 +268,25 @@ export function CompanyAutocomplete({
                                     onMouseEnter={() => setActiveCompanySuggestionIndex(index)}
                                     style={{ width: '100%', padding: '8px 14px', border: 'none', background: index === activeCompanySuggestionIndex ? 'var(--accent-muted, rgba(59, 130, 246, 0.1))' : 'transparent', color: 'var(--text-primary)', fontSize: '13px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
                                 >
-                                    {suggestion.logo_url ? (
-                                        <img src={suggestion.logo_url} alt="" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} onError={(e) => {
-                                            e.currentTarget.style.display = 'none';
-                                            if (e.currentTarget.nextElementSibling) {
-                                                (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
-                                            }
-                                        }} />
-                                    ) : null}
                                     <div
                                         style={{
                                             width: '24px',
                                             height: '24px',
                                             borderRadius: '4px',
                                             flexShrink: 0,
-                                            display: suggestion.logo_url ? 'none' : 'flex',
+                                            display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            backgroundColor: getCompanyColor(suggestion.name),
-                                            color: '#fff',
-                                            fontSize: '12px',
-                                            fontWeight: 'bold'
+                                            background: 'var(--background)',
+                                            border: '1px solid var(--border)',
+                                            overflow: 'hidden'
                                         }}
                                     >
-                                        {getCompanyInitial(suggestion.name)}
+                                        <CompanyLogo
+                                            companyName={suggestion.name}
+                                            logoUrl={suggestion.logo_url}
+                                            size={20}
+                                        />
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                                         <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suggestion.name}</span>

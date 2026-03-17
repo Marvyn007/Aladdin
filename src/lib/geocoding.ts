@@ -1,3 +1,4 @@
+
 import { callLLM, safeJsonParse } from './resume-generation/utils';
 import { getPostgresPool } from './postgres';
 import { getDbType } from './db';
@@ -17,25 +18,37 @@ interface JobDetails {
     companyNormalized: string | null;
 }
 
-const ENRICHMENT_CACHE = new Map<string, { points: GeoPoint[]; timestamp: number }>();
-const CACHE_TTL = 24 * 60 * 60 * 1000;
-
-function getCacheKey(company: string | null, location: string): string {
-    const normalizedCompany = (company || '').toLowerCase().trim();
-    const normalizedLocation = location.toLowerCase().trim();
-    return `${normalizedCompany}:${normalizedLocation}`;
-}
-
-function getEnrichmentCache(key: string): GeoPoint[] | null {
-    const cached = ENRICHMENT_CACHE.get(key);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        return cached.points;
+async function getEnrichmentCache(key: string): Promise<GeoPoint[] | null> {
+    const pool = getPostgresPool();
+    try {
+        const result = await pool.query(
+            `SELECT jgp.location_label as label, jgp.latitude, jgp.longitude, jgp.confidence, jgp.source 
+             FROM job_geo_points jgp
+             JOIN jobs j ON jgp.job_id = j.id
+             WHERE j.location_dedup_key = $1
+             LIMIT 5`,
+            [key]
+        );
+        
+        if (result.rows.length > 0) {
+            return result.rows.map(r => ({
+                latitude: Number(r.latitude),
+                longitude: Number(r.longitude),
+                label: r.label,
+                confidence: Number(r.confidence),
+                source: r.source
+            }));
+        }
+    } catch (e) {
+        console.error('[Geocoding] Cache lookup failed:', e);
     }
     return null;
 }
 
-function setEnrichmentCache(key: string, points: GeoPoint[]): void {
-    ENRICHMENT_CACHE.set(key, { points, timestamp: Date.now() });
+function getCacheKey(company: string | null, location: string): string {
+    const normalizedCompany = (company || 'unknown').toLowerCase().trim();
+    const normalizedLocation = location.toLowerCase().trim();
+    return `${normalizedCompany}:${normalizedLocation}`;
 }
 
 export async function resolveLocation(jobId: string, locationString: string, company?: string | null): Promise<boolean> {
@@ -61,25 +74,21 @@ export async function resolveLocation(jobId: string, locationString: string, com
         }
 
         const check = await pool.query('SELECT geo_resolved, location_dedup_key FROM jobs WHERE id = $1', [jobId]);
-        if (check.rows[0]?.geo_resolved) {
-            return true;
-        }
-
+        
         const cacheKey = getCacheKey(company ?? null, locationString);
-        const cachedPoints = getEnrichmentCache(cacheKey);
+        const cachedPoints = await getEnrichmentCache(cacheKey);
 
         let points: GeoPoint[] | null;
 
         if (cachedPoints) {
-            console.log(`[Geocoding] Using cached enrichment for: ${cacheKey}`);
+            console.log(`[Geocoding] Using persistent cache for: ${cacheKey}`);
             points = cachedPoints;
         } else {
             const jobDetails = await getJobDetails(jobId);
+            // Ensure we use the passed company if available, fallback to DB
+            jobDetails.company = company || jobDetails.company; 
+            
             points = await enrichLocation(jobDetails, locationString);
-
-            if (points) {
-                setEnrichmentCache(cacheKey, points);
-            }
         }
 
         if (!points || points.length === 0) {
@@ -90,6 +99,9 @@ export async function resolveLocation(jobId: string, locationString: string, com
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+
+            // Clear any existing points for this job before inserting new ones
+            await client.query('DELETE FROM job_geo_points WHERE job_id = $1', [jobId]);
 
             for (const pt of points) {
                 await client.query(
@@ -137,11 +149,20 @@ async function getJobDetails(jobId: string): Promise<JobDetails> {
 }
 
 async function enrichLocation(job: JobDetails, locationString: string): Promise<GeoPoint[] | null> {
+    if (isRemoteLocation(locationString)) return null;
+    
+    // First, geocode the city level location to get a centroid for proximity biasing
+    // Use strictly place/locality to avoid getting random addresses in other countries
+    const cityCentroid = await geocodeWithMapbox(locationString, false, undefined, 'place,locality');
+    const proximity = cityCentroid && cityCentroid.length > 0 
+        ? { lat: cityCentroid[0].latitude, lng: cityCentroid[0].longitude } 
+        : undefined;
+
     const isCityOnly = isCityLevelLocation(locationString);
     const company = job.company || job.companyNormalized;
 
-    if (isCityOnly && company) {
-        const hqPoints = await tryCompanyHQEnrichment(company, locationString);
+    if (company) {
+        const hqPoints = await tryCompanyHQEnrichment(company, locationString, proximity);
         if (hqPoints) {
             return hqPoints;
         }
@@ -150,27 +171,43 @@ async function enrichLocation(job: JobDetails, locationString: string): Promise<
     return getCoordinatesFromAI(locationString);
 }
 
-async function tryCompanyHQEnrichment(company: string, cityLocation: string): Promise<GeoPoint[] | null> {
+async function tryCompanyHQEnrichment(company: string, cityLocation: string, proximity?: { lat: number, lng: number }): Promise<GeoPoint[] | null> {
     const searchQueries = [
-        `${company} headquarters`,
-        `${company} HQ`,
-        `${company} corporate headquarters`,
-        `${company} main office`,
-        `${company} office address`,
-        `${company} ${cityLocation} office`,
-        `${company} ${cityLocation} headquarters`,
-        cityLocation
+        `${company} headquarters`, 
+        `${company} ${cityLocation}`,
+        `${company} office`,
+        `${company} HQ`
     ];
 
     for (const query of searchQueries) {
         try {
-            const points = await geocodeWithMapbox(query, true);
-            if (points && points.length > 0 && points[0].confidence >= 0.7) {
-                return [{
-                    ...points[0],
-                    label: `${company} - ${points[0].label}`,
-                    source: 'company-hq'
-                }];
+            const points = await geocodeWithMapbox(query, true, proximity);
+            if (points && points.length > 0 && points[0].confidence >= 0.6) {
+                // Verification: Is this result actually in the right place?
+                const labelLower = points[0].label.toLowerCase();
+                const cityParts = cityLocation.split(',').map(s => s.toLowerCase().trim());
+                const primaryCity = cityParts[0];
+                
+                // Distance Guard: If we have a proximity target, don't stray too far (e.g. 100km)
+                if (proximity) {
+                    const distance = calculateDistance(proximity.lat, proximity.lng, points[0].latitude, points[0].longitude);
+                    if (distance > 100) {
+                        console.log(`[Geocoding] Rejecting ${points[0].label} - Too far from ${cityLocation} (${distance.toFixed(1)}km)`);
+                        continue;
+                    }
+                }
+
+                // Context Validation: Check if the label mentions the city or company
+                const isCityMatch = cityParts.some(part => labelLower.includes(part));
+                const isCompanyMatch = labelLower.includes(company.toLowerCase());
+
+                if (isCityMatch || isCompanyMatch) {
+                    return [{
+                        ...points[0],
+                        label: `${company} - ${points[0].label}`,
+                        source: 'company-hq'
+                    }];
+                }
             }
         } catch (e) {
             console.log(`[Geocoding] HQ search failed for: ${query}`);
@@ -180,24 +217,28 @@ async function tryCompanyHQEnrichment(company: string, cityLocation: string): Pr
     return null;
 }
 
-async function geocodeWithMapbox(query: string, preferPOI: boolean = false): Promise<GeoPoint[] | null> {
+async function geocodeWithMapbox(query: string, preferPOI: boolean = false, proximity?: { lat: number, lng: number }, typesOverride?: string): Promise<GeoPoint[] | null> {
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     if (!token) {
         return null;
     }
 
     try {
-        let types = 'address,poi,locality';
-        if (preferPOI) {
+        let types = typesOverride || 'address,poi,locality';
+        if (!typesOverride && preferPOI) {
             types = 'poi,address,locality';
         }
         
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&limit=3&types=${types}`;
+        let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&limit=3&types=${types}`;
+        
+        if (proximity) {
+            url += `&proximity=${proximity.lng},${proximity.lat}`;
+        }
+
         const response = await fetch(url);
         const data = await response.json();
 
         if (data.features && data.features.length > 0) {
-            // Prefer address or poi over locality
             const feature = data.features.find((f: any) => 
                 preferPOI ? (f.id.startsWith('poi') || f.id.startsWith('address')) : true
             ) || data.features[0];
@@ -205,7 +246,6 @@ async function geocodeWithMapbox(query: string, preferPOI: boolean = false): Pro
             const [lng, lat] = feature.center;
             const confidence = getConfidenceFromMapboxFeature(feature);
             
-            // Determine source based on feature type
             let source = 'city-centroid';
             if (feature.id.startsWith('poi')) {
                 source = 'company-hq';
@@ -232,33 +272,28 @@ async function geocodeWithMapbox(query: string, preferPOI: boolean = false): Pro
 
 function getConfidenceFromMapboxFeature(feature: any): number {
     const id = feature.id || '';
-    
-    // Highest confidence - exact address with house number
-    if (id.startsWith('address') && feature.address) {
-        return 0.95;
-    }
-    // High confidence - address without house number
-    if (id.startsWith('address')) {
-        return 0.85;
-    }
-    // High confidence - POI (company office, building)
-    if (id.startsWith('poi')) {
-        return 0.9;
-    }
-    // Medium confidence - city/town
-    if (id.startsWith('locality') || id.startsWith('place')) {
-        return 0.7;
-    }
-    // Low confidence - region/state
-    if (id.startsWith('region')) {
-        return 0.5;
-    }
-    // Very low confidence - country
-    if (id.startsWith('country')) {
-        return 0.3;
-    }
-    
+    if (id.startsWith('address') && feature.address) return 0.95;
+    if (id.startsWith('address')) return 0.85;
+    if (id.startsWith('poi')) return 0.9;
+    if (id.startsWith('locality') || id.startsWith('place')) return 0.7;
+    if (id.startsWith('region')) return 0.5;
+    if (id.startsWith('country')) return 0.3;
     return 0.5;
+}
+
+/**
+ * Haversine formula to calculate distance between two points in KM
+ */
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
 function isCityLevelLocation(loc: string): boolean {
@@ -274,7 +309,7 @@ async function markAsUnresolvable(jobId: string, pool: any) {
 }
 
 function isRemoteLocation(loc: string): boolean {
-    const lower = loc.toLowerCase();
+    const lower = (loc || '').toLowerCase();
     return lower.includes('remote') || lower.includes('virtual') || lower.includes('home based') || lower === 'anywhere' || lower.includes('work from home');
 }
 
@@ -291,8 +326,7 @@ Rules:
 
 Example Format:
 [
-  { "latitude": 12.34, "longitude": 56.78, "label": "City, Country", "confidence": 0.9 },
-  ...
+  { "latitude": 12.34, "longitude": 56.78, "label": "City, Country", "confidence": 0.9 }
 ]`;
 
     const userPrompt = `Geocode this location: "${location}"`;

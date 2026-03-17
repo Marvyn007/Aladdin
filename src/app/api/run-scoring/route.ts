@@ -12,7 +12,7 @@ import {
     getResumeById,
     updateResume
 } from '@/lib/db';
-import { parseResumeFromPdf, scoreJob } from '@/lib/gemini';
+import { parseResumeFromPdf, scoreJob } from '@/lib/openai';
 import { analyzeSkills } from '@/lib/skill-matcher';
 import type { ParsedResume } from '@/types';
 

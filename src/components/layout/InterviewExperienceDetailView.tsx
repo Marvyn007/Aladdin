@@ -16,8 +16,11 @@ import {
     Search,
     Filter,
     ArrowUpDown,
-    Clock
+    Clock,
+    CheckCircle2,
+    Ban
 } from 'lucide-react';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 interface UserData {
     firstName: string | null;
@@ -61,7 +64,7 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
     const [data, setData] = useState<CompanyData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [expandedReview, setExpandedReview] = useState<string | null>(null);
+    const [expandedReviews, setExpandedReviews] = useState<string[]>([]);
     const [isMounted, setIsMounted] = useState(false);
 
     // Filtering State
@@ -76,7 +79,7 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
         const fetchCompanyExperiences = async () => {
             try {
                 setIsLoading(true);
-                const res = await fetch(`/api/interview-experiences/${encodeURIComponent(companyName)}`);
+                const res = await fetch(`/api/interview-experiences/by-company/${encodeURIComponent(companyName)}`);
                 if (!res.ok) {
                     const err = await res.json();
                     setError(err.error || 'Failed to fetch reviews');
@@ -85,7 +88,7 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                 const result = await res.json();
                 setData(result);
                 if (result.experiences.length > 0) {
-                    setExpandedReview(null); // Default closed as requested
+                    setExpandedReviews([]); // Default closed as requested
                 }
             } catch (err) {
                 console.error('Failed to fetch:', err);
@@ -106,12 +109,21 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
 
         let filtered = [...data.experiences];
 
-        // Apply Role Filter
+        // Apply Smarter Generalized Filter
         if (roleFilter) {
-            const query = roleFilter.toLowerCase();
-            filtered = filtered.filter(exp =>
-                exp.role.toLowerCase().includes(query)
-            );
+            const searchTerms = roleFilter.toLowerCase().trim().split(/\s+/);
+            
+            filtered = filtered.filter(exp => {
+                const searchableText = [
+                    exp.role,
+                    exp.location,
+                    exp.workOption,
+                    exp.additionalComments || '',
+                    exp.offerStatus
+                ].join(' ').toLowerCase();
+
+                return searchTerms.every(term => searchableText.includes(term));
+            });
         }
 
         // Apply Work Option Filter
@@ -194,20 +206,18 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                     </button>
                 </div>
 
-                {/* Company Logo & Name */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                     <div style={{
                         height: '100px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
-                        {data.company.logoUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={data.company.logoUrl} alt={data.company.name} style={{ maxHeight: '100%', maxWidth: '250px', objectFit: 'contain' }} />
-                        ) : (
-                            <div style={{ width: '80px', height: '80px', borderRadius: '20px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
-                                <span style={{ fontSize: '28px', fontWeight: 'bold', color: '#000' }}>{data.company.name.charAt(0)}</span>
-                            </div>
-                        )}
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <CompanyLogo 
+                                companyName={data.company.name} 
+                                logoUrl={data.company.logoUrl} 
+                                size={80} 
+                            />
+                        </div>
                     </div>
                     <h1 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-primary)', margin: 0, textAlign: 'center' }}>
                         {data.company.name}
@@ -246,15 +256,6 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                         <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>Total Reviews</span>
                     </div>
 
-                    <div style={{ width: '1px', height: '24px', background: 'var(--border)' }}></div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ color: '#f59e0b' }}><Globe size={18} /></div>
-                        <span style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                            {data.experiences.length > 0 ? Array.from(new Set(data.experiences.map(e => e.location))).length : 0}
-                        </span>
-                        <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>Global Locations</span>
-                    </div>
                 </div>
             </div>
 
@@ -279,7 +280,7 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                             <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
                             <input
                                 type="text"
-                                placeholder="Search by role (e.g. Software Engineer)..."
+                                placeholder="Search by role, location, or keywords..."
                                 value={roleFilter}
                                 onChange={(e) => setRoleFilter(e.target.value)}
                                 style={{
@@ -344,7 +345,7 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                 </div>
 
                 {/* Experiences List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                     {filteredExperiences.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '64px 0', color: 'var(--text-tertiary)' }}>
                             <div style={{ marginBottom: '16px', opacity: 0.5 }}>
@@ -362,10 +363,10 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                             <div key={exp.id} style={{
                                 background: 'var(--surface)',
                                 border: '2px solid var(--border)',
-                                borderRadius: '24px',
+                                borderRadius: '16px',
                                 overflow: 'hidden',
                                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: expandedReview === exp.id ? '0 12px 32px -8px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.02)'
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                             }}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.borderColor = 'var(--accent)';
@@ -373,33 +374,46 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                                 }}
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.borderColor = 'var(--border)';
-                                    e.currentTarget.style.boxShadow = expandedReview === exp.id ? '0 12px 32px -8px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.02)';
+                                    e.currentTarget.style.boxShadow = expandedReviews.includes(exp.id) ? '0 12px 32px -8px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.02)';
                                 }}>
                                 {/* Card Header */}
                                 <div
-                                    onClick={() => setExpandedReview(expandedReview === exp.id ? null : exp.id)}
+                                    onClick={() => setExpandedReviews(prev => prev.includes(exp.id) ? prev.filter(id => id !== exp.id) : [...prev, exp.id])}
                                     style={{
-                                        padding: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                                        cursor: 'pointer', background: expandedReview === exp.id ? 'var(--background-secondary)' : 'var(--surface)'
+                                        padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                                        cursor: 'pointer', background: 'var(--surface)'
                                     }}
                                 >
                                     <div style={{ display: 'flex', gap: '24px' }}>
                                         <div style={{
-                                            width: '72px', height: '72px',
+                                            width: '48px', height: '48px',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            flexShrink: 0
+                                            flexShrink: 0, position: 'relative'
                                         }}>
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={data.company.logoUrl || ''} alt={data.company.name} style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }} />
+                                            <CompanyLogo 
+                                                companyName={data.company.name} 
+                                                logoUrl={data.company.logoUrl} 
+                                                size={32} 
+                                            />
                                         </div>
                                         <div>
                                             <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px 0' }}>
                                                 {exp.role} @ {data.company.name}
                                             </h3>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px', marginTop: '12px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                                    <span style={{ color: exp.offerStatus === 'Yes' ? 'var(--success)' : exp.offerStatus === 'No' ? 'var(--error)' : 'var(--warning)', background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
-                                                        {exp.offerStatus === 'Yes' ? 'Got Offer' : exp.offerStatus === 'No' ? 'No Offer' : 'Pending'}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                                                    {exp.offerStatus === 'Yes' ? (
+                                                        <CheckCircle2 size={14} style={{ color: 'var(--success)' }} />
+                                                    ) : exp.offerStatus === 'No' ? (
+                                                        <Ban size={14} style={{ color: 'var(--error)' }} />
+                                                    ) : (
+                                                        <Clock size={14} style={{ color: 'var(--warning)' }} />
+                                                    )}
+                                                    <span style={{ 
+                                                        fontWeight: 600, 
+                                                        color: exp.offerStatus === 'Yes' ? 'var(--success)' : exp.offerStatus === 'No' ? 'var(--error)' : 'var(--text-secondary)' 
+                                                    }}>
+                                                        {exp.offerStatus === 'Yes' ? 'Received Offer' : exp.offerStatus === 'No' ? 'No Offer' : 'Pending'}
                                                     </span>
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -415,6 +429,10 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                                                     {isMounted && exp.appliedDate ? new Date(exp.appliedDate).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric' }) : 'N/A'}
                                                     {isMounted && exp.offerDate ? ` - ${new Date(exp.offerDate).toLocaleDateString('en-US', { year: '2-digit', month: 'numeric' })}` : ''}
                                                 </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                                    <DollarSign size={14} style={{ color: 'var(--text-tertiary)' }} />
+                                                    {exp.salaryHourly ? `${exp.salaryHourly}USD/hr` : 'N/A'}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -422,110 +440,71 @@ export function InterviewExperienceDetailView({ companyName }: Props) {
                                         padding: '10px', borderRadius: '12px', background: 'var(--background-secondary)',
                                         color: 'var(--text-tertiary)', transition: 'all 0.2s'
                                     }}>
-                                        {expandedReview === exp.id ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
+                                        {expandedReviews.includes(exp.id) ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
                                     </div>
                                 </div>
 
-                                {/* Card Body */}
-                                {expandedReview === exp.id && (
-                                    <div style={{ padding: '0 32px 32px 32px', display: 'flex', flexDirection: 'column', gap: '40px', background: 'var(--background-secondary)' }}>
-                                        <div style={{ height: '1px', background: 'var(--border)', width: '100%' }} />
+                                 {/* Card Body - Dense Text Form */}
+                                 {expandedReviews.includes(exp.id) && (
+                                     <div style={{ padding: '0 24px 24px 96px', display: 'flex', flexDirection: 'column', gap: '32px', background: 'var(--surface)' }}>
+                                         
+                                         {/* Interview Process Section */}
+                                         {exp.processSteps && exp.processSteps.length > 0 && (
+                                             <div>
+                                                 <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '16px' }}>Interview Process</h4>
+                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                     {exp.processSteps.map((step: any, idx: number) => (
+                                                         <div key={idx} style={{ fontSize: '14px', color: 'var(--text-secondary)', display: 'flex', gap: '8px' }}>
+                                                             <span style={{ color: 'var(--text-tertiary)', minWidth: '80px' }}>
+                                                                 {step.date ? new Date(step.date).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit' }) : 'N/A'}
+                                                             </span>
+                                                             <span style={{ color: 'var(--text-secondary)' }}>—</span>
+                                                             <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{step.step}</span>
+                                                             {step.type && <span style={{ color: 'var(--text-tertiary)' }}>({step.type})</span>}
+                                                             {step.durationMinutes && <span style={{ color: 'var(--text-tertiary)' }}>, {step.durationMinutes} minutes</span>}
+                                                         </div>
+                                                     ))}
+                                                 </div>
+                                             </div>
+                                         )}
+ 
+                                         {/* Interview Information Section */}
+                                         {(() => {
+                                             const validRounds = exp.processSteps?.map((step: any, idx: number) => {
+                                                 const details = exp.interviewDetails?.[`${step.step}-${step.type}-${idx}`] || exp.interviewDetails?.[`step_${idx}`] || exp.interviewDetails?.[step.step];
+                                                 return details ? { ...step, details } : null;
+                                             }).filter(Boolean);
 
-                                        {/* Timeline */}
-                                        {exp.processSteps && exp.processSteps.length > 0 && (
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-                                                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                                                        <Clock size={16} />
-                                                    </div>
-                                                    <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Detailed Interview Process</h4>
-                                                </div>
-                                                <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '16px' }}>
-                                                    {exp.processSteps.map((step: any, idx: number) => (
-                                                        <div key={idx} style={{ display: 'flex', gap: '32px' }}>
-                                                            <div style={{ width: '80px', fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'right', paddingTop: '6px' }}>
-                                                                {step.date ? new Date(step.date).toLocaleDateString() : 'N/A'}
-                                                            </div>
-                                                            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                                <div style={{
-                                                                    width: '12px', height: '12px', borderRadius: '50%', background: 'var(--accent)',
-                                                                    border: '4px solid var(--background-secondary)', zIndex: 1
-                                                                }} />
-                                                                {idx < exp.processSteps.length - 1 && <div style={{ width: '2px', flex: 1, background: 'var(--border)', minHeight: '40px' }} />}
-                                                            </div>
-                                                            <div style={{ paddingBottom: '32px', flex: 1 }}>
-                                                                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>{step.step}</div>
-                                                                <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px' }}>{step.type} {step.durationMinutes ? `• ${step.durationMinutes} mins` : ''}</div>
+                                             if (!validRounds || validRounds.length === 0) return null;
 
-                                                                {exp.interviewDetails && exp.interviewDetails[`${step.step}-${step.type}-${idx}`] && (
-                                                                    <div style={{
-                                                                        padding: '16px', background: 'var(--surface)',
-                                                                        borderRadius: '16px', fontSize: '14px', color: 'var(--text-primary)',
-                                                                        lineHeight: 1.6, whiteSpace: 'pre-wrap', border: '1px solid var(--border)'
-                                                                    }}>
-                                                                        {exp.interviewDetails[`${step.step}-${step.type}-${idx}`]}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                             return (
+                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                     <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>Interview information</h4>
+                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                         {validRounds.map((round: any, idx: number) => (
+                                                             <div key={idx} style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                                                 <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{idx + 1}. {round.step}</span>
+                                                                 {round.type && <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}> ({round.type})</span>}
+                                                                 <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}> : </span>
+                                                                 <span>{round.details}</span>
+                                                             </div>
+                                                         ))}
+                                                     </div>
+                                                 </div>
+                                             );
+                                         })()}
+ 
+                                         {/* Additional Comments (merged into text flow) */}
+                                         {exp.additionalComments && (
+                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                 <h4 style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Overall Experience & Advice</h4>
+                                                 <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>{exp.additionalComments}</p>
+                                             </div>
+                                         )}
 
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '40px' }}>
-                                            {/* Salary Detail */}
-                                            <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)' }}>
-                                                <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '12px' }}>Financial Info</h4>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(var(--accent-rgb), 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                                                        <DollarSign size={20} />
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '18px', color: 'var(--text-primary)', fontWeight: 700 }}>
-                                                            {exp.salaryHourly ? `$${exp.salaryHourly.toFixed(2)} / hr` : 'Not reported'}
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Hourly Salary</div>
-                                                    </div>
-                                                </div>
-                                            </div>
 
-                                            {/* User Info */}
-                                            <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)' }}>
-                                                <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '12px' }}>Shared By</h4>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                    <div style={{
-                                                        width: '40px', height: '40px', borderRadius: '50%', background: 'var(--background-secondary)',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', color: 'var(--text-secondary)'
-                                                    }}>
-                                                        {exp.user?.imageUrl ? (
-                                                            /* eslint-disable-next-line @next/next/no-img-element */
-                                                            <img src={exp.user.imageUrl} alt="User" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                        ) : (
-                                                            <User size={20} />
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontSize: '15px', color: 'var(--text-primary)', fontWeight: 600 }}>
-                                                            {exp.user?.firstName} {exp.user?.lastName ? exp.user.lastName.charAt(0) + '.' : ''}
-                                                        </div>
-                                                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Verified Aladdin User</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Additional Comments */}
-                                        {exp.additionalComments && (
-                                            <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)' }}>
-                                                <h4 style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '16px' }}>Additional Comments</h4>
-                                                <p style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>
-                                                    {exp.additionalComments}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                     </div>
+                                 )}
                             </div>
                         ))
                     )}

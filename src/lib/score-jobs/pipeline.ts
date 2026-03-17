@@ -350,23 +350,40 @@ async function persistJobScore(
   try {
     if (dbType === 'postgres') {
       const pool = getPostgresPool();
-      await pool.query(`
-        INSERT INTO job_scores (user_id, job_id, score, confidence, breakdown, extracted_meta, scored_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        ON CONFLICT (user_id, job_id) DO UPDATE SET
-          score = EXCLUDED.score,
-          confidence = EXCLUDED.confidence,
-          breakdown = EXCLUDED.breakdown,
-          extracted_meta = EXCLUDED.extracted_meta,
-          scored_at = NOW()
-      `, [
-        userId,
-        jobId,
-        scoreResult.score,
-        scoreResult.confidence,
-        JSON.stringify(scoreResult.breakdown),
-        JSON.stringify(scoreResult.extraction_meta),
-      ]);
+      
+      // Check if exists
+      const exists = await pool.query('SELECT 1 FROM job_scores WHERE user_id = $1 AND job_id = $2', [userId, jobId]);
+      
+      if (exists.rows.length > 0) {
+        await pool.query(`
+          UPDATE job_scores 
+          SET score = $3, 
+              confidence = $4, 
+              breakdown = $5, 
+              extracted_meta = $6, 
+              scored_at = NOW()
+          WHERE user_id = $1 AND job_id = $2
+        `, [
+          userId,
+          jobId,
+          scoreResult.score,
+          scoreResult.confidence,
+          JSON.stringify(scoreResult.breakdown),
+          JSON.stringify(scoreResult.extraction_meta),
+        ]);
+      } else {
+        await pool.query(`
+          INSERT INTO job_scores (user_id, job_id, score, confidence, breakdown, extracted_meta, scored_at)
+          VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [
+          userId,
+          jobId,
+          scoreResult.score,
+          scoreResult.confidence,
+          JSON.stringify(scoreResult.breakdown),
+          JSON.stringify(scoreResult.extraction_meta),
+        ]);
+      }
     } else if (dbType === 'supabase') {
       const client = getSupabaseClient();
       await client.from('job_scores').upsert({

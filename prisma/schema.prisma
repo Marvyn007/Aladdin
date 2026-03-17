@@ -33,6 +33,7 @@ model User {
   receivedVotes       UserReputationVote[]   @relation("ReceivedVotes")
   interviewExperiences InterviewExperience[]
   tailoredResumes      TailoredResume[]
+  jobScores            JobScore[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -109,6 +110,7 @@ model Job {
   userInteractions       UserInteraction[]
   userJobs               UserJob[]
   tailoredResumes         TailoredResume[]
+  jobScores               JobScore[]
 
   @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
   @@index([contentHash], map: "idx_jobs_content_hash")
@@ -382,6 +384,18 @@ model InterviewExperience {
   processSteps       Json      @default("[]") @map("process_steps")
   interviewDetails   Json      @default("{}") @map("interview_details")
   additionalComments String?   @map("additional_comments")
+  
+  // New fields
+  outcome            String?   @default("Pending")
+  offerDetails       String?   @map("offer_details")
+  isRemote           Boolean   @default(false) @map("is_remote")
+  isFlagged          Boolean   @default(false) @map("is_flagged")
+  status             String    @default("published")
+  moderationNotes    String?   @map("moderation_notes")
+  lastEditedBy       String?   @map("last_edited_by")
+  lastEditedAt       DateTime? @map("last_edited_at") @db.Timestamptz(6)
+  editHistory        Json?     @map("edit_history") // Array of {timestamp, editorId, changedFields}
+
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   company Company @relation(fields: [companyName], references: [name], onDelete: Cascade)
@@ -414,7 +428,7 @@ model JobScore {
   userId          String    @map("user_id")
   jobId           String    @map("job_id") @db.Uuid
   score           Int
-  confidence      Float     @db.Float
+  confidence      Float
   breakdown       Json
   extractedMeta   Json?     @map("extracted_meta")
   scoredAt        DateTime  @default(now()) @map("scored_at") @db.Timestamptz(6)
@@ -427,4 +441,3 @@ model JobScore {
   @@index([jobId], map: "idx_job_score_job_id")
   @@map("job_scores")
 }
-

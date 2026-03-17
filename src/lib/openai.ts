@@ -144,3 +144,133 @@ Write a tailored cover letter using the provided data. Use the provided date, re
         provider: "openai"
     };
 }
+
+/**
+ * Scores a job against a user's resume and LinkedIn profile using GPT-4o-mini.
+ */
+export async function scoreJob(resume: any, linkedin: any, job: any) {
+    const systemPrompt = `You are an expert recruiter. Your task is to score how well a candidate's profile matches a job description.
+Return a JSON object with:
+1. "match_score": A number from 0 to 100.
+2. "why": A brief (1-2 sentence) explanation of the score.
+
+Candidate Profile (Resume):
+${JSON.stringify(resume, null, 2)}
+
+Candidate Profile (LinkedIn):
+${linkedin ? JSON.stringify(linkedin, null, 2) : 'No LinkedIn profile provided.'}
+
+Job Title: ${job.title}
+Job Company: ${job.company}
+Job Description:
+${job.job_description_plain || job.normalized_text || ''}
+`;
+
+    const response = await callLLM([
+        { role: "system", content: "You extract score data into JSON. Return ONLY JSON." },
+        { role: "user", content: systemPrompt }
+    ], {
+        model: "gpt-4o-mini",
+        temperature: 0.1,
+        jsonMode: true
+    });
+
+    try {
+        const parsed = JSON.parse(response);
+        return {
+            match_score: parsed.match_score || 0,
+            why: parsed.why || "No explanation provided."
+        };
+    } catch (e) {
+        console.error("[OpenAI] Failed to parse scoreJob response:", e);
+        return { match_score: 0, why: "Failed to parse scoring response." };
+    }
+}
+
+/**
+ * Verifies the authenticity of a job by comparing provided data with ground truth scrape.
+ */
+export async function verifyJobAuthenticity(groundTruthDescription: string, providedData: { title: string, company: string, description: string }) {
+    const systemPrompt = `You are a cybersecurity and recruitment fraud expert. Compare the provided job data with the ground truth scraped from the source URL.
+Check for:
+1. Mismatches in Title or Company.
+2. Significant discrepancies in the job description that might indicate a scam or misrepresentation.
+
+Ground Truth Description:
+${groundTruthDescription}
+
+User Provided Data:
+Title: ${providedData.title}
+Company: ${providedData.company}
+Description:
+${providedData.description}
+
+Return a JSON object with:
+1. "isAuthentic": boolean
+2. "reasoning": A brief explanation of your finding.
+`;
+
+    const response = await callLLM([
+        { role: "system", content: "You verify job data integrity. Return ONLY JSON." },
+        { role: "user", content: systemPrompt }
+    ], {
+        model: "gpt-4o-mini",
+        temperature: 0.1,
+        jsonMode: true
+    });
+
+    try {
+        const parsed = JSON.parse(response);
+        return {
+            isAuthentic: !!parsed.isAuthentic,
+            reasoning: parsed.reasoning || "No reasoning provided."
+        };
+    } catch (e) {
+        console.error("[OpenAI] Failed to parse verifyJobAuthenticity response:", e);
+        return { isAuthentic: false, reasoning: "Failed to parse verification response." };
+    }
+}
+
+/**
+ * Processes a batch of jobs and decides which ones should be deleted based on strict criteria.
+ * Used for automated cleanup of spam or irrelevant listings.
+ */
+export async function batchFilterJobs(jobs: any[]) {
+    if (!jobs || jobs.length === 0) {
+        return { deleteIds: [], reasons: {} };
+    }
+
+    const systemPrompt = `You are a job quality auditor. Your task is to identify jobs that should be deleted from a high-quality job board.
+Criteria for deletion:
+1. SPAM: Obvious promotional content, "make money from home" scams, or non-job content.
+2. IRRELEVANT: Jobs that are clearly not for Software Engineering, Product, Design, or Data roles.
+3. INCOMPLETE: Description is strictly "view full description" or similar placeholder and cannot be scored.
+
+Return a JSON object with:
+1. "deleteIds": An array of job IDs that should be deleted.
+2. "reasons": A map of job ID to a short reason for deletion.
+
+Job Data to Analyze:
+${jobs.map(j => `ID: ${j.id} | Title: ${j.title} | Company: ${j.company} | Description: ${(j.job_description_plain || j.normalized_text || '').substring(0, 500)}...`).join('\n---\n')}
+`;
+
+    const response = await callLLM([
+        { role: "system", content: "You audit job quality. Return ONLY JSON." },
+        { role: "user", content: systemPrompt }
+    ], {
+        model: "gpt-4o-mini",
+        temperature: 0.1,
+        jsonMode: true
+    });
+
+    try {
+        const parsed = JSON.parse(response);
+        return {
+            deleteIds: parsed.deleteIds || [],
+            reasons: parsed.reasons || {}
+        };
+    } catch (e) {
+        console.error("[OpenAI] Failed to parse batchFilterJobs response:", e);
+        return { deleteIds: [], reasons: {} };
+    }
+}

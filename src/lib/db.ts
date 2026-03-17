@@ -659,11 +659,15 @@ export async function insertJob(
 
         // 2. Insert User Job linkage with Snapshot
         await executeWithUser(userId, async (client) => {
-            await client.query(`
-                INSERT INTO user_jobs (user_id, job_id, status, match_score, poster_first_name, poster_last_name, poster_image_url)
-                VALUES ($1, $2, 'fresh', 0, $3, $4, $5)
-                ON CONFLICT (user_id, job_id) DO NOTHING
-            `, [userId, jobId, posterFirstName, posterLastName, posterImageUrl]);
+            // Check if link already exists
+            const exists = await client.query('SELECT 1 FROM user_jobs WHERE user_id = $1 AND job_id = $2', [userId, jobId]);
+            
+            if (exists.rows.length === 0) {
+                await client.query(`
+                    INSERT INTO user_jobs (user_id, job_id, status, match_score, poster_first_name, poster_last_name, poster_image_url)
+                    VALUES ($1, $2, 'fresh', 0, $3, $4, $5)
+                `, [userId, jobId, posterFirstName, posterLastName, posterImageUrl]);
+            }
         });
 
         // Sync company logo globally if provided
@@ -823,19 +827,37 @@ export async function updateJobStatus(userId: string, jobId: string, status: Job
     if (dbType === 'postgres') {
         await executeWithUser(userId, async (client) => {
             if (status === 'archived') {
+            // Check if record exists
+            const exists = await client.query('SELECT 1 FROM user_jobs WHERE job_id = $1 AND user_id = $2', [jobId, userId]);
+            
+            if (exists.rows.length > 0) {
+                await client.query(`
+                    UPDATE user_jobs 
+                    SET status = $1, archived_at = NOW(), updated_at = NOW()
+                    WHERE job_id = $2 AND user_id = $3
+                `, [status, jobId, userId]);
+            } else {
                 await client.query(`
                     INSERT INTO user_jobs (user_id, job_id, status, archived_at, updated_at)
                     VALUES ($3, $2, $1, NOW(), NOW())
-                    ON CONFLICT (user_id, job_id) 
-                    DO UPDATE SET status = EXCLUDED.status, archived_at = NOW(), updated_at = NOW()
+                `, [status, jobId, userId]);
+            }
+            } else {
+            // Check if record exists
+            const exists = await client.query('SELECT 1 FROM user_jobs WHERE job_id = $1 AND user_id = $2', [jobId, userId]);
+            
+            if (exists.rows.length > 0) {
+                await client.query(`
+                    UPDATE user_jobs 
+                    SET status = $1, archived_at = NULL, updated_at = NOW()
+                    WHERE job_id = $2 AND user_id = $3
                 `, [status, jobId, userId]);
             } else {
                 await client.query(`
                     INSERT INTO user_jobs (user_id, job_id, status, archived_at, updated_at)
                     VALUES ($3, $2, $1, NULL, NOW())
-                    ON CONFLICT (user_id, job_id) 
-                    DO UPDATE SET status = EXCLUDED.status, archived_at = NULL, updated_at = NOW()
                 `, [status, jobId, userId]);
+            }
             }
         });
     } else if (dbType === 'supabase') {
