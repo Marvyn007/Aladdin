@@ -8,7 +8,9 @@
 
 ## Overview
 
-Replace the existing job aggregation system with a queue-based architecture that polls 5 external sources on independent schedules, using Neon Postgres as both data store and job queue. Designed for Vercel Hobby constraints (10s function timeout, no Redis), but architected so swapping to BullMQ/Redis is a single config change.
+Replace the existing job aggregation system with a queue-based architecture that polls 5 external job sources on independent schedules, using Neon Postgres as both data store and job queue. Designed for Vercel Hobby constraints (10s function timeout, no Redis), but architected so swapping to BullMQ/Redis is a single config change.
+
+**Vercel Hobby constraint:** All route handlers are limited to 10s execution. Do NOT export `maxDuration` values >10 — existing routes with `maxDuration = 60` or `300` only work on Pro/Enterprise and should not be copied as patterns.
 
 ## Sources & Polling Cadence
 
@@ -19,7 +21,7 @@ Replace the existing job aggregation system with a queue-based architecture that
 | The Muse | Bulk/paginated | API key (`THEMUSE_API_KEY`) | 1 hr | 2 (medium) | `www.themuse.com/api/public/jobs` |
 | Arbeitnow | Bulk/paginated | None | 1 hr | 2 (medium) | `arbeitnow.com/api/job-board-api` |
 | Himalayas | Bulk | None | 24 hr | 3 (low) | `himalayas.app/jobs/api` |
-| ATS Discovery | Crawl | None | 6 hr | 4 (lowest) | Internal task |
+| ATS Discovery | Internal crawl | None | 6 hr | 4 (lowest) | Internal task (not an external source) |
 
 **Env config for The Muse:**
 ```
@@ -46,7 +48,18 @@ interface QueueAdapter {
 ### Neon implementation (`NeonQueueAdapter`)
 
 - Backed by `JobQueue` Prisma model
-- Dequeue uses raw SQL: `SELECT ... WHERE status='pending' AND runAt <= NOW() ORDER BY priority ASC, runAt ASC FOR UPDATE SKIP LOCKED LIMIT $1`
+- Dequeue uses a **short transaction** to atomically claim tasks:
+  ```sql
+  BEGIN;
+  SELECT id, type, source, payload FROM job_queue
+    WHERE status='pending' AND run_at <= NOW()
+    ORDER BY priority ASC, run_at ASC
+    FOR UPDATE SKIP LOCKED LIMIT $1;
+  UPDATE job_queue SET status='processing', locked_at=NOW(), locked_by=$2
+    WHERE id = ANY($3);
+  COMMIT;
+  ```
+  The task then executes **outside** the transaction. On completion, a separate UPDATE marks it `completed`. This avoids holding row locks during external API calls — critical for Neon's PgBouncer (transaction mode) pooler.
 - Priority values: 1=high, 2=medium, 3=low, 4=lowest (ascending sort = higher priority first)
 - Stale lock recovery: tasks stuck in `processing` for >60s get reset to `pending`
 - Dead-letter: tasks exceeding `maxAttempts` (default 3) move to `dead` status
@@ -103,7 +116,7 @@ interface NormalizedJob {
   isRemote: boolean
   experienceLevel: 'entry' | 'mid' | 'senior' | 'lead' | null
   skills: string[]                       // extracted keywords e.g. ['React', 'TypeScript']
-  applyUrl: string                       // direct application URL
+  applyUrl: string | null                 // direct application URL (nullable — some sources only have sourceUrl)
   expiresAt: Date | null
 }
 ```
@@ -113,9 +126,9 @@ interface NormalizedJob {
 When a source does not provide a native ID, generate a deterministic fallback:
 
 ```typescript
-function generateFallbackId(title: string, company: string, location: string, applyUrl: string): string {
+function generateFallbackId(title: string, company: string, location: string, applyUrl: string | null): string {
   const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
-  const input = [normalize(title), normalize(company), normalize(location), normalize(applyUrl)].join('|')
+  const input = [normalize(title), normalize(company), normalize(location), normalize(applyUrl ?? '')].join('|')
   return sha256(input)
 }
 ```
@@ -151,9 +164,9 @@ src/lib/job-sources/
 
 ### Scheduler: `/api/cron/tick`
 
-Triggered externally every 5 minutes (cron-job.org, free). Two steps per invocation:
+Triggered externally every 5 minutes (cron-job.org, free). Authenticated via `CRON_SECRET` bearer token (same pattern as existing `/api/cron/process-queue`). Three phases per invocation, with an internal time budget that exits early if elapsed > 7s to stay within Vercel Hobby's 10s limit:
 
-**Step 1 — Enqueue tasks (capped at 50 per tick):**
+**Phase 1 — Enqueue tasks (capped at 50 per tick):**
 
 ```
 for each source config:
@@ -170,19 +183,19 @@ if lastDiscoveryAt + 6hrs < now():
 
 Cap: max 50 tasks enqueued per tick. Remaining companies catch up on subsequent ticks since `lastPolledAt` won't update until they're actually processed.
 
-**Step 2 — Process tasks (up to 3):**
+**Phase 2 — Process tasks (up to 3, sequentially):**
 
-Dequeues and executes up to 3 tasks in the same invocation. Higher priority tasks dequeue first.
+Dequeues and executes up to 3 tasks sequentially in the same invocation. Higher priority tasks dequeue first. Each task runs one external API call + DB writes. If the 7s time budget is exceeded after any task, stop processing and let burst workers handle the rest.
 
-**Step 3 — Burst mode (if queue > 20 pending):**
+**Phase 3 — Burst mode (if queue > 20 pending):**
 
 Fire up to 3 additional async fetch calls to `/api/worker/process` (fire-and-forget). Max 9 tasks processed per tick. Burst cap is hard-limited at 3 parallel calls to prevent runaway invocations on Vercel Hobby.
 
 ### Worker endpoint: `/api/worker/process`
 
-Stateless. Dequeues up to 3 tasks, executes them, returns. Can be called by:
+Stateless. Authenticated via `CRON_SECRET` bearer token (same as `/api/cron/tick`). Dequeues up to 3 tasks, executes them sequentially (with 7s time budget), returns. Can be called by:
 - The scheduler (burst mode)
-- Manually (for debugging)
+- Manually via admin (for debugging — requires admin auth OR cron secret)
 - Future: a Redis-backed BullMQ worker (same task shapes)
 
 ### Task execution flow
@@ -425,6 +438,7 @@ model JobQueue {
   lockedAt    DateTime?
   lockedBy    String?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   completedAt DateTime?
 
   @@index([status, runAt, priority])
@@ -448,6 +462,7 @@ model TrackedCompany {
   lastJobCount   Int       @default(0)
   errorCount     Int       @default(0)
   createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([slug, ats])
   @@index([ats, isActive])
@@ -482,6 +497,12 @@ model JobVote {
   @@unique([userId, jobId])
   @@index([jobId])
 }
+
+// NOTE: The existing User model must also add: jobVotes JobVote[]
+// The existing Company model serves a different purpose (interview experiences).
+// TrackedCompany tracks ATS polling state. Do NOT unify them — they may share
+// a name but have different lifecycles and fields. A future linking table can
+// associate TrackedCompany → Company if needed for logo/domain reuse.
 ```
 
 ### Modifications to existing Job model
@@ -495,13 +516,13 @@ model Job {
   externalId     String                       // REQUIRED: native source ID or deterministic fallback hash
 
   // ── Enriched fields ──
-  salaryMin       Int?
-  salaryMax       Int?
+  salaryMin       Float?                      // whole currency units (e.g., 75000.50 USD)
+  salaryMax       Float?                      // whole currency units
   salaryCurrency  String?
   jobType         String?                     // 'fulltime' | 'parttime' | 'contract' | 'internship'
   isRemote        Boolean  @default(false)
   experienceLevel String?                     // 'entry' | 'mid' | 'senior' | 'lead'
-  skills          Json     @default("[]")     // string[]
+  skills          Json     @default("[]")     // string[] — Prisma 5.22+ handles this default for Postgres jsonb
   applyUrl        String?
   expiresAt       DateTime?
 
@@ -519,11 +540,26 @@ model Job {
 
 ### Migration strategy
 
-1. Add new columns (`source`, `externalId`, enriched fields) as nullable first
-2. Add `JobQueue`, `TrackedCompany`, `SourcePollLog`, `JobVote` models
-3. Backfill `source` and `externalId` on existing jobs (derive from `sourceUrl` where possible, use fallback hash otherwise)
-4. Make `source` and `externalId` non-nullable after backfill
-5. Add `@@unique([source, externalId])` composite index
+1. **Drop `@unique` on `contentHash`.** The existing schema has `contentHash String @unique` — this MUST be changed to a non-unique index. Cross-source clustering requires multiple jobs with the same contentHash (e.g., same job on Greenhouse and Arbeitnow). Change to `@@index([contentHash])`.
+2. Add new columns (`source`, `externalId`, enriched fields including `salaryMin Float?`, `salaryMax Float?`) as nullable first
+3. Add `JobQueue`, `TrackedCompany`, `SourcePollLog`, `JobVote` models. Add `jobVotes JobVote[]` relation to existing `User` model.
+4. Backfill `source` and `externalId` on existing jobs:
+   - Derive `source` from `sourceUrl` host (e.g., `boards.greenhouse.io` → `'greenhouse'`)
+   - For jobs with `isImported = 1`, set `source = 'imported'`
+   - Generate `externalId` from native IDs where available, fallback hash otherwise
+5. Make `source` and `externalId` non-nullable after backfill
+6. Add `@@unique([source, externalId])` composite index
+7. **Deprecate `isImported` field.** After backfill, `isImported` is redundant (replaced by `source = 'imported'`). Add `@deprecated` comment. Refactor the ~6 files referencing `isImported`/`is_imported` to use `source === 'imported'` instead. Drop the column in a subsequent migration after all references are removed.
+8. Refactor `insertJob()` in `src/lib/db.ts` — currently deduplicates via `SELECT id FROM jobs WHERE content_hash = $1`. Change to use `source + externalId` as the primary dedupe key: `INSERT ... ON CONFLICT (source, external_id) DO NOTHING`.
+
+### Bootstrap sequence
+
+After migration, the system must be initialized in this order:
+1. Run Prisma migration (`npx prisma migrate deploy`)
+2. Set `CRON_SECRET` env var on Vercel
+3. POST `/api/admin/seed-companies` to populate `TrackedCompany` with 93 seed companies
+4. Configure external cron (cron-job.org) to hit `/api/cron/tick` every 5 min
+5. First tick will enqueue bulk sources (Himalayas, Muse, Arbeitnow) immediately. Per-company tasks start flowing once seed companies have `lastPolledAt = null` (which means "never polled" → due immediately)
 
 ---
 
