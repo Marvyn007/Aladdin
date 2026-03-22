@@ -180,7 +180,8 @@ export async function processTaskBatch(
   tasks: QueueTask[],
   queue: QueueAdapter,
   db: WorkerDb,
-  startTime: number = Date.now()
+  startTime: number = Date.now(),
+  createDiscoveryDbFn?: () => DiscoveryDb
 ): Promise<TaskResult[]> {
   const results: TaskResult[] = []
 
@@ -199,10 +200,9 @@ export async function processTaskBatch(
       const start = Date.now()
 
       try {
-        const discoveryDb: DiscoveryDb = {
-          getTrackedSlugs: async () => new Set<string>(),
-          insertTrackedCompany: async () => {},
-        }
+        const discoveryDb = createDiscoveryDbFn
+          ? createDiscoveryDbFn()
+          : { getTrackedSlugs: async () => new Set<string>(), insertTrackedCompany: async () => {} }
 
         const result = await discoverNewCompanies(discoveryDb, tier, offset)
 
