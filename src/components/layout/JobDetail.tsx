@@ -10,6 +10,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { ImageWithRetry } from '@/components/common/ImageWithRetry';
 import Link from 'next/link';
+import DOMPurify from 'isomorphic-dompurify';
+import he from 'he';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 
 // Get dynamic color based on company name
 export function getCompanyColor(companyName: string | null): string {
@@ -287,7 +290,84 @@ function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteContro
 }
 
 // Notion-like text parser and renderer
-function JobDescriptionRenderer({ text }: { text: string }) {
+function JobDescriptionRenderer({ text, html }: { text: string; html?: string | null }) {
+    if (html) {
+        const decodedHtml = he.decode(html);
+        const cleanHtml = DOMPurify.sanitize(decodedHtml, {
+            ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'span'],
+            ALLOWED_ATTR: ['href', 'target', 'rel']
+        });
+        return (
+            <>
+                <style dangerouslySetInnerHTML={{ __html: `
+                    .job-description-html {
+                        color: #3f3f3f;
+                        line-height: 1.75;
+                        font-size: 14px;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        word-wrap: break-word;
+                        max-width: 100%;
+                    }
+                    .job-description-html h1, .job-description-html h2, .job-description-html h3, .job-description-html h4, .job-description-html h5, .job-description-html h6 {
+                        color: #1a1a1a;
+                        font-weight: 600;
+                        margin-top: 1.75em;
+                        margin-bottom: 0.6em;
+                        line-height: 1.4;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    }
+                    .job-description-html h1 { font-size: 1.4em; }
+                    .job-description-html h2 { font-size: 1.25em; }
+                    .job-description-html h3 { font-size: 1.1em; }
+                    .job-description-html p {
+                        margin-bottom: 1.1em;
+                        line-height: 1.75;
+                    }
+                    .job-description-html ul, .job-description-html ol {
+                        padding-left: 1.5em;
+                        margin-bottom: 1.2em;
+                        margin-top: 0.5em;
+                    }
+                    .job-description-html li {
+                        margin-bottom: 0.5em;
+                        line-height: 1.7;
+                    }
+                    .job-description-html ul { list-style-type: disc; }
+                    .job-description-html ol { list-style-type: decimal; }
+                    .job-description-html a {
+                        color: #0a66c2;
+                        text-decoration: none;
+                    }
+                    .job-description-html a:hover {
+                        text-decoration: underline;
+                    }
+                    .job-description-html strong, .job-description-html b {
+                        color: #1a1a1a;
+                        font-weight: 600;
+                    }
+                    .job-description-html blockquote {
+                        border-left: 3px solid #e0e0e0;
+                        padding-left: 1em;
+                        margin-left: 0;
+                        color: #555;
+                        font-style: italic;
+                    }
+                    .job-description-html code {
+                        background: #f5f5f5;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-family: "SF Mono", Monaco, monospace;
+                        font-size: 0.9em;
+                    }
+                ` }} />
+                <div 
+                    className="job-description-html" 
+                    dangerouslySetInnerHTML={{ __html: cleanHtml }}
+                />
+            </>
+        );
+    }
+
     if (!text) return null;
 
     // Helper to auto-link emails and bold money
@@ -343,11 +423,12 @@ function JobDescriptionRenderer({ text }: { text: string }) {
                 <p
                     key={`text-${blocks.length}`}
                     style={{
-                        marginBottom: '12px',
-                        lineHeight: '1.6',
+                        marginBottom: '16px',
+                        lineHeight: '1.75',
                         fontSize: '14px',
-                        color: 'var(--text-primary)',
-                        whiteSpace: 'pre-wrap'
+                        color: '#3f3f3f',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                     }}
                 >
                     {enhanceText(currentTextBuffer.join('\n'))}
@@ -363,24 +444,25 @@ function JobDescriptionRenderer({ text }: { text: string }) {
                 <ul
                     key={`list-${blocks.length}`}
                     style={{
-                        marginTop: '4px',
-                        marginBottom: '12px',
-                        paddingLeft: '20px',
+                        marginTop: '8px',
+                        marginBottom: '16px',
+                        paddingLeft: '24px',
                         listStyleType: 'disc',
-                        color: 'var(--text-secondary)'
+                        color: '#3f3f3f'
                     }}
                 >
                     {currentListBuffer.map((item, i) => (
                         <li
                             key={i}
                             style={{
-                                marginBottom: '4px',
-                                lineHeight: '1.6',
+                                marginBottom: '8px',
+                                lineHeight: '1.7',
                                 fontSize: '14px',
                                 paddingLeft: '4px',
+                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                             }}
                         >
-                            <span style={{ color: 'var(--text-primary)' }}>{enhanceText(item)}</span>
+                            <span style={{ color: '#1a1a1a' }}>{enhanceText(item)}</span>
                         </li>
                     ))}
                 </ul>
@@ -431,12 +513,13 @@ function JobDescriptionRenderer({ text }: { text: string }) {
                 <h4
                     key={`h-${blocks.length}`}
                     style={{
-                        fontSize: '15px',
-                        fontWeight: 700,
-                        marginTop: '24px',
-                        marginBottom: '8px',
-                        color: 'var(--text-primary)',
-                        lineHeight: 1.4
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        marginTop: '28px',
+                        marginBottom: '12px',
+                        color: '#1a1a1a',
+                        lineHeight: 1.4,
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                     }}
                 >
                     {enhanceText(trimmed)}
@@ -684,37 +767,7 @@ export function JobDetail({
                                         transition: 'opacity 0.2s'
                                     }}
                                 >
-                                    {job.company_logo_url ? (
-                                        <img
-                                            src={job.company_logo_url}
-                                            alt={`${job.company} logo`}
-                                            style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }}
-                                            onError={(e) => {
-                                                e.currentTarget.style.display = 'none';
-                                                if (e.currentTarget.nextElementSibling) {
-                                                    (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
-                                                }
-                                            }}
-                                        />
-                                    ) : null}
-                                    {/* Fallback initial icon, hidden by default if trying to load an image */}
-                                    <div
-                                        style={{
-                                            width: '20px',
-                                            height: '20px',
-                                            borderRadius: '4px',
-                                            flexShrink: 0,
-                                            display: job.company_logo_url ? 'none' : 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            backgroundColor: getCompanyColor(job.company),
-                                            color: '#fff',
-                                            fontSize: '12px',
-                                            fontWeight: 'bold'
-                                        }}
-                                    >
-                                        {getCompanyInitial(job.company)}
-                                    </div>
+                                    <CompanyLogo companyName={job.company || ''} logoUrl={job.company_logo_url} size={20} />
                                     {job.company && (
                                         <p style={{ fontSize: '16px', color: 'var(--text-secondary)', margin: 0 }}>
                                             {job.company}
@@ -960,11 +1013,21 @@ export function JobDetail({
                     {/* Job description */}
                     {
                         (job.job_description_plain || job.raw_text_summary) && (
-                            <div>
-                                <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            <div style={{ marginTop: '8px' }}>
+                                <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                     Job Description
                                 </h3>
-                                <JobDescriptionRenderer text={job.job_description_plain || job.raw_text_summary || ''} />
+                                <div style={{ 
+                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                    fontSize: '14px',
+                                    lineHeight: '1.75',
+                                    color: '#3f3f3f',
+                                }}>
+                                    <JobDescriptionRenderer 
+                                        text={job.job_description_plain || job.raw_text_summary || ''} 
+                                        html={job.raw_description_html || (job as any).rawDescriptionHtml}
+                                    />
+                                </div>
                             </div>
                         )
                     }

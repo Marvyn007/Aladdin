@@ -12,6 +12,7 @@ import { useAuth } from '@clerk/nextjs';
 import { SearchEmptyState } from '@/components/common/SearchEmptyState';
 import { JobLoadingState } from '@/components/common/JobLoadingState';
 import { ImageWithRetry } from '@/components/common/ImageWithRetry';
+import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { trackJobInteraction } from '@/lib/actions';
 import { useFilters, jobMatchesFilters, checkJobMatchFields, type MatchField } from '@/contexts/FilterContext';
 
@@ -147,7 +148,7 @@ export function JobList({ onJobClick }: JobListProps) {
         displayedJobs = [...displayedJobs].sort((a, b) => {
             const dir = sorting.dir === 'asc' ? 1 : -1;
             if (sorting.by === 'imported') {
-                return (Number(!!a.isImported) - Number(!!b.isImported)) * dir;
+                return (Number(a.source === 'imported') - Number(b.source === 'imported')) * dir;
             } else {
                 // Time
                 const dateA = new Date(a.original_posted_date || a.posted_at || 0).getTime();
@@ -361,9 +362,28 @@ export function JobList({ onJobClick }: JobListProps) {
                                 }}
                                 className={`card card-interactive ${selectedJob?.id === job.id ? 'selected' : ''}`}
                                 style={{
-                                    padding: '12px',
+                                    padding: '16px',
                                     cursor: 'pointer',
                                     position: 'relative',
+                                    background: 'var(--surface)',
+                                    border: selectedJob?.id === job.id ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                                    borderRadius: '12px',
+                                    transition: 'all 0.2s ease',
+                                    boxShadow: selectedJob?.id === job.id ? '0 0 0 2px var(--accent-muted)' : 'none',
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (selectedJob?.id !== job.id) {
+                                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                                        e.currentTarget.style.borderColor = 'var(--border-hover)';
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (selectedJob?.id !== job.id) {
+                                        e.currentTarget.style.boxShadow = 'none';
+                                        e.currentTarget.style.borderColor = 'var(--border)';
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                    }
                                 }}
                             >
                                 {/* Match Badge - Show which field matched */}
@@ -373,10 +393,10 @@ export function JobList({ onJobClick }: JobListProps) {
                                     </div>
                                 )}
                                 {/* Header with score */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                                     <h3
                                         style={{
-                                            fontSize: '13px',
+                                            fontSize: '15px',
                                             fontWeight: 600,
                                             color: 'var(--text-primary)',
                                             lineHeight: 1.4,
@@ -443,58 +463,28 @@ export function JobList({ onJobClick }: JobListProps) {
 
                                 {/* Company & Logo */}
                                 {(job.company || job.company_logo_url) && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                                        {job.company_logo_url ? (
-                                            <img
-                                                src={job.company_logo_url}
-                                                alt={`${job.company} logo`}
-                                                style={{ width: '16px', height: '16px', borderRadius: '4px', objectFit: 'cover' }}
-                                                onError={(e) => {
-                                                    // Replace with building icon on error immediately
-                                                    e.currentTarget.style.display = 'none';
-                                                    if (e.currentTarget.nextElementSibling) {
-                                                        (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'block';
-                                                    }
-                                                }}
-                                            />
-                                        ) : null}
-                                        {/* Fallback initial icon, hidden by default if trying to load an image */}
-                                        <div
-                                            style={{
-                                                width: '16px',
-                                                height: '16px',
-                                                borderRadius: '4px',
-                                                flexShrink: 0,
-                                                display: job.company_logo_url ? 'none' : 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                backgroundColor: getCompanyColor(job.company),
-                                                color: '#fff',
-                                                fontSize: '10px',
-                                                fontWeight: 'bold'
-                                            }}
-                                        >
-                                            {getCompanyInitial(job.company)}
-                                        </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px', fontWeight: 500 }}>
+                                        <CompanyLogo companyName={job.company || ''} logoUrl={job.company_logo_url} size={18} />
                                         {job.company && <span>{job.company}</span>}
                                     </div>
                                 )}
 
                                 {/* Location & Posted */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
                                     {(job.location_display || job.location) && (
                                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
                                                 <circle cx="12" cy="10" r="3" />
                                             </svg>
-                                            {job.location_display || job.location}
+                                            <span style={{ color: 'var(--text-secondary)' }}>{job.location_display || job.location}</span>
                                         </span>
                                     )}
                                     <span
                                         suppressHydrationWarning
                                         style={{
-                                            color: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 'var(--success)' : 'var(--error)'
+                                            color: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 'var(--success)' : 'var(--text-tertiary)',
+                                            fontWeight: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 500 : 400,
                                         }}
                                         title={job.original_posted_raw ? `Original: ${job.original_posted_raw}` : undefined}
                                     >
