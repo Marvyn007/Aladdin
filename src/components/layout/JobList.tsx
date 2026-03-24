@@ -2,9 +2,9 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useStore, useStoreActions } from '@/store/useStore';
-import type { Job } from '@/types';
+import type { Job, JobStatus } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { Pagination } from './Pagination';
@@ -14,7 +14,7 @@ import { JobLoadingState } from '@/components/common/JobLoadingState';
 import { ImageWithRetry } from '@/components/common/ImageWithRetry';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { trackJobInteraction } from '@/lib/actions';
-import { useFilters, jobMatchesFilters, checkJobMatchFields, type MatchField } from '@/contexts/FilterContext';
+import { useFilters, checkJobMatchFields, type MatchField } from '@/contexts/FilterContext';
 
 const FIELD_LABELS: Record<MatchField, string> = {
     title: 'Title Match',
@@ -24,26 +24,50 @@ const FIELD_LABELS: Record<MatchField, string> = {
     description: 'Description Match'
 };
 
+const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
+
+function getJobPostedTimestamp(job: Job): number | null {
+    const candidate = job.original_posted_date ?? job.posted_at ?? job.fetched_at;
+    if (!candidate) return null;
+    const parsed = Date.parse(candidate);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function matchesStatusFilter(job: Job, filter: JobStatus): boolean {
+    if (filter === 'saved') {
+        return job.status === 'saved';
+    }
+
+    const postedAt = getJobPostedTimestamp(job);
+    if (postedAt === null) return false;
+
+    const ageMs = Date.now() - postedAt;
+    if (filter === 'fresh') {
+        return ageMs <= THIRTY_DAYS_MS;
+    }
+
+    return ageMs > THIRTY_DAYS_MS;
+}
+
 function MatchBadge({ matchedFields }: { matchedFields: MatchField[] }) {
     const primaryField = matchedFields[0];
     const label = FIELD_LABELS[primaryField];
     const allMatches = matchedFields.map(f => FIELD_LABELS[f]).join(', ');
-    
+
     return (
         <div
             title={allMatches}
             style={{
-                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)',
-                color: '#4f46e5',
-                fontSize: '9px',
-                fontWeight: 700,
-                padding: '3px 8px',
-                borderRadius: '12px',
-                border: '1px solid rgba(99, 102, 241, 0.3)',
+                background: 'var(--accent-muted)',
+                color: 'var(--accent)',
+                fontSize: '10px',
+                fontWeight: 600,
+                padding: '4px 8px',
+                borderRadius: '999px',
+                border: '1px solid rgba(var(--accent-rgb), 0.22)',
                 cursor: 'help',
-                letterSpacing: '0.3px',
+                letterSpacing: '0.2px',
                 textTransform: 'uppercase' as const,
-                boxShadow: '0 2px 4px rgba(99, 102, 241, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px'
@@ -60,7 +84,6 @@ function MatchBadge({ matchedFields }: { matchedFields: MatchField[] }) {
 interface JobListProps {
     onJobClick: (job: Job) => void;
 }
-
 
 // Format posted date
 function formatPostedDate(postedAt: string | null): string {
@@ -113,19 +136,20 @@ export function JobList({ onJobClick }: JobListProps) {
     const sorting = useStore(state => state.sorting);
     const jobStatus = useStore(state => state.jobStatus);
     const pagination = useStore(state => state.pagination);
+    const paginationLimit = pagination.limit || 50;
     const selectedJob = useStore(state => state.selectedJob);
     const isLoadingJobs = useStore(state => state.isLoadingJobs);
 
-    const { activeFilters, removeFilter, clearFilters, checkJobMatch } = useFilters();
+    const { activeFilters, removeFilter, clearFilters } = useFilters();
 
     const filteredJobs = useMemo(() => {
         if (activeFilters.length === 0) return jobs;
-        
+
         return jobs.filter(job => {
             const result = checkJobMatchFields(job, activeFilters);
             return result.matches;
         });
-    }, [jobs, activeFilters, checkJobMatch]);
+    }, [jobs, activeFilters]);
 
     const jobMatchResults = useMemo(() => {
         if (activeFilters.length === 0) return new Map<string, MatchField[]>();
@@ -137,30 +161,34 @@ export function JobList({ onJobClick }: JobListProps) {
             }
         });
         return results;
-    }, [jobs, activeFilters, checkJobMatch]);
+    }, [jobs, activeFilters]);
+
+    const statusFilteredJobs = useMemo(() => {
+        const baseJobs = searchMode ? searchResults : filteredJobs;
+        return baseJobs.filter(job => matchesStatusFilter(job, jobStatus));
+    }, [searchMode, searchResults, filteredJobs, jobStatus]);
+
+    const statusAwareCount = statusFilteredJobs.length;
+    const statusTotalPages = Math.ceil(statusAwareCount / paginationLimit);
 
     // Determine which jobs to display
-    let displayedJobs = searchMode ? searchResults : filteredJobs;
+    let displayedJobs = statusFilteredJobs;
 
-    // Apply Client-Side Pagination & Sorting for Search Results
+    // Apply client-side pagination and sorting for search results
     if (searchMode) {
-        // Sort
-        displayedJobs = [...displayedJobs].sort((a, b) => {
+        const sorted = [...statusFilteredJobs].sort((a, b) => {
             const dir = sorting.dir === 'asc' ? 1 : -1;
             if (sorting.by === 'imported') {
                 return (Number(a.source === 'imported') - Number(b.source === 'imported')) * dir;
-            } else {
-                // Time
-                const dateA = new Date(a.original_posted_date || a.posted_at || 0).getTime();
-                const dateB = new Date(b.original_posted_date || b.posted_at || 0).getTime();
-                return (dateA - dateB) * dir;
             }
+            const dateA = new Date(a.original_posted_date || a.posted_at || 0).getTime();
+            const dateB = new Date(b.original_posted_date || b.posted_at || 0).getTime();
+            return (dateA - dateB) * dir;
         });
 
-        // Paginate
-        const start = (pagination.page - 1) * pagination.limit;
-        const end = start + pagination.limit;
-        displayedJobs = displayedJobs.slice(start, end);
+        const start = (pagination.page - 1) * paginationLimit;
+        const end = start + paginationLimit;
+        displayedJobs = sorted.slice(start, end);
     }
 
     const { setPagination, setJobStatus, toggleJobStatus } = useStoreActions();
@@ -183,20 +211,18 @@ export function JobList({ onJobClick }: JobListProps) {
         };
     };
 
-
     return (
         <div className="job-list-container">
             <div
                 style={{
-                    padding: '16px',
+                    padding: '16px 20px',
                     borderBottom: '1px solid var(--border)',
                     background: 'var(--background)',
                     zIndex: 10,
                 }}
             >
-                {/* Title Row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: activeFilters.length > 0 ? '12px' : 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {isSignedIn ? (
                             <div
                                 style={{
@@ -227,32 +253,32 @@ export function JobList({ onJobClick }: JobListProps) {
                         <span
                             style={{
                                 fontSize: '12px',
-                                background: 'var(--surface)',
-                                color: 'var(--text-secondary)',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
+                                background: 'var(--background-secondary)',
+                                color: 'var(--text-tertiary)',
+                                padding: '3px 9px',
+                                borderRadius: '999px',
                                 border: '1px solid var(--border)',
                             }}
                         >
-                            {searchMode ? pagination.total : (activeFilters.length > 0 ? filteredJobs.length : pagination.total)}
+                            {statusAwareCount}
                         </span>
                     </div>
                 </div>
 
-                {/* Filter Pills Row - Below Fresh/Saved/Archived */}
                 {activeFilters.length > 0 && (
-                    <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '6px', 
-                        flexWrap: 'wrap',
-                        marginBottom: '12px',
-                        padding: '8px',
-                        background: 'var(--surface)',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border)'
-                    }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                            padding: '10px',
+                            background: 'var(--background-secondary)',
+                            borderRadius: '10px',
+                            border: '1px solid var(--border)'
+                        }}
+                    >
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 600 }}>
                             Search:
                         </span>
                         {activeFilters.map(filter => (
@@ -262,11 +288,11 @@ export function JobList({ onJobClick }: JobListProps) {
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     fontSize: '11px',
-                                    background: 'rgba(59, 130, 246, 0.1)',
-                                    color: '#3b82f6',
-                                    border: '1px solid rgba(59, 130, 246, 0.25)',
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
+                                    background: 'var(--surface)',
+                                    color: 'var(--text-secondary)',
+                                    border: '1px solid var(--border)',
+                                    padding: '3px 9px',
+                                    borderRadius: '999px',
                                     fontWeight: 500
                                 }}
                             >
@@ -282,7 +308,8 @@ export function JobList({ onJobClick }: JobListProps) {
                                         padding: 0,
                                         display: 'flex',
                                         fontSize: '12px',
-                                        fontWeight: 700
+                                        fontWeight: 700,
+                                        lineHeight: 1,
                                     }}
                                 >
                                     ×
@@ -297,7 +324,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                 background: 'transparent',
                                 border: 'none',
                                 cursor: 'pointer',
-                                fontWeight: 500,
+                                fontWeight: 600,
                                 marginLeft: 'auto'
                             }}
                         >
@@ -311,18 +338,16 @@ export function JobList({ onJobClick }: JobListProps) {
                 style={{
                     flex: 1,
                     overflowY: 'auto',
-                    overflowX: 'hidden', // Prevent horizontal scroll
-                    padding: '12px', // Compact padding
+                    overflowX: 'hidden',
+                    padding: '12px',
                 }}
             >
                 {isLoadingJobs ? (
                     <JobLoadingState />
                 ) : displayedJobs.length === 0 ? (
-
                     searchMode ? (
                         <SearchEmptyState />
                     ) : (
-                        // Empty state for regular list
                         <div
                             style={{
                                 display: 'flex',
@@ -343,7 +368,6 @@ export function JobList({ onJobClick }: JobListProps) {
                         </div>
                     )
                 ) : (
-                    // Job cards
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px' }}>
                         {displayedJobs.map((job) => (
                             <div
@@ -352,55 +376,39 @@ export function JobList({ onJobClick }: JobListProps) {
                                     onJobClick(job);
                                     trackJobInteraction(job.id, 'view', { source: 'job_list', sort: sorting.by });
                                 }}
-                                className={`card card-interactive ${selectedJob?.id === job.id ? 'selected' : ''}`}
+                                className={`card card-interactive job-listing-card ${selectedJob?.id === job.id ? 'selected' : ''}`}
                                 style={{
-                                    padding: '16px',
+                                    padding: '14px 14px 12px',
                                     cursor: 'pointer',
                                     position: 'relative',
                                     background: 'var(--surface)',
-                                    border: selectedJob?.id === job.id ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                                    border: selectedJob?.id === job.id ? '1px solid rgba(var(--accent-rgb), 0.35)' : '1px solid var(--border)',
                                     borderRadius: '12px',
-                                    transition: 'all 0.2s ease',
-                                    boxShadow: selectedJob?.id === job.id ? '0 0 0 2px var(--accent-muted)' : 'none',
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (selectedJob?.id !== job.id) {
-                                        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
-                                        e.currentTarget.style.borderColor = 'var(--border-hover)';
-                                        e.currentTarget.style.transform = 'translateY(-1px)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (selectedJob?.id !== job.id) {
-                                        e.currentTarget.style.boxShadow = 'none';
-                                        e.currentTarget.style.borderColor = 'var(--border)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                    }
+                                    transition: 'all 0.18s ease',
+                                    boxShadow: selectedJob?.id === job.id ? '0 0 0 2px rgba(var(--accent-rgb), 0.15)' : 'none',
                                 }}
                             >
-                                {/* Match Badge - Show which field matched */}
                                 {activeFilters.length > 0 && jobMatchResults.get(job.id) && (
                                     <div style={{ marginBottom: '8px' }}>
                                         <MatchBadge matchedFields={jobMatchResults.get(job.id)!} />
                                     </div>
                                 )}
-                                {/* Header with score */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '9px' }}>
                                     <h3
                                         style={{
                                             fontSize: '15px',
                                             fontWeight: 600,
                                             color: 'var(--text-primary)',
-                                            lineHeight: 1.4,
+                                            lineHeight: 1.35,
                                             flex: 1,
-                                            marginRight: '12px',
+                                            marginRight: '10px',
                                         }}
                                         className="truncate-2"
                                     >
                                         {job.title}
                                     </h3>
 
-                                    {/* Action Buttons (Save) & Profile Image */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
                                         {job.postedBy && (
                                             <div
@@ -438,13 +446,15 @@ export function JobList({ onJobClick }: JobListProps) {
                                                     cursor: 'pointer',
                                                     color: job.status === 'saved' ? 'var(--accent)' : 'var(--text-tertiary)',
                                                     padding: '4px',
+                                                    borderRadius: '999px',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
+                                                    transition: 'color var(--transition-fast)',
                                                 }}
-                                                title={job.status === 'saved' ? "Unsave" : "Save Job"}
+                                                title={job.status === 'saved' ? 'Unsave' : 'Save Job'}
                                             >
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill={job.status === 'saved' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill={job.status === 'saved' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
                                                 </svg>
                                             </button>
@@ -452,17 +462,14 @@ export function JobList({ onJobClick }: JobListProps) {
                                     </div>
                                 </div>
 
-
-                                {/* Company & Logo */}
                                 {(job.company || job.company_logo_url) && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px', fontWeight: 500 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 500 }}>
                                         <CompanyLogo companyName={job.company || ''} logoUrl={job.company_logo_url} size={18} />
                                         {job.company && <span>{job.company}</span>}
                                     </div>
                                 )}
 
-                                {/* Location & Posted */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--text-tertiary)', flexWrap: 'wrap' }}>
                                     {(job.location_display || job.location) && (
                                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -485,14 +492,13 @@ export function JobList({ onJobClick }: JobListProps) {
                                             : formatPostedDate(job.original_posted_date || job.posted_at)}
                                     </span>
                                 </div>
-
                             </div>
                         ))}
 
                         <Pagination
                             currentPage={pagination.page}
-                            totalPages={searchMode ? pagination.totalPages : (activeFilters.length > 0 ? Math.ceil(filteredJobs.length / pagination.limit) : pagination.totalPages)}
-                            totalItems={searchMode ? pagination.total : (activeFilters.length > 0 ? filteredJobs.length : pagination.total)}
+                            totalPages={statusTotalPages}
+                            totalItems={statusAwareCount}
                             limit={pagination.limit}
                             onPageChange={(page) => setPagination({ page })}
                         />
@@ -502,3 +508,4 @@ export function JobList({ onJobClick }: JobListProps) {
         </div>
     );
 }
+
