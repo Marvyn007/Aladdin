@@ -27,8 +27,8 @@ User wants the job board to look like simplify.jobs (job cards + job details) an
 **Goal:** Add answer history and versioning to onboarding, allow users to edit and view their response history
 **Requirements**: TBD
 **Depends on:** Phase 1
-**Plans:** 2 plans
+**Status:** in_progress
 
 Plans:
-- [ ] 02-01-PLAN.md — Add answer history schema and DB layer functions
+- [x] 02-01-PLAN.md — Add answer history schema and DB layer functions
 - [ ] 02-02-PLAN.md — Integrate versioning into save flow and UI timestamps

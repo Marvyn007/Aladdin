@@ -1,24 +1,29 @@
 # Project State
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-23
 
 ## Overview
 Job board application with AI-powered features for job searching, application tracking, resume generation, and cover letter creation.
 
 ## Current Phase
-- Phase 1: Frontend UI Redesign - Implementation in progress
+- Phase 2: Build onboarding questionnaire and per-question preference storage - Plan 01 complete
 
 ## Progress
 - Phase 1: UI Design Contract complete (6/6 dimensions passed)
 - Phase 1: Implementation started (JobList, JobDetail, globals.css updated)
+- Phase 2: Onboarding answer history schema and functions implemented (2/2 tasks complete)
 
 ## Recent Activity
 - 2026-03-23: UI-SPEC.md created and verified (commit 7c73ee4)
 - 2026-03-23: UI implementation started - enhanced job cards, job detail styling
-- 2026-03-24: Completed quick task 260323-r0r - job list status filters + styling
+- 2026-03-23: Plan 02-01 complete - OnboardingAnswerHistory model, getAnswerHistory, saveAnswerVersion functions added
 
-### Quick Tasks Completed
+## Accumulated Context
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260323-r0r | small changes: on the top bar on job listings: make the 'fresh', 'saved' and 'archived' selector be blue. remove the box around the save button on job listing (the bookmark icon). when the user is on saved section (from the selector) ONLY show the job that is marked as 'saved'. all the jobs that are older than 1 month (30 days) should be visible when the user selects 'archived'. all the jobs that are posted before 1 month (30 days) should be visible when the user is on 'fresh' section. test before and after. | 2026-03-24 | 0b567b9 | [260323-r0r-small-changes-on-the-top-bar-on-job-list](./quick/260323-r0r-small-changes-on-the-top-bar-on-job-list/) |
+### Roadmap Evolution
+- Phase 2 added: Build onboarding questionnaire and per-question preference storage
+- Phase 2 Plan 01: Answer history schema and functions complete
+
+### Decisions Made
+- Used existing multi-DB abstraction pattern (postgres/supabase/sqlite) for history functions
+- Auto-incrementing version numbers for answer versioning
