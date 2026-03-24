@@ -164,6 +164,24 @@ export function JobList({ onJobClick }: JobListProps) {
     }
 
     const { setPagination, setJobStatus, toggleJobStatus } = useStoreActions();
+    const getStatusTabStyle = (status: JobStatus) => {
+        const isActive = jobStatus === status;
+        return {
+            padding: '6px 14px',
+            fontSize: '12px',
+            fontWeight: isActive ? 600 : 500,
+            borderRadius: 'var(--radius-lg)',
+            background: isActive ? 'var(--accent)' : 'transparent',
+            color: isActive ? '#ffffff' : 'var(--accent)',
+            border: 'none',
+            boxShadow: isActive ? '0 8px 18px rgba(var(--accent-rgb), 0.25)' : '0 0 0 1px var(--accent-muted)',
+            cursor: 'pointer',
+            transition: 'all var(--transition-fast)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+        };
+    };
 
 
     return (
@@ -180,50 +198,24 @@ export function JobList({ onJobClick }: JobListProps) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {isSignedIn ? (
-                            <div style={{ display: 'flex', gap: '4px', background: 'var(--surface)', padding: '2px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                                <button
-                                    onClick={() => setJobStatus('fresh')}
-                                    style={{
-                                        padding: '4px 8px',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        borderRadius: '6px',
-                                        background: jobStatus === 'fresh' ? 'var(--accent)' : 'transparent',
-                                        color: jobStatus === 'fresh' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                    }}
-                                >
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    gap: '6px',
+                                    padding: '4px',
+                                    borderRadius: 'var(--radius-lg)',
+                                    background: 'var(--surface)',
+                                    border: '1px solid var(--border)',
+                                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                                }}
+                            >
+                                <button onClick={() => setJobStatus('fresh')} style={getStatusTabStyle('fresh')}>
                                     Fresh
                                 </button>
-                                <button
-                                    onClick={() => setJobStatus('saved')}
-                                    style={{
-                                        padding: '4px 8px',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        borderRadius: '6px',
-                                        background: jobStatus === 'saved' ? 'var(--accent)' : 'transparent',
-                                        color: jobStatus === 'saved' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                    }}
-                                >
+                                <button onClick={() => setJobStatus('saved')} style={getStatusTabStyle('saved')}>
                                     Saved
                                 </button>
-                                <button
-                                    onClick={() => setJobStatus('archived')}
-                                    style={{
-                                        padding: '4px 8px',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        borderRadius: '6px',
-                                        background: jobStatus === 'archived' ? 'var(--accent)' : 'transparent',
-                                        color: jobStatus === 'archived' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                    }}
-                                >
+                                <button onClick={() => setJobStatus('archived')} style={getStatusTabStyle('archived')}>
                                     Archived
                                 </button>
                             </div>
