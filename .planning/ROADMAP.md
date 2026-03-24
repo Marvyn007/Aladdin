@@ -31,4 +31,4 @@ User wants the job board to look like simplify.jobs (job cards + job details) an
 
 Plans:
 - [x] 02-01-PLAN.md — Add answer history schema and DB layer functions
-- [ ] 02-02-PLAN.md — Integrate versioning into save flow and UI timestamps
+- [x] 02-02-PLAN.md — Integrate versioning into save flow and UI timestamps
