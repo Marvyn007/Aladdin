@@ -375,7 +375,7 @@ async function saveSingleAnswer(userId: string, question: OnboardingQuestion, va
 
   const dbType = resolveDbType();
 
-  if (dbType === 'postgres') {
+    if (dbType === 'postgres') {
     await executeWithUser(userId, async (client) => {
       await client.query(
         `
@@ -406,6 +406,8 @@ async function saveSingleAnswer(userId: string, question: OnboardingQuestion, va
         ]
       );
     });
+    // Auto-create version history
+    await saveAnswerVersion(userId, question, normalizedValue, 'user_update');
     return;
   }
 
@@ -428,6 +430,8 @@ async function saveSingleAnswer(userId: string, question: OnboardingQuestion, va
     );
 
     if (error) throw error;
+    // Auto-create version history
+    await saveAnswerVersion(userId, question, normalizedValue, 'user_update');
     return;
   }
 
@@ -459,6 +463,8 @@ async function saveSingleAnswer(userId: string, question: OnboardingQuestion, va
     question.order,
     'v1'
   );
+  // Auto-create version history
+  await saveAnswerVersion(userId, question, normalizedValue, 'user_update');
 }
 
 async function upsertState(userId: string, currentStep: number, complete: boolean): Promise<void> {
@@ -704,7 +710,7 @@ export async function saveAnswerVersion(
     if (error) throw error;
     return;
   }
-  
+
   const db = getSQLiteDB();
   db.prepare(
     `INSERT INTO user_onboarding_answer_history 
