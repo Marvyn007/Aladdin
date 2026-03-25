@@ -36,6 +36,7 @@ vi.mock('@/lib/preference-scoring', () => ({
   computePreferenceScore: vi.fn(),
 }));
 
+import { NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getAllPublicJobs, getTotalPublicJobsCount, getLastJobIngestionTime } from '@/lib/db';
 import { getOnboardingSnapshot } from '@/lib/onboarding-db';
@@ -88,10 +89,10 @@ function makeIncompleteSnapshot(): OnboardingSnapshot {
   };
 }
 
-function makeRequest(params: Record<string, string>): Request {
+function makeRequest(params: Record<string, string>): NextRequest {
   const url = new URL('http://localhost:3000/api/jobs');
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  return new Request(url.toString());
+  return new NextRequest(url.toString());
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
