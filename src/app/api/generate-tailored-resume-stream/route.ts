@@ -17,6 +17,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getDefaultResume, getAllLinkedInProfiles } from "@/lib/db";
 import { generateTailoredResume } from "@/lib/resume-generation/pipeline";
 import { getS3Client } from "@/lib/s3";
+import { toPlainText } from "@/lib/plain-text";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -42,8 +43,9 @@ function createSSEStream(req: Request) {
         // ── Parse request body ─────────────────────────────────────
         const body = await req.json();
         const { jobDescription, linkedinData, linkedinProfileUrl } = body;
+        const plainJobDescription = toPlainText(jobDescription);
 
-        if (!jobDescription || jobDescription.trim().length < 20) {
+        if (!plainJobDescription || plainJobDescription.trim().length < 20) {
           sendEvent("error", {
             message: "Job description is required (min 20 characters).",
           });
@@ -119,7 +121,7 @@ function createSSEStream(req: Request) {
           const result = await generateTailoredResume({
             resumePdf: resumeBuffer,
             linkedinPdf: linkedinPdfBuffer,
-            jobDescription,
+            jobDescription: plainJobDescription,
             linkedinData,
             onProgress: (event, data) => sendEvent(event, data),
           });

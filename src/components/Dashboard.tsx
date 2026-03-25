@@ -29,6 +29,7 @@ import { useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import type { Job, Application, ApplicationColumn } from '@/types';
+import { toPlainText } from '@/lib/plain-text';
 import {
     getCachedApplications,
     setCachedApplications,
@@ -332,6 +333,15 @@ export function Dashboard({
     defaultJobMode = 'list',
     selectedCompany
 }: DashboardProps) {
+    const getPlainTextJobDescription = (job: Job | null | undefined): string =>
+        toPlainText(
+            job?.job_description_plain ||
+            job?.raw_text_summary ||
+            job?.normalized_text ||
+            job?.raw_description_html ||
+            ((job as Job & { rawDescriptionHtml?: string } | null | undefined)?.rawDescriptionHtml ?? '')
+        );
+
     const {
         jobs,
         setJobs,
@@ -812,9 +822,10 @@ export function Dashboard({
 
         const job = jobs.find(j => j.id === jobId) || (selectedJob?.id === jobId ? selectedJob : null);
         if (!job) return;
+        const plainDescription = getPlainTextJobDescription(job);
 
         if (queue) {
-            handleConfirmGenerateCoverLetter(jobId, '', true);
+            handleConfirmGenerateCoverLetter(jobId, plainDescription, true);
         } else {
             setCoverLetterSetupModal({
                 isOpen: true,
@@ -822,13 +833,15 @@ export function Dashboard({
                 jobTitle: job.title,
                 company: job.company,
                 jobUrl: job.source_url,
-                initialDescription: job.raw_text_summary || job.normalized_text || ''
+                initialDescription: plainDescription
             });
         }
     };
 
     const handleConfirmGenerateCoverLetter = async (jobId: string, jobDescription: string, queue: boolean = false) => {
         if (!isSignedIn) return;
+        const job = jobs.find(j => j.id === jobId) || (selectedJob?.id === jobId ? selectedJob : null);
+        const normalizedJobDescription = toPlainText(jobDescription || getPlainTextJobDescription(job));
 
         if (queue) {
             try {
@@ -838,7 +851,7 @@ export function Dashboard({
                     body: JSON.stringify({
                         job_id: jobId,
                         queue: true,
-                        job_description: jobDescription
+                        job_description: normalizedJobDescription
                     }),
                 });
                 const data = await res.json();
@@ -853,8 +866,6 @@ export function Dashboard({
             }
             return;
         }
-
-        const job = jobs.find(j => j.id === jobId) || (selectedJob?.id === jobId ? selectedJob : null);
 
         setCoverLetterModal(prev => ({
             ...prev,
@@ -888,7 +899,7 @@ export function Dashboard({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     job_id: jobId,
-                    job_description: jobDescription
+                    job_description: normalizedJobDescription
                 }),
             });
 
@@ -1020,7 +1031,7 @@ export function Dashboard({
             jobId,
             jobTitle: job.title,
             company: job.company,
-            jobDescription: job.raw_text_summary || job.normalized_text || '',
+            jobDescription: getPlainTextJobDescription(job),
             jobUrl: job.source_url || null,
             linkedinProfileUrl: null,
             linkedinData: null,
@@ -1199,7 +1210,7 @@ export function Dashboard({
                     <Link
                         href="/application-tracker"
                         className={`view-tab ${isTracker ? 'active' : ''}`}
-                        style={{ position: 'relative', opacity: !isSignedIn ? 0.6 : 1, filter: !isSignedIn ? 'blur(0.5px)' : 'none' }}
+                        style={{ position: 'relative', opacity: !isSignedIn ? 0.65 : 1 }}
                     >
                         Application Tracker {isSignedIn && `(${applications.length})`}
                         {!isSignedIn && <span style={{ marginLeft: 6, opacity: 0.5 }}>🔒</span>}
@@ -1207,10 +1218,10 @@ export function Dashboard({
                     <Link
                         href="/jobs-map"
                         className={`view-tab ${isJobBoard && isMapMode ? 'active' : ''}`}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: !isSignedIn ? 0.6 : 1, filter: !isSignedIn ? 'blur(0.5px)' : 'none' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: !isSignedIn ? 0.65 : 1 }}
                     >
                         <MapIcon size={14} />
-                        View Jobs on Map
+                        Jobs Map
                         {!isSignedIn && <span style={{ marginLeft: 6, opacity: 0.5 }}>🔒</span>}
                     </Link>
                     <Link

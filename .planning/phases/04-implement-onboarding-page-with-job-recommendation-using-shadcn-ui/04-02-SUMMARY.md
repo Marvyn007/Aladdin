@@ -152,6 +152,24 @@ None — all components have real implementations wired to real API endpoints. T
 - Task 3 is a human-verify checkpoint — visual/functional review of the wizard at http://localhost:3000/onboarding
 - Plan 04-03 can build the recommendation panel on top of the wizard foundation
 
+## Self-Check: PASSED
+
+Files exist:
+- src/app/onboarding/layout.tsx: FOUND
+- src/app/onboarding/page.tsx: FOUND
+- src/components/onboarding/OnboardingWizard.tsx: FOUND
+- src/components/onboarding/StepOne.tsx: FOUND
+- src/components/onboarding/StepTwo.tsx: FOUND
+- src/components/onboarding/QuestionMultiSelect.tsx: FOUND
+- src/components/onboarding/QuestionSingleSelect.tsx: FOUND
+- src/components/onboarding/QuestionFileUpload.tsx: FOUND
+- src/components/onboarding/QuestionText.tsx: FOUND
+- src/app/api/onboarding/route.ts: FOUND
+
+Commits exist:
+- f0b0733: feat(04-02): create onboarding layout, page, wizard state machine, and step containers — FOUND
+- 22b8522: feat(04-02): create question renderer components (multi-select, single-select, file upload, text) — FOUND
+
 ---
 *Phase: 04-implement-onboarding-page-with-job-recommendation-using-shadcn-ui*
 *Completed: 2026-03-25*

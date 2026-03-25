@@ -11,6 +11,14 @@ import type { DiscoveryCandidate } from './discovery-candidates'
 export function createWorkerDb(prisma: PrismaClient): WorkerDb {
   return {
     async upsertJob(job: NormalizedJob): Promise<{ isNew: boolean }> {
+      const { validateJobDescription } = await import('../job-validation')
+      const validation = validateJobDescription(job.jobDescriptionPlain || '')
+      if (!validation.valid) {
+        // Silently drop invalid scraped jobs to avoid polluting logs with exceptions, 
+        // while preventing them from entering the database.
+        return { isNew: false }
+      }
+
       // Primary dedupe: source + externalId
       // For now source/externalId are nullable in the schema (Phase 6 makes them non-nullable).
       // Use raw SQL with ON CONFLICT to handle atomically.
@@ -57,6 +65,37 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         job.applyUrl,
         job.expiresAt
       )
+
+      if (job.company) {
+        try {
+          const companyExists = await prisma.company.findUnique({ where: { name: job.company } })
+          if (!companyExists || !companyExists.logoFetched) {
+            const logoRes = await fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(job.company)}`)
+            if (logoRes.ok) {
+              const suggestions = await logoRes.json()
+              const bestMatch = suggestions.length > 0 ? suggestions[0] : null
+              const finalLogoUrl = bestMatch?.logo || (bestMatch?.domain ? `https://logo.clearbit.com/${bestMatch.domain}` : null)
+              
+              await prisma.company.upsert({
+                where: { name: job.company },
+                create: {
+                  name: job.company,
+                  domain: bestMatch?.domain || null,
+                  logoUrl: finalLogoUrl,
+                  logoFetched: true,
+                },
+                update: {
+                  ...(bestMatch?.domain ? { domain: bestMatch.domain } : {}),
+                  ...(finalLogoUrl ? { logoUrl: finalLogoUrl } : {}),
+                  logoFetched: true,
+                }
+              })
+            }
+          }
+        } catch (e) {
+          console.error(`[worker-db] Failed to fetch logo for ${job.company}`, e)
+        }
+      }
 
       return { isNew: result.length > 0 }
     },

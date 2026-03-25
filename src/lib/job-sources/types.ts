@@ -7,7 +7,7 @@
 
 // ── Source Adapter Interface ──
 
-export type SourceType = 'greenhouse' | 'lever' | 'themuse' | 'arbeitnow' | 'himalayas' | 'imported'
+export type SourceType = 'greenhouse' | 'lever' | 'themuse' | 'arbeitnow' | 'himalayas' | 'workday' | 'imported'
 
 export type PollTarget =
   | { type: 'company'; slug: string }
@@ -65,6 +65,7 @@ export interface SourceScheduleConfig {
 export const SOURCE_SCHEDULES: SourceScheduleConfig[] = [
   { source: 'greenhouse', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
   { source: 'lever', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
+  { source: 'workday', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
   { source: 'themuse', type: 'bulk', intervalMs: 60 * 60 * 1000, priority: 2 },
   { source: 'arbeitnow', type: 'bulk', intervalMs: 60 * 60 * 1000, priority: 2 },
   { source: 'himalayas', type: 'bulk', intervalMs: 24 * 60 * 60 * 1000, priority: 3 },

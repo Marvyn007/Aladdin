@@ -10,6 +10,7 @@ import { LeverAdapter } from './adapters/lever'
 import { TheMuseAdapter } from './adapters/themuse'
 import { ArbeitnowAdapter } from './adapters/arbeitnow'
 import { HimalayasAdapter } from './adapters/himalayas'
+import { WorkdayAdapter } from './adapters/workday'
 
 // ── Adapter Registry ──
 
@@ -38,6 +39,9 @@ export function resolveAdapter(source: SourceName): SourceAdapter {
       break
     case 'himalayas':
       adapter = new HimalayasAdapter()
+      break
+    case 'workday':
+      adapter = new WorkdayAdapter()
       break
     default:
       throw new Error(`Unknown source adapter: "${source}"`)

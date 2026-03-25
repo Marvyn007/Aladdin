@@ -1,7 +1,7 @@
 # Privacy Policy & Terms of Service — Design Spec
 
 **Date:** 2026-03-19
-**Product:** Aladdin (job hunting platform)
+**Product:** Aladdin - the ultimate job application workflow
 **Status:** Draft (open items must be resolved before publishing)
 
 ---
@@ -15,7 +15,7 @@ Two static Next.js pages providing legal coverage for Aladdin. Each document use
 ## Product Context
 
 - **Name:** Aladdin
-- **Type:** AI-powered job hunting platform (AI matching/tailoring features are currently active for job matching; cover letter generation is planned)
+- **Type:** AI-powered job application workflow platform (AI tailoring features are currently active for job matching; cover letter generation is planned)
 - **Users:** Job seekers, primarily US-based, open worldwide
 - **Pricing:** Freemium or fully premium (Stripe integration planned, not yet live)
 - **Age requirement:** 13+

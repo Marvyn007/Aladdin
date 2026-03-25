@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { JobEditModal } from '@/components/modals/JobEditModal';
-import { useStore, useStoreActions } from '@/store/useStore';
+import { useStoreActions } from '@/store/useStore';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -142,7 +142,7 @@ function ReputationCard({ targetUser, currentUserId, onVoteSuccess }: VoteContro
                 setVotes(data.votes);
                 if (onVoteSuccess) onVoteSuccess();
             }
-        } catch (err) {
+        } catch {
             setVotes(oldVotes);
             setUserVote(oldVote);
         } finally {
@@ -301,62 +301,63 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
             <>
                 <style dangerouslySetInnerHTML={{ __html: `
                     .job-description-html {
-                        color: #3f3f3f;
-                        line-height: 1.75;
+                        color: var(--text-secondary);
+                        line-height: 1.65;
                         font-size: 14px;
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        font-family: var(--font-inter), "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                         word-wrap: break-word;
                         max-width: 100%;
                     }
                     .job-description-html h1, .job-description-html h2, .job-description-html h3, .job-description-html h4, .job-description-html h5, .job-description-html h6 {
-                        color: #1a1a1a;
+                        color: var(--text-primary);
                         font-weight: 600;
                         margin-top: 1.75em;
                         margin-bottom: 0.6em;
-                        line-height: 1.4;
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        line-height: 1.35;
+                        letter-spacing: -0.01em;
                     }
-                    .job-description-html h1 { font-size: 1.4em; }
-                    .job-description-html h2 { font-size: 1.25em; }
-                    .job-description-html h3 { font-size: 1.1em; }
+                    .job-description-html h1 { font-size: 1.45em; }
+                    .job-description-html h2 { font-size: 1.3em; }
+                    .job-description-html h3 { font-size: 1.12em; }
                     .job-description-html p {
-                        margin-bottom: 1.1em;
-                        line-height: 1.75;
+                        margin-bottom: 1em;
+                        line-height: 1.65;
                     }
                     .job-description-html ul, .job-description-html ol {
-                        padding-left: 1.5em;
-                        margin-bottom: 1.2em;
+                        padding-left: 1.2em;
+                        margin-bottom: 1.05em;
                         margin-top: 0.5em;
                     }
                     .job-description-html li {
-                        margin-bottom: 0.5em;
-                        line-height: 1.7;
+                        margin-bottom: 0.45em;
+                        line-height: 1.6;
                     }
                     .job-description-html ul { list-style-type: disc; }
                     .job-description-html ol { list-style-type: decimal; }
                     .job-description-html a {
-                        color: #0a66c2;
+                        color: var(--accent);
                         text-decoration: none;
+                        font-weight: 500;
                     }
                     .job-description-html a:hover {
                         text-decoration: underline;
                     }
                     .job-description-html strong, .job-description-html b {
-                        color: #1a1a1a;
+                        color: var(--text-primary);
                         font-weight: 600;
                     }
                     .job-description-html blockquote {
-                        border-left: 3px solid #e0e0e0;
+                        border-left: 3px solid var(--border);
                         padding-left: 1em;
                         margin-left: 0;
-                        color: #555;
+                        color: var(--text-tertiary);
                         font-style: italic;
                     }
                     .job-description-html code {
-                        background: #f5f5f5;
+                        background: var(--background-secondary);
                         padding: 2px 6px;
                         border-radius: 4px;
-                        font-family: "SF Mono", Monaco, monospace;
+                        font-family: "SFMono-Regular", Consolas, Monaco, monospace;
                         font-size: 0.9em;
                     }
                 ` }} />
@@ -424,11 +425,11 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
                     key={`text-${blocks.length}`}
                     style={{
                         marginBottom: '16px',
-                        lineHeight: '1.75',
-                        fontSize: '14px',
-                        color: '#3f3f3f',
+                        lineHeight: '1.7',
+                        fontSize: '15px',
+                        color: 'var(--text-secondary)',
                         whiteSpace: 'pre-wrap',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        fontFamily: 'var(--font-inter), "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                     }}
                 >
                     {enhanceText(currentTextBuffer.join('\n'))}
@@ -448,7 +449,7 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
                         marginBottom: '16px',
                         paddingLeft: '24px',
                         listStyleType: 'disc',
-                        color: '#3f3f3f'
+                        color: 'var(--text-secondary)'
                     }}
                 >
                     {currentListBuffer.map((item, i) => (
@@ -456,13 +457,13 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
                             key={i}
                             style={{
                                 marginBottom: '8px',
-                                lineHeight: '1.7',
-                                fontSize: '14px',
+                                lineHeight: '1.65',
+                                fontSize: '15px',
                                 paddingLeft: '4px',
-                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                fontFamily: 'var(--font-inter), "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                             }}
                         >
-                            <span style={{ color: '#1a1a1a' }}>{enhanceText(item)}</span>
+                            <span style={{ color: 'var(--text-primary)' }}>{enhanceText(item)}</span>
                         </li>
                     ))}
                 </ul>
@@ -482,7 +483,7 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
         }
 
         // Check for bullets
-        const bulletMatch = trimmed.match(/^[-*•]\s+(.*)/);
+        const bulletMatch = trimmed.match(/^[-*\u2022]\s+(.*)/);
 
         if (bulletMatch) {
             flushText();
@@ -517,9 +518,9 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
                         fontWeight: 600,
                         marginTop: '28px',
                         marginBottom: '12px',
-                        color: '#1a1a1a',
+                        color: 'var(--text-primary)',
                         lineHeight: 1.4,
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        fontFamily: 'var(--font-inter), "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                     }}
                 >
                     {enhanceText(trimmed)}
@@ -578,18 +579,6 @@ export function JobDetail({
             .catch(err => console.error("Error checking for tailored resume:", err));
         return () => { mounted = false; };
     }, [job?.id]);
-
-    // Temporary debug log – remove after validation
-    if (process.env.NODE_ENV === 'development' && job) {
-        console.log('Edit check:', {
-            currentUserId,
-            'job.posted_by_user_id': job.posted_by_user_id,
-            'job.postedByUserId': job.postedByUserId,
-            'job.postedBy?.id': job.postedBy?.id,
-            resolved: jobPosterId,
-            match: currentUserId === jobPosterId,
-        });
-    }
 
     const canEdit = Boolean(
         currentUserId && jobPosterId && String(currentUserId) === String(jobPosterId)
@@ -714,12 +703,10 @@ export function JobDetail({
         );
     }
 
-    // Helper for disabled visual style
-    const disabledStyle = !isAuthenticated ? { opacity: 0.6, cursor: 'not-allowed' } : {};
-    // Actually we want cursor to be pointer to allow click for modal, but look disabled
+    // Auth-gated actions should still be clickable so we can trigger the auth flow.
     const gatedStyle = !isAuthenticated ? { opacity: 0.6, position: 'relative' as const } : {};
     const gatedIcon = !isAuthenticated && (
-        <span style={{ position: 'absolute', top: -5, right: -5, fontSize: 10 }}>🔒</span>
+        <span style={{ position: 'absolute', top: -7, right: -7, fontSize: 9, lineHeight: 1, fontWeight: 700 }}>LOCK</span>
     );
 
     return (
@@ -736,19 +723,19 @@ export function JobDetail({
                 </button>
             )}
 
-            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            <div className="job-detail-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {/* Header Info (Static) */}
                 <div
                     style={{
-                        padding: '20px 20px 8px 20px',
-                        background: 'var(--background-secondary)',
+                        padding: '24px 24px 10px',
+                        background: 'var(--background)',
                     }}
                 >
                     {/* Title and Score */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div style={{ flex: 1, marginRight: '20px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, lineHeight: 1.4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                <h2 style={{ fontSize: '28px', fontWeight: 700, margin: 0, lineHeight: 1.18, letterSpacing: '-0.02em' }}>
                                     {job.title}
                                 </h2>
                             </div>
@@ -760,7 +747,7 @@ export function JobDetail({
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: '8px',
-                                        marginBottom: '8px',
+                                        marginBottom: '6px',
                                         textDecoration: 'none',
                                         cursor: 'pointer',
                                         width: 'fit-content',
@@ -769,7 +756,7 @@ export function JobDetail({
                                 >
                                     <CompanyLogo companyName={job.company || ''} logoUrl={job.company_logo_url} size={20} />
                                     {job.company && (
-                                        <p style={{ fontSize: '16px', color: 'var(--text-secondary)', margin: 0 }}>
+                                        <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text-secondary)', margin: 0 }}>
                                             {job.company}
                                         </p>
                                     )}
@@ -784,12 +771,12 @@ export function JobDetail({
                     </div>
 
                     {/* Meta info */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '4px' }}>
                         {/* Poster Info */}
 
 
                         {(job.location_display || job.location) && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '13px' }}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
                                     <circle cx="12" cy="10" r="3" />
@@ -798,7 +785,7 @@ export function JobDetail({
                             </div>
                         )}
                         <div
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'help' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'help', fontSize: '13px' }}
                             title={job.original_posted_raw ? `Original: ${job.original_posted_raw} (${job.original_posted_source || 'unknown'})` : undefined}
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 'var(--success)' : 'var(--error)' }}>
@@ -816,17 +803,17 @@ export function JobDetail({
 
                 {/* Action Buttons (Sticky) */}
                 <div
+                    className="job-detail-action-bar"
                     style={{
-                        padding: '12px 20px 20px 20px',
+                        padding: '10px 24px 14px',
                         borderBottom: '1px solid var(--border)',
-                        background: 'var(--background-secondary)',
                         position: 'sticky',
                         top: 0,
                         zIndex: 10,
                     }}
                 >
                     {/* Action buttons */}
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <div className="action-buttons" style={{ gap: '10px' }}>
                         <a
                             href={job.source_url}
                             target="_blank"
@@ -853,7 +840,7 @@ export function JobDetail({
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill={job.status === 'saved' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
                                 </svg>
-                                {job.status === 'saved' ? 'Saved' : 'Save'}
+                                {job.status === 'saved' ? 'Saved Job' : 'Save Job'}
                             </button>
                         )}
 
@@ -959,7 +946,7 @@ export function JobDetail({
                                         <line x1="8" y1="2" x2="8" y2="6" />
                                         <line x1="3" y1="10" x2="21" y2="10" />
                                     </svg>
-                                    Applied?
+                                    Add to Tracker
                                 </>
                             )}
                         </button>
@@ -1003,7 +990,7 @@ export function JobDetail({
                 </div>
 
                 {/* Content */}
-                <div style={{ flex: 1, padding: '20px' }}>
+                <div style={{ flex: 1, padding: '24px' }}>
 
 
                     {/* Why explanation */}
@@ -1014,18 +1001,18 @@ export function JobDetail({
                     {
                         (job.job_description_plain || job.raw_text_summary) && (
                             <div style={{ marginTop: '8px' }}>
-                                <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#666', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                                     Job Description
                                 </h3>
                                 <div style={{ 
-                                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                                    fontFamily: 'var(--font-inter), "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                                     fontSize: '14px',
-                                    lineHeight: '1.75',
-                                    color: '#3f3f3f',
+                                    lineHeight: '1.65',
+                                    color: 'var(--text-secondary)',
                                 }}>
-                                    <JobDescriptionRenderer 
-                                        text={job.job_description_plain || job.raw_text_summary || ''} 
-                                        html={job.raw_description_html || (job as any).rawDescriptionHtml}
+                                    <JobDescriptionRenderer
+                                        text={job.job_description_plain || job.raw_text_summary || ''}
+                                        html={job.raw_description_html || (job as Job & { rawDescriptionHtml?: string }).rawDescriptionHtml}
                                     />
                                 </div>
                             </div>
@@ -1062,3 +1049,4 @@ export function JobDetail({
         </div >
     );
 }
+

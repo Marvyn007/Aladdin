@@ -5,16 +5,14 @@
 import { useMemo } from 'react';
 import { useStore, useStoreActions } from '@/store/useStore';
 import type { Job, JobStatus } from '@/types';
-import { formatDistanceToNow } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
 import { Pagination } from './Pagination';
 import { useAuth } from '@clerk/nextjs';
 import { SearchEmptyState } from '@/components/common/SearchEmptyState';
 import { JobLoadingState } from '@/components/common/JobLoadingState';
-import { ImageWithRetry } from '@/components/common/ImageWithRetry';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { trackJobInteraction } from '@/lib/actions';
 import { useFilters, checkJobMatchFields, type MatchField } from '@/contexts/FilterContext';
+import { extractJobCardTags, type JobCardTag } from '@/lib/job-card-tags';
 
 const FIELD_LABELS: Record<MatchField, string> = {
     title: 'Title Match',
@@ -85,32 +83,6 @@ interface JobListProps {
     onJobClick: (job: Job) => void;
 }
 
-// Format posted date
-function formatPostedDate(postedAt: string | null): string {
-    if (!postedAt) return 'Added: N/A';
-
-    try {
-        const date = new Date(postedAt);
-        const chicagoTime = toZonedTime(date, 'America/Chicago');
-        return `Added ${formatDistanceToNow(chicagoTime, { addSuffix: true })}`;
-    } catch {
-        return 'Added: N/A';
-    }
-}
-
-// Check if job was posted less than 24 hours ago
-function isRecentlyPosted(postedAt: string | null): boolean {
-    if (!postedAt) return false;
-    try {
-        const date = new Date(postedAt);
-        const now = new Date();
-        const hoursDiff = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-        return hoursDiff < 24;
-    } catch {
-        return false;
-    }
-}
-
 // Get dynamic color based on company name
 export function getCompanyColor(companyName: string | null): string {
     if (!companyName) return 'var(--text-tertiary)';
@@ -125,6 +97,151 @@ export function getCompanyColor(companyName: string | null): string {
 export function getCompanyInitial(companyName: string | null): string {
     if (!companyName) return '?';
     return companyName.charAt(0).toUpperCase();
+}
+
+function getTagColors(tag: JobCardTag) {
+    const bySlug: Record<string, { background: string; border: string; text: string }> = {
+        internship: { background: 'rgba(79, 70, 229, 0.08)', border: 'rgba(79, 70, 229, 0.18)', text: '#4338ca' },
+        'co-op': { background: 'rgba(124, 58, 237, 0.08)', border: 'rgba(124, 58, 237, 0.18)', text: '#6d28d9' },
+        apprenticeship: { background: 'rgba(234, 88, 12, 0.08)', border: 'rgba(234, 88, 12, 0.18)', text: '#c2410c' },
+        fellowship: { background: 'rgba(147, 51, 234, 0.08)', border: 'rgba(147, 51, 234, 0.18)', text: '#7e22ce' },
+        'full-time': { background: 'rgba(37, 99, 235, 0.08)', border: 'rgba(37, 99, 235, 0.18)', text: '#1d4ed8' },
+        'part-time': { background: 'rgba(217, 119, 6, 0.08)', border: 'rgba(217, 119, 6, 0.18)', text: '#b45309' },
+        contract: { background: 'rgba(220, 38, 38, 0.08)', border: 'rgba(220, 38, 38, 0.18)', text: '#b91c1c' },
+        temporary: { background: 'rgba(225, 29, 72, 0.08)', border: 'rgba(225, 29, 72, 0.18)', text: '#be123c' },
+        'new-grad': { background: 'rgba(8, 145, 178, 0.08)', border: 'rgba(8, 145, 178, 0.18)', text: '#0e7490' },
+        'entry-level': { background: 'rgba(15, 118, 110, 0.08)', border: 'rgba(15, 118, 110, 0.18)', text: '#0f766e' },
+        junior: { background: 'rgba(15, 118, 110, 0.08)', border: 'rgba(15, 118, 110, 0.18)', text: '#0f766e' },
+        'mid-level': { background: 'rgba(37, 99, 235, 0.08)', border: 'rgba(37, 99, 235, 0.18)', text: '#1d4ed8' },
+        senior: { background: 'rgba(219, 39, 119, 0.08)', border: 'rgba(219, 39, 119, 0.18)', text: '#be185d' },
+        staff: { background: 'rgba(192, 38, 211, 0.08)', border: 'rgba(192, 38, 211, 0.18)', text: '#a21caf' },
+        principal: { background: 'rgba(126, 34, 206, 0.08)', border: 'rgba(126, 34, 206, 0.18)', text: '#7e22ce' },
+        lead: { background: 'rgba(225, 29, 72, 0.08)', border: 'rgba(225, 29, 72, 0.18)', text: '#be123c' },
+        compensation: { background: 'rgba(22, 163, 74, 0.08)', border: 'rgba(22, 163, 74, 0.18)', text: '#15803d' },
+        location: { background: 'rgba(3, 105, 161, 0.08)', border: 'rgba(3, 105, 161, 0.18)', text: '#0369a1' },
+        remote: { background: 'rgba(13, 148, 136, 0.08)', border: 'rgba(13, 148, 136, 0.18)', text: '#0f766e' },
+        hybrid: { background: 'rgba(14, 116, 144, 0.08)', border: 'rgba(14, 116, 144, 0.18)', text: '#0e7490' },
+        'in-person': { background: 'rgba(194, 65, 12, 0.08)', border: 'rgba(194, 65, 12, 0.18)', text: '#9a3412' },
+    };
+
+    const byKind: Record<JobCardTag['kind'], { background: string; border: string; text: string }> = {
+        season: { background: 'rgba(250, 204, 21, 0.14)', border: 'rgba(250, 204, 21, 0.28)', text: '#a16207' },
+        program: { background: 'rgba(99, 102, 241, 0.12)', border: 'rgba(99, 102, 241, 0.24)', text: '#4f46e5' },
+        schedule: { background: 'rgba(37, 99, 235, 0.12)', border: 'rgba(37, 99, 235, 0.24)', text: '#2563eb' },
+        experience: { background: 'rgba(236, 72, 153, 0.12)', border: 'rgba(236, 72, 153, 0.24)', text: '#db2777' },
+        compensation: { background: 'rgba(34, 197, 94, 0.12)', border: 'rgba(34, 197, 94, 0.24)', text: '#15803d' },
+        location: { background: 'rgba(14, 165, 233, 0.12)', border: 'rgba(14, 165, 233, 0.24)', text: '#0369a1' },
+        workplace: { background: 'rgba(20, 184, 166, 0.12)', border: 'rgba(20, 184, 166, 0.24)', text: '#0f766e' },
+    };
+
+    return bySlug[tag.slug] || byKind[tag.kind];
+}
+
+function parseCompensationLabel(label: string): { currency: string | null; amount: string } {
+    const trimmed = label.trim();
+    const prefixMatch = trimmed.match(/^(R\$|HK\$|CHF|AED|SAR|kr|zł|₹|€|£|¥|\$|R)\s*/i);
+    if (!prefixMatch) {
+        return { currency: null, amount: trimmed };
+    }
+
+    const amount = trimmed.slice(prefixMatch[0].length).trimStart();
+    return {
+        currency: prefixMatch[1],
+        amount: amount || trimmed,
+    };
+}
+
+function TagIcon({ kind }: { kind: JobCardTag['kind'] }) {
+    if (kind === 'compensation') {
+        return (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="6" width="18" height="12" rx="2" />
+                <circle cx="12" cy="12" r="2.5" />
+                <path d="M7 12h.01" />
+                <path d="M17 12h.01" />
+            </svg>
+        );
+    }
+
+    if (kind === 'location') {
+        return (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+            </svg>
+        );
+    }
+
+    if (kind === 'workplace') {
+        return (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="14" rx="2" />
+                <path d="M8 20h8" />
+                <path d="M12 18v2" />
+            </svg>
+        );
+    }
+
+    if (kind === 'season') {
+        return (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4" />
+                <path d="M8 2v4" />
+                <path d="M3 10h18" />
+            </svg>
+        );
+    }
+
+    if (kind === 'experience') {
+        return (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="m5 12 4 4L19 6" />
+            </svg>
+        );
+    }
+
+    return (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 7h18" />
+            <path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+            <rect x="3" y="7" width="18" height="13" rx="2" />
+        </svg>
+    );
+}
+
+function JobTagPill({ tag }: { tag: JobCardTag }) {
+    const colors = getTagColors(tag);
+    const compensationDisplay = tag.kind === 'compensation' ? parseCompensationLabel(tag.label) : null;
+    const showCompensationCurrencyPrefix = tag.kind === 'compensation' && Boolean(compensationDisplay?.currency);
+
+    return (
+        <span
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 11px',
+                borderRadius: '999px',
+                fontSize: '13px',
+                fontWeight: 600,
+                lineHeight: 1,
+                color: colors.text,
+                background: colors.background,
+                border: `1px solid ${colors.border}`,
+                whiteSpace: 'nowrap',
+            }}
+        >
+            {showCompensationCurrencyPrefix ? (
+                <span style={{ fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
+                    {compensationDisplay?.currency}
+                </span>
+            ) : (
+                <TagIcon kind={tag.kind} />
+            )}
+            {showCompensationCurrencyPrefix ? compensationDisplay?.amount : tag.label}
+        </span>
+    );
 }
 
 export function JobList({ onJobClick }: JobListProps) {
@@ -369,131 +486,140 @@ export function JobList({ onJobClick }: JobListProps) {
                     )
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px' }}>
-                        {displayedJobs.map((job) => (
-                            <div
-                                key={job.id}
-                                onClick={() => {
-                                    onJobClick(job);
-                                    trackJobInteraction(job.id, 'view', { source: 'job_list', sort: sorting.by });
-                                }}
-                                className={`card card-interactive job-listing-card ${selectedJob?.id === job.id ? 'selected' : ''}`}
-                                style={{
-                                    padding: '14px 14px 12px',
-                                    cursor: 'pointer',
-                                    position: 'relative',
-                                    background: 'var(--surface)',
-                                    border: selectedJob?.id === job.id ? '1px solid rgba(var(--accent-rgb), 0.35)' : '1px solid var(--border)',
-                                    borderRadius: '12px',
-                                    transition: 'all 0.18s ease',
-                                    boxShadow: selectedJob?.id === job.id ? '0 0 0 2px rgba(var(--accent-rgb), 0.15)' : 'none',
-                                }}
-                            >
-                                {activeFilters.length > 0 && jobMatchResults.get(job.id) && (
-                                    <div style={{ marginBottom: '8px' }}>
-                                        <MatchBadge matchedFields={jobMatchResults.get(job.id)!} />
-                                    </div>
-                                )}
+                        {displayedJobs.map((job) => {
+                            const tags = extractJobCardTags(job);
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '9px' }}>
-                                    <h3
-                                        style={{
-                                            fontSize: '15px',
-                                            fontWeight: 600,
-                                            color: 'var(--text-primary)',
-                                            lineHeight: 1.35,
-                                            flex: 1,
-                                            marginRight: '10px',
-                                        }}
-                                        className="truncate-2"
-                                    >
-                                        {job.title}
-                                    </h3>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-                                        {job.postedBy && (
-                                            <div
-                                                title={`Posted by ${job.postedBy.firstName} ${job.postedBy.lastName}`}
-                                                style={{ display: 'block', lineHeight: 0 }}
-                                            >
-                                                <ImageWithRetry
-                                                    src={job.postedBy.imageUrl || null}
-                                                    alt="Poster"
-                                                    style={{
-                                                        width: '28px',
-                                                        height: '28px',
-                                                        minWidth: '28px',
-                                                        minHeight: '28px',
-                                                        maxWidth: '28px',
-                                                        maxHeight: '28px',
-                                                        borderRadius: '50%',
-                                                        objectFit: 'cover',
-                                                        border: '1px solid var(--border)',
-                                                        display: 'block'
-                                                    }}
-                                                />
-                                            </div>
-                                        )}
-
-                                        {isSignedIn && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved');
-                                                }}
-                                                style={{
-                                                    background: 'transparent',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    color: job.status === 'saved' ? 'var(--accent)' : 'var(--text-tertiary)',
-                                                    padding: '4px',
-                                                    borderRadius: '999px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    transition: 'color var(--transition-fast)',
-                                                }}
-                                                title={job.status === 'saved' ? 'Unsave' : 'Save Job'}
-                                            >
-                                                <svg width="18" height="18" viewBox="0 0 24 24" fill={job.status === 'saved' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {(job.company || job.company_logo_url) && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 500 }}>
-                                        <CompanyLogo companyName={job.company || ''} logoUrl={job.company_logo_url} size={18} />
-                                        {job.company && <span>{job.company}</span>}
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--text-tertiary)', flexWrap: 'wrap' }}>
-                                    {(job.location_display || job.location) && (
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                                                <circle cx="12" cy="10" r="3" />
-                                            </svg>
-                                            <span style={{ color: 'var(--text-secondary)' }}>{job.location_display || job.location}</span>
-                                        </span>
+                            return (
+                                <div
+                                    key={job.id}
+                                    onClick={() => {
+                                        onJobClick(job);
+                                        trackJobInteraction(job.id, 'view', { source: 'job_list', sort: sorting.by });
+                                    }}
+                                    className={`card card-interactive job-listing-card ${selectedJob?.id === job.id ? 'selected' : ''}`}
+                                    style={{
+                                        padding: '16px 18px',
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        background: selectedJob?.id === job.id
+                                            ? 'color-mix(in srgb, var(--accent) 7%, var(--surface))'
+                                            : 'var(--surface)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '14px',
+                                        transition: 'all 0.18s ease',
+                                        boxShadow: selectedJob?.id === job.id
+                                            ? '0 1px 0 rgba(var(--accent-rgb), 0.2)'
+                                            : '0 1px 2px rgba(15, 23, 42, 0.06)',
+                                    }}
+                                >
+                                    {activeFilters.length > 0 && jobMatchResults.get(job.id) && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <MatchBadge matchedFields={jobMatchResults.get(job.id)!} />
+                                        </div>
                                     )}
-                                    <span
-                                        suppressHydrationWarning
-                                        style={{
-                                            color: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 'var(--success)' : 'var(--text-tertiary)',
-                                            fontWeight: isRecentlyPosted(job.original_posted_date || job.posted_at) ? 500 : 400,
-                                        }}
-                                        title={job.original_posted_raw ? `Original: ${job.original_posted_raw}` : undefined}
-                                    >
-                                        {job.original_posted_raw && !job.original_posted_date
-                                            ? `Added ${job.original_posted_raw}`
-                                            : formatPostedDate(job.original_posted_date || job.posted_at)}
-                                    </span>
+
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                                        <div
+                                            style={{
+                                                width: '56px',
+                                                height: '56px',
+                                                minWidth: '56px',
+                                                borderRadius: '14px',
+                                                border: '1px solid rgba(15, 23, 42, 0.08)',
+                                                background: '#ffffff',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                overflow: 'hidden',
+                                            }}
+                                        >
+                                            <CompanyLogo
+                                                companyName={job.company || 'Company'}
+                                                logoUrl={job.company_logo_url}
+                                                size={42}
+                                            />
+                                        </div>
+
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div
+                                                        style={{
+                                                            fontSize: '15px',
+                                                            fontWeight: 500,
+                                                            color: 'var(--text-secondary)',
+                                                            lineHeight: 1.25,
+                                                            marginBottom: '4px',
+                                                        }}
+                                                        className="truncate-2"
+                                                    >
+                                                        {job.company || 'Unknown Company'}
+                                                    </div>
+
+                                                    <h3
+                                                        style={{
+                                                            fontSize: '17px',
+                                                            fontWeight: 650,
+                                                            color: 'var(--text-primary)',
+                                                            lineHeight: 1.15,
+                                                            letterSpacing: '-0.01em',
+                                                            margin: 0,
+                                                        }}
+                                                        className="truncate-2"
+                                                    >
+                                                        {job.title}
+                                                    </h3>
+                                                </div>
+
+                                                {isSignedIn && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved');
+                                                        }}
+                                                        style={{
+                                                            background: 'transparent',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            color: job.status === 'saved' ? 'var(--accent)' : 'var(--text-tertiary)',
+                                                            padding: '4px',
+                                                            borderRadius: '999px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'color var(--transition-fast)',
+                                                            marginTop: '2px',
+                                                            flexShrink: 0,
+                                                            opacity: 0.82,
+                                                        }}
+                                                        title={job.status === 'saved' ? 'Unsave' : 'Save Job'}
+                                                    >
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill={job.status === 'saved' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {tags.length > 0 && (
+                                                <div
+                                                    style={{
+                                                        display: 'flex',
+                                                        flexWrap: 'wrap',
+                                                        gap: '8px',
+                                                        marginTop: '12px',
+                                                    }}
+                                                >
+                                                    {tags.map((tag) => (
+                                                        <JobTagPill key={`${job.id}-${tag.kind}-${tag.slug}`} tag={tag} />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         <Pagination
                             currentPage={pagination.page}

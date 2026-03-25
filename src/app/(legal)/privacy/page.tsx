@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { LegalPage, LegalSection, P, UL, LI, SubHeading, Placeholder, TocSection } from '../LegalPage';
+import { LegalPage, LegalSection, P, UL, LI, SubHeading, Placeholder, type TocSection } from '../LegalPage';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — Aladdin',

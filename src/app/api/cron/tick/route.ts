@@ -77,8 +77,8 @@ export async function GET(request: Request) {
       await queue.enqueueBatch(plan)
     }
 
-    // ── Phase 2: Process tasks (up to 3, sequentially) ──
-    const tasks = await queue.dequeue(3)
+    // ── Phase 2: Process tasks (up to 1, sequentially) ──
+    const tasks = await queue.dequeue(1)
     const results = await processTaskBatch(tasks, queue, db, startTime, () => createDiscoveryDb(prisma))
 
     // ── Phase 3: Burst mode ──
@@ -87,7 +87,7 @@ export async function GET(request: Request) {
 
     if (currentStats.pending > BURST_THRESHOLD) {
       const baseUrl = getBaseUrl(request)
-      const secret = process.env.CRON_SECRET
+      const secret = process.env.CRON_SECRET || ''
 
       burstFired = Math.min(BURST_MAX_WORKERS, Math.ceil((currentStats.pending - BURST_THRESHOLD) / 3))
 
@@ -133,10 +133,15 @@ export async function GET(request: Request) {
 }
 
 function verifyCronSecret(request: Request): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret) return false // Require CRON_SECRET to be set
-
+  const secret = process.env.CRON_SECRET || ''
   const authHeader = request.headers.get('authorization')
+
+  console.log("[DEBUG v2] env.CRON_SECRET:", process.env.CRON_SECRET)
+  console.log("[DEBUG v2] EXPECTED (fallback applied):", secret)
+  console.log("[DEBUG v2] RECEIVED:", authHeader)
+
+  if (!secret) return false
+
   if (authHeader === `Bearer ${secret}`) return true
 
   const { searchParams } = new URL(request.url)

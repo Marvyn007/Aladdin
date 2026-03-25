@@ -10,6 +10,7 @@ import {
 } from '@/lib/db';
 // No direct AI imports needed here as they are handled in cover-letter-service.ts
 import { performCoverLetterGeneration, queueCoverLetterGeneration } from '@/lib/cover-letter-service';
+import { toPlainText } from '@/lib/plain-text';
 
 import { auth } from '@clerk/nextjs/server';
 
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         const { job_id, resume_id, queue, job_description } = await request.json();
+        const normalizedJobDescription = toPlainText(job_description);
 
         if (!job_id) {
             return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Handle Immediate Generation
-        const result = await performCoverLetterGeneration(userId, job_id, resume_id, undefined, job_description);
+        const result = await performCoverLetterGeneration(userId, job_id, resume_id, undefined, normalizedJobDescription);
 
         if (result.success && result.coverLetter) {
             return NextResponse.json({

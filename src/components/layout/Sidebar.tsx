@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useStore, useStoreActions } from '@/store/useStore';
-import { Map as MapIcon } from 'lucide-react';
+import { Map as MapIcon, SlidersHorizontal } from 'lucide-react';
 import { UserAccountSection } from './UserAccountSection';
 import { useAuth } from '@clerk/nextjs';
 import { AuthModal } from '@/components/modals/AuthModal';
@@ -172,6 +172,14 @@ export function Sidebar({
                         icon={<img src="/icons/import-job.png" alt="Import" style={{ width: 22, height: 22, objectFit: 'contain' }} />}
                         label="Import Job"
                         onClick={() => handleNavClick(() => useStore.getState().setActiveModal('import-job-selection'), true, "Sign in to import jobs.")}
+                        collapsed={isEffectivelyCollapsed}
+                        disabled={!isSignedIn}
+                    />
+
+                    <NavItem
+                        icon={<SlidersHorizontal size={18} />}
+                        label="Onboarding"
+                        onClick={() => handleNavClick(() => router.push('/onboarding'), true, 'Sign in to personalize your onboarding profile.')}
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
                     />

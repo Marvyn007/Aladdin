@@ -5,6 +5,21 @@
  */
 
 .onboarding-theme {
+  background-color: oklch(1.0000 0 0);
+  color: oklch(0.1884 0.0128 248.5103);
+  overflow-y: auto;
+  /* Tailwind v4 --color-* aliases for light mode */
+  --color-background: oklch(1.0000 0 0);
+  --color-foreground: oklch(0.1884 0.0128 248.5103);
+  --color-primary: oklch(0.6723 0.1606 244.9955);
+  --color-primary-foreground: oklch(1.0000 0 0);
+  --color-muted: oklch(0.9222 0.0013 286.3737);
+  --color-muted-foreground: oklch(0.1884 0.0128 248.5103);
+  --color-accent: oklch(0.9392 0.0166 250.8453);
+  --color-accent-foreground: oklch(0.6723 0.1606 244.9955);
+  --color-border: oklch(0.9317 0.0118 231.6594);
+  --color-input: oklch(0.9809 0.0025 228.7836);
+  --color-ring: oklch(0.6818 0.1584 243.3540);
   --background: oklch(1.0000 0 0);
   --foreground: oklch(0.1884 0.0128 248.5103);
   --card: oklch(0.9784 0.0011 197.1387);
@@ -63,6 +78,25 @@
 /* Dark mode variant: applies when .onboarding-theme.dark or .dark .onboarding-theme */
 .onboarding-theme.dark,
 .dark .onboarding-theme {
+  background-color: oklch(0 0 0);
+  color: oklch(0.9328 0.0025 228.7857);
+  /* Tailwind v4 --color-* aliases (bg-*, text-*, border-* utilities read these) */
+  --color-background: oklch(0 0 0);
+  --color-foreground: oklch(0.9328 0.0025 228.7857);
+  --color-card: oklch(0.2097 0.0080 274.5332);
+  --color-card-foreground: oklch(0.8853 0 0);
+  --color-primary: oklch(0.6692 0.1607 245.0110);
+  --color-primary-foreground: oklch(1.0000 0 0);
+  --color-secondary: oklch(0.9622 0.0035 219.5331);
+  --color-secondary-foreground: oklch(0.1884 0.0128 248.5103);
+  --color-muted: oklch(0.2090 0 0);
+  --color-muted-foreground: oklch(0.5637 0.0078 247.9662);
+  --color-accent: oklch(0.1928 0.0331 242.5459);
+  --color-accent-foreground: oklch(0.6692 0.1607 245.0110);
+  --color-destructive: oklch(0.6188 0.2376 25.7658);
+  --color-border: oklch(0.2674 0.0047 248.0045);
+  --color-input: oklch(0.3020 0.0288 244.8244);
+  --color-ring: oklch(0.6818 0.1584 243.3540);
   --background: oklch(0 0 0);
   --foreground: oklch(0.9328 0.0025 228.7857);
   --card: oklch(0.2097 0.0080 274.5332);
