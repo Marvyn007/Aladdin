@@ -54,10 +54,10 @@ Plans:
 - D-01 through D-25: See 04-CONTEXT.md for full decision list covering first-time redirect, wizard UI, file uploads, theme scoping, preference sorting, and preferences tab.
 **Depends on:** Phase 3
 **Status:** in_progress
-**Plans:** 4 plans
+**Plans:** 3/4 plans executed
 
 Plans:
 - [x] 04-01-PLAN.md — Install shadcn/ui + tweakcn theme, add LinkedIn PDF question, create preference scoring module
-- [ ] 04-02-PLAN.md — Build onboarding wizard UI (/onboarding page with 2-step form)
-- [ ] 04-03-PLAN.md — Wire preference sort into /api/jobs + first-time onboarding redirect
+- [x] 04-02-PLAN.md — Build onboarding wizard UI (/onboarding page with 2-step form)
+- [x] 04-03-PLAN.md — Wire preference sort into /api/jobs + first-time onboarding redirect
 - [ ] 04-04-PLAN.md — Add Preferences tab to Account Settings + default dashboard to preference sort

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Executing Phase 04
-last_updated: "2026-03-25T08:05:00.000Z"
+last_updated: "2026-03-25T08:15:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 11
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -21,7 +21,7 @@ Job board application with AI-powered features for job searching, application tr
 
 ## Current Phase
 
-- Phase 4: Implement onboarding page with job recommendation using shadcn-ui - Plan 01 complete
+- Phase 4: Implement onboarding page with job recommendation using shadcn-ui - Plan 03 complete
 
 ## Progress
 
@@ -38,6 +38,8 @@ Job board application with AI-powered features for job searching, application tr
 - 2026-03-24: Plan 02-02 complete - Auto-versioning on answer save, UI displays last updated timestamps per question
 - 2026-03-24: Phase 03 added for company logo scraping, backfill, and ingestion-time logo updates
 - 2026-03-25: Plan 04-01 complete - shadcn/ui foundation, tweakcn theme scoped to .onboarding-theme, linkedin_pdf question added, computePreferenceScore TDD-implemented (24 tests green)
+- 2026-03-25: Plan 04-02 complete - /onboarding wizard UI with 2-step form, dark theme, QuestionMultiSelect/SingleSelect/FileUpload/Text renderers, /api/onboarding route
+- 2026-03-25: Plan 04-03 complete - /api/jobs?sort_by=preferences wired with in-memory score re-sort, OnboardingRedirect component added to dashboard (isNew flag + localStorage one-time redirect)
 
 ## Accumulated Context
 
@@ -59,6 +61,9 @@ Job board application with AI-powered features for job searching, application tr
 - normalizeFileValue confirmed generic (dispatches on question.type not question.key) - no changes needed per D-14
 - computePreferenceScore uses substring keyword matching for work_areas (underscores-to-spaces, strip trailing 'engineer')
 - career_levels uses spaced keywords (' ii', ' iii') to avoid false positives
+- DB sorts by fetched_at for sortBy=preferences; API re-sorts in-memory to avoid DB complexity
+- OnboardingRedirect uses isNew from /api/user/init (not snapshot.completed) for first-time detection per D-01
+- localStorage onboardingShown flag prevents repeated redirect after first visit
 
 ### Key Technical Patterns
 
