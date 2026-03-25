@@ -61,6 +61,9 @@ Job board application with AI-powered features for job searching, application tr
 - normalizeFileValue confirmed generic (dispatches on question.type not question.key) - no changes needed per D-14
 - computePreferenceScore uses substring keyword matching for work_areas (underscores-to-spaces, strip trailing 'engineer')
 - career_levels uses spaced keywords (' ii', ' iii') to avoid false positives
+- OnboardingWizard uses simple step state machine delegating to StepOne/StepTwo + 4 type-specific renderers
+- QuestionFileUpload dispatches to /api/upload-resume or /api/upload-linkedin based on question.key; normalizes both response shapes (data.resume.id vs data.profile.id)
+- TooltipTrigger from base-ui does not support asChild (Radix pattern only)
 - DB sorts by fetched_at for sortBy=preferences; API re-sorts in-memory to avoid DB complexity
 - OnboardingRedirect uses isNew from /api/user/init (not snapshot.completed) for first-time detection per D-01
 - localStorage onboardingShown flag prevents repeated redirect after first visit
