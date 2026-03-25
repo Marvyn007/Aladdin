@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { QuestionMultiSelect } from '@/components/onboarding/QuestionMultiSelect';
 import { QuestionSingleSelect } from '@/components/onboarding/QuestionSingleSelect';
 import { QuestionFileUpload } from '@/components/onboarding/QuestionFileUpload';
@@ -16,51 +15,68 @@ interface StepTwoProps {
   setAnswers: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
 }
 
+const cardStyle: React.CSSProperties = {
+  borderRadius: 14,
+  border: '1px solid rgba(255,255,255,0.07)',
+  background: 'rgba(255,255,255,0.03)',
+  padding: '20px 22px',
+  marginBottom: 16,
+};
+
+const titleStyle: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 600,
+  color: 'rgba(255,255,255,0.92)',
+  marginBottom: 4,
+};
+
+const descStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: 'rgba(255,255,255,0.4)',
+  marginBottom: 16,
+};
+
 export function StepTwo({ questions, answers, setAnswers }: StepTwoProps) {
   return (
-    <div className="space-y-6">
+    <div>
       {questions.map((question) => (
-        <Card key={question.key}>
-          <CardHeader>
-            <CardTitle>{question.title}</CardTitle>
-            <CardDescription>{question.description}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {question.type === 'single_select' && (
-              <QuestionSingleSelect
-                question={question}
-                value={typeof answers[question.key] === 'string' ? (answers[question.key] as string) : null}
-                onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
-              />
-            )}
-            {question.type === 'multi_select' && (
-              <QuestionMultiSelect
-                question={question}
-                value={Array.isArray(answers[question.key]) ? (answers[question.key] as string[]) : []}
-                onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
-              />
-            )}
-            {question.type === 'file' && (
-              <QuestionFileUpload
-                question={question}
-                value={
-                  answers[question.key] != null && typeof answers[question.key] === 'object'
-                    ? (answers[question.key] as FileUploadValue)
-                    : null
-                }
-                onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
-                showInfoTooltip={question.key === 'linkedin_pdf'}
-              />
-            )}
-            {question.type === 'text' && (
-              <QuestionText
-                question={question}
-                value={typeof answers[question.key] === 'string' ? (answers[question.key] as string) : ''}
-                onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
-              />
-            )}
-          </CardContent>
-        </Card>
+        <div key={question.key} style={cardStyle}>
+          <div style={titleStyle}>{question.title}</div>
+          <div style={descStyle}>{question.description}</div>
+          {question.type === 'single_select' && (
+            <QuestionSingleSelect
+              question={question}
+              value={typeof answers[question.key] === 'string' ? (answers[question.key] as string) : null}
+              onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
+            />
+          )}
+          {question.type === 'multi_select' && (
+            <QuestionMultiSelect
+              question={question}
+              value={Array.isArray(answers[question.key]) ? (answers[question.key] as string[]) : []}
+              onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
+            />
+          )}
+          {question.type === 'file' && (
+            <QuestionFileUpload
+              question={question}
+              value={
+                answers[question.key] != null && typeof answers[question.key] === 'object'
+                  ? (answers[question.key] as FileUploadValue)
+                  : null
+              }
+              onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
+              showInfoTooltip={question.key === 'linkedin_pdf'}
+            />
+          )}
+          {question.type === 'text' && (
+            <QuestionText
+              question={question}
+              value={typeof answers[question.key] === 'string' ? (answers[question.key] as string) : ''}
+              onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
+            />
+          )}
+        </div>
       ))}
     </div>
   );
