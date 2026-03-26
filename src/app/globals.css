@@ -464,6 +464,16 @@ body {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes profileWidgetPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 0;   transform: scale(1.18); }
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -974,10 +984,23 @@ body {
   }
 }
 
+/* ===== SPLIT VIEW (1200px - 1440px) ===== */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  :root {
+    --job-list-width: 570px;
+  }
+
+  .job-list-container {
+    width: var(--job-list-width);
+    min-width: var(--job-list-width);
+    max-width: var(--job-list-width);
+  }
+}
+
 /* ===== LARGE DESKTOP (> 1440px) ===== */
 @media (min-width: 1440px) {
   :root {
-    --job-list-width: 380px;
+    --job-list-width: 570px;
     --sidebar-width: 220px;
   }
 

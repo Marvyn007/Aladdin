@@ -1,0 +1,89 @@
+[
+  {
+    "additionalPlain": "The United States base range for this position is $126,163 - $157,504 plus equity.",
+    "additional": "<div>The United States base range for this position is $126,163 - $157,504 plus equity.</div>",
+    "categories": {
+      "commitment": "Permanent",
+      "department": "Operations and Business Support",
+      "location": "Toronto",
+      "team": "Platform",
+      "allLocations": ["Toronto"]
+    },
+    "createdAt": 1773335421350,
+    "descriptionPlain": "As an Account Executive for Spotify Backstage, you will be responsible for driving revenue growth by building strong relationships with clients and understanding their technical needs related to Backstage.",
+    "description": "<div>As an Account Executive for Spotify Backstage, you will be responsible for driving revenue growth.</div>",
+    "id": "1ff4a4e3-897c-4eab-9ee2-aa7d1d07a9d6",
+    "lists": [
+      {
+        "text": "What You'll Do",
+        "content": "<li>Identify and pursue new business opportunities for Backstage.</li><li>Develop and manage a robust sales pipeline.</li>"
+      },
+      {
+        "text": "Who You Are",
+        "content": "<li>Experienced in a sales role, preferably in SaaS or developer platforms.</li><li>Proven track record of achieving sales targets in a B2B environment.</li>"
+      }
+    ],
+    "text": "Account Executive, Backstage",
+    "hostedUrl": "https://jobs.lever.co/spotify/1ff4a4e3-897c-4eab-9ee2-aa7d1d07a9d6",
+    "applyUrl": "https://jobs.lever.co/spotify/1ff4a4e3-897c-4eab-9ee2-aa7d1d07a9d6/apply",
+    "workplaceType": "unspecified"
+  },
+  {
+    "additionalPlain": "Salary range: $140,000 - $200,000 USD plus equity and benefits.",
+    "additional": "<div>Salary range: $140,000 - $200,000 USD plus equity and benefits.</div>",
+    "categories": {
+      "commitment": "Permanent",
+      "department": "Engineering",
+      "location": "New York, NY",
+      "team": "Backend",
+      "allLocations": ["New York, NY", "Remote US"]
+    },
+    "createdAt": 1773248000000,
+    "descriptionPlain": "We are looking for a Senior Backend Engineer to join the Content Platform team. You will design and build distributed systems that power Spotify's content delivery infrastructure.",
+    "description": "<div>We are looking for a Senior Backend Engineer to join the Content Platform team.</div>",
+    "id": "a2b3c4d5-6789-4abc-def0-123456789abc",
+    "lists": [
+      {
+        "text": "What You'll Do",
+        "content": "<li>Design and build scalable backend services using Java and Python.</li><li>Collaborate with cross-functional teams on system design.</li>"
+      },
+      {
+        "text": "Who You Are",
+        "content": "<li>5+ years of experience in backend engineering.</li><li>Strong knowledge of distributed systems and microservices.</li>"
+      }
+    ],
+    "text": "Senior Backend Engineer, Content Platform",
+    "hostedUrl": "https://jobs.lever.co/spotify/a2b3c4d5-6789-4abc-def0-123456789abc",
+    "applyUrl": "https://jobs.lever.co/spotify/a2b3c4d5-6789-4abc-def0-123456789abc/apply",
+    "workplaceType": "unspecified"
+  },
+  {
+    "additionalPlain": "",
+    "additional": "",
+    "categories": {
+      "commitment": "Permanent",
+      "department": "Design",
+      "location": "Stockholm, Sweden",
+      "team": "Product Design",
+      "allLocations": ["Stockholm, Sweden"]
+    },
+    "createdAt": 1773161000000,
+    "descriptionPlain": "Join our Product Design team to shape the future of music discovery. You will work on features that millions of users interact with daily.",
+    "description": "<div>Join our Product Design team to shape the future of music discovery.</div>",
+    "id": "b3c4d5e6-7890-4bcd-ef01-23456789abcd",
+    "lists": [
+      {
+        "text": "What You'll Do",
+        "content": "<li>Design intuitive user experiences for Spotify's mobile and desktop apps.</li>"
+      },
+      {
+        "text": "Who You Are",
+        "content": "<li>3+ years of product design experience.</li><li>Strong portfolio demonstrating user-centered design.</li>"
+      }
+    ],
+    "text": "Product Designer, Music Discovery",
+    "hostedUrl": "https://jobs.lever.co/spotify/b3c4d5e6-7890-4bcd-ef01-23456789abcd",
+    "applyUrl": "https://jobs.lever.co/spotify/b3c4d5e6-7890-4bcd-ef01-23456789abcd/apply",
+    "workplaceType": "unspecified"
+  }
+]

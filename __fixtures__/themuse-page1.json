@@ -1,0 +1,112 @@
+{
+  "page": 1,
+  "page_count": 100,
+  "total": 1985,
+  "results": [
+    {
+      "id": 5847293,
+      "name": "Software Engineer, Frontend",
+      "type": "external",
+      "publication_date": "2026-03-15T12:00:00Z",
+      "short_name": "software-engineer-frontend-5847293",
+      "model_type": "jobs",
+      "locations": [
+        {
+          "name": "New York, NY"
+        }
+      ],
+      "categories": [
+        {
+          "name": "Engineering"
+        }
+      ],
+      "levels": [
+        {
+          "name": "Mid Level",
+          "short_name": "mid"
+        }
+      ],
+      "tags": [],
+      "refs": {
+        "landing_page": "https://www.themuse.com/jobs/acme/software-engineer-frontend-5847293"
+      },
+      "company": {
+        "id": 12345,
+        "short_name": "acme",
+        "name": "Acme Corp"
+      },
+      "contents": "<p>We are looking for a talented Frontend Engineer to join our team. You will build responsive web applications using React and TypeScript.</p><h3>Requirements</h3><ul><li>3+ years of React experience</li><li>Strong TypeScript skills</li><li>Experience with modern CSS frameworks</li></ul><h3>Benefits</h3><ul><li>Competitive salary ($120,000 - $160,000)</li><li>Health, dental, and vision insurance</li><li>Flexible PTO</li></ul>"
+    },
+    {
+      "id": 5847301,
+      "name": "Data Scientist",
+      "type": "external",
+      "publication_date": "2026-03-14T10:30:00Z",
+      "short_name": "data-scientist-5847301",
+      "model_type": "jobs",
+      "locations": [
+        {
+          "name": "San Francisco, CA"
+        },
+        {
+          "name": "Remote"
+        }
+      ],
+      "categories": [
+        {
+          "name": "Data Science"
+        }
+      ],
+      "levels": [
+        {
+          "name": "Senior Level",
+          "short_name": "senior"
+        }
+      ],
+      "tags": [],
+      "refs": {
+        "landing_page": "https://www.themuse.com/jobs/techstart/data-scientist-5847301"
+      },
+      "company": {
+        "id": 67890,
+        "short_name": "techstart",
+        "name": "TechStart Inc"
+      },
+      "contents": "<p>Join our data science team to build ML models that drive product decisions.</p><h3>Requirements</h3><ul><li>5+ years in data science or ML engineering</li><li>Python, SQL, and statistical modeling expertise</li></ul>"
+    },
+    {
+      "id": 5847310,
+      "name": "Product Manager",
+      "type": "external",
+      "publication_date": "2026-03-13T08:00:00Z",
+      "short_name": "product-manager-5847310",
+      "model_type": "jobs",
+      "locations": [
+        {
+          "name": "Chicago, IL"
+        }
+      ],
+      "categories": [
+        {
+          "name": "Product"
+        }
+      ],
+      "levels": [
+        {
+          "name": "Mid Level",
+          "short_name": "mid"
+        }
+      ],
+      "tags": [],
+      "refs": {
+        "landing_page": "https://www.themuse.com/jobs/bigco/product-manager-5847310"
+      },
+      "company": {
+        "id": 11111,
+        "short_name": "bigco",
+        "name": "BigCo"
+      },
+      "contents": "<p>We need an experienced Product Manager to lead our consumer-facing product line.</p><h3>Requirements</h3><ul><li>3+ years PM experience</li><li>Strong analytical and communication skills</li></ul>"
+    }
+  ]
+}

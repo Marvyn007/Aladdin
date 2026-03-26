@@ -1,0 +1,82 @@
+{
+  "jobs": [
+    {
+      "absolute_url": "https://stripe.com/jobs/search?gh_jid=7532733",
+      "data_compliance": [
+        {
+          "type": "gdpr",
+          "requires_consent": false,
+          "requires_processing_consent": false,
+          "requires_retention_consent": false,
+          "retention_period": null,
+          "demographic_data_consent_applies": false
+        }
+      ],
+      "internal_job_id": 3336216,
+      "location": {
+        "name": "San Francisco, CA"
+      },
+      "metadata": null,
+      "id": 7532733,
+      "updated_at": "2026-03-17T17:31:19-04:00",
+      "requisition_id": "See Opening ID",
+      "title": "Account Executive, AI Sales",
+      "company_name": "Stripe",
+      "first_published": "2026-02-03T15:19:01-05:00",
+      "language": "en"
+    },
+    {
+      "absolute_url": "https://stripe.com/jobs/search?gh_jid=7546284",
+      "data_compliance": [
+        {
+          "type": "gdpr",
+          "requires_consent": false,
+          "requires_processing_consent": false,
+          "requires_retention_consent": false,
+          "retention_period": null,
+          "demographic_data_consent_applies": false
+        }
+      ],
+      "internal_job_id": 3340392,
+      "location": {
+        "name": "San Francisco, CA"
+      },
+      "metadata": null,
+      "id": 7546284,
+      "updated_at": "2026-03-17T17:31:20-04:00",
+      "requisition_id": "See Opening ID",
+      "title": "Account Executive, AI Sales",
+      "company_name": "Stripe",
+      "first_published": "2026-02-13T12:39:30-05:00",
+      "language": "en"
+    },
+    {
+      "absolute_url": "https://stripe.com/jobs/search?gh_jid=7547809",
+      "data_compliance": [
+        {
+          "type": "gdpr",
+          "requires_consent": false,
+          "requires_processing_consent": false,
+          "requires_retention_consent": false,
+          "retention_period": null,
+          "demographic_data_consent_applies": false
+        }
+      ],
+      "internal_job_id": 3340984,
+      "location": {
+        "name": "San Francisco or New York"
+      },
+      "metadata": null,
+      "id": 7547809,
+      "updated_at": "2026-03-17T17:31:21-04:00",
+      "requisition_id": "See Opening ID",
+      "title": "Account Executive, Bridge",
+      "company_name": "Stripe",
+      "first_published": "2026-01-20T16:58:05-05:00",
+      "language": "en"
+    }
+  ],
+  "meta": {
+    "total": 500
+  }
+}

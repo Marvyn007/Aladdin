@@ -1,9 +1,10 @@
 import './theme.css';
+import { OnboardingShell } from './OnboardingShell';
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="onboarding-theme dark">
+    <OnboardingShell>
       {children}
-    </div>
+    </OnboardingShell>
   );
 }

@@ -7,6 +7,7 @@ import {
     setDefaultResume
 } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
+import { recomputeProfileSetupComplete } from '@/lib/onboarding-db';
 
 
 export const runtime = 'nodejs';
@@ -64,6 +65,8 @@ export async function POST(request: NextRequest) {
             buffer
         );
 
+        // Recompute setup flag (non-blocking)
+        void recomputeProfileSetupComplete(userId).catch(() => undefined);
         return NextResponse.json({ success: true, resume });
     } catch (error) {
         console.error('Error uploading resume:', error);
@@ -115,6 +118,8 @@ export async function DELETE(request: NextRequest) {
         }
 
         await deleteResume(userId, id);
+        // Recompute setup flag — resume deletion may invalidate setup completion
+        void recomputeProfileSetupComplete(userId).catch(() => undefined);
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error deleting resume:', error);

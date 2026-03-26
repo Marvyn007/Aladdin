@@ -19,7 +19,7 @@ export function CompanyLogo({ companyName, logoUrl, size = 32, className = '' }:
             <img 
                 src={normalizedLogoUrl}
                 alt={companyName}
-                style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '4px' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
                 referrerPolicy="no-referrer"
                 loading="lazy"
             />

@@ -19,6 +19,7 @@ export interface OnboardingStateRecord {
   startedAt: string | null;
   completedAt: string | null;
   updatedAt: string | null;
+  profileSetupComplete: boolean;
 }
 
 export interface OnboardingSnapshot {
@@ -29,6 +30,7 @@ export interface OnboardingSnapshot {
   requiredTotal: number;
   progress: number;
   completed: boolean;
+  profileSetupComplete: boolean;
 }
 
 export interface SaveOnboardingAnswerInput {
@@ -149,6 +151,8 @@ function normalizeValue(question: OnboardingQuestion, value: unknown): unknown {
   }
 
   if (question.type === 'file') {
+    // Allow 'skipped' sentinel value to pass through for optional file questions (e.g. linkedin_pdf)
+    if (value === 'skipped') return 'skipped';
     return normalizeFileValue(value);
   }
 
@@ -162,6 +166,7 @@ function emptyState(): OnboardingStateRecord {
     startedAt: null,
     completedAt: null,
     updatedAt: null,
+    profileSetupComplete: false,
   };
 }
 
@@ -230,7 +235,7 @@ async function fetchState(userId: string): Promise<OnboardingStateRecord> {
       await ensureStatePostgres(userId);
       const result = await client.query(
         `
-          SELECT status, current_step, started_at, completed_at, updated_at
+          SELECT status, current_step, started_at, completed_at, updated_at, profile_setup_complete
           FROM user_onboarding_state
           WHERE user_id = $1
         `,
@@ -244,6 +249,7 @@ async function fetchState(userId: string): Promise<OnboardingStateRecord> {
         startedAt: row?.started_at ? new Date(row.started_at).toISOString() : null,
         completedAt: row?.completed_at ? new Date(row.completed_at).toISOString() : null,
         updatedAt: row?.updated_at ? new Date(row.updated_at).toISOString() : null,
+        profileSetupComplete: Boolean(row?.profile_setup_complete),
       };
     });
   }
@@ -253,7 +259,7 @@ async function fetchState(userId: string): Promise<OnboardingStateRecord> {
     await ensureStateSupabase(userId);
     const { data, error } = await client
       .from('user_onboarding_state')
-      .select('status, current_step, started_at, completed_at, updated_at')
+      .select('status, current_step, started_at, completed_at, updated_at, profile_setup_complete')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -266,6 +272,7 @@ async function fetchState(userId: string): Promise<OnboardingStateRecord> {
       startedAt: data.started_at || null,
       completedAt: data.completed_at || null,
       updatedAt: data.updated_at || null,
+      profileSetupComplete: Boolean(data.profile_setup_complete),
     };
   }
 
@@ -274,7 +281,7 @@ async function fetchState(userId: string): Promise<OnboardingStateRecord> {
   const row = db
     .prepare(
       `
-        SELECT status, current_step, started_at, completed_at, updated_at
+        SELECT status, current_step, started_at, completed_at, updated_at, profile_setup_complete
         FROM user_onboarding_state
         WHERE user_id = ?
       `
@@ -289,6 +296,7 @@ async function fetchState(userId: string): Promise<OnboardingStateRecord> {
     startedAt: typeof row.started_at === 'string' ? row.started_at : null,
     completedAt: typeof row.completed_at === 'string' ? row.completed_at : null,
     updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
+    profileSetupComplete: Boolean(row.profile_setup_complete),
   };
 }
 
@@ -537,6 +545,7 @@ export async function getOnboardingSnapshot(userId: string): Promise<OnboardingS
     requiredTotal,
     progress,
     completed: state.status === 'complete' || progress >= 100,
+    profileSetupComplete: state.profileSetupComplete,
   };
 }
 
@@ -554,12 +563,135 @@ export async function saveOnboardingAnswers(
   }
 
   await upsertState(userId, options?.currentStep ?? 1, !!options?.complete);
+  // Recompute setup flag after any answer/state change (non-blocking on error)
+  await recomputeProfileSetupComplete(userId).catch(() => undefined);
   return getOnboardingSnapshot(userId);
 }
 
 export async function markOnboardingComplete(userId: string, currentStep: number = 2): Promise<OnboardingSnapshot> {
   await upsertState(userId, currentStep, true);
+  await recomputeProfileSetupComplete(userId).catch(() => undefined);
   return getOnboardingSnapshot(userId);
+}
+
+/**
+ * Recomputes and persists the profile_setup_complete flag for a user.
+ * Setup is complete when: resume uploaded + (linkedin uploaded OR skipped) + preferences completed.
+ * Call this after any action that could change these conditions.
+ */
+export async function recomputeProfileSetupComplete(userId: string): Promise<boolean> {
+  const dbType = resolveDbType();
+
+  if (dbType === 'postgres') {
+    const pool = getPostgresPool();
+    const client = await pool.connect();
+    try {
+      const result = await client.query<{
+        has_resume: boolean;
+        has_linkedin: boolean;
+        linkedin_skipped: boolean;
+        onboarding_done: boolean;
+      }>(`
+        SELECT
+          EXISTS(SELECT 1 FROM resumes WHERE user_id = $1) AS has_resume,
+          EXISTS(SELECT 1 FROM linkedin_profiles WHERE user_id = $1) AS has_linkedin,
+          EXISTS(
+            SELECT 1 FROM user_onboarding_answers
+            WHERE user_id = $1 AND question_key = 'linkedin_pdf'
+              AND answer_json::text = '"skipped"'
+          ) AS linkedin_skipped,
+          COALESCE(
+            (SELECT (status = 'complete') FROM user_onboarding_state WHERE user_id = $1),
+            false
+          ) AS onboarding_done
+      `, [userId]);
+
+      const row = result.rows[0];
+      const isComplete =
+        Boolean(row?.has_resume) &&
+        (Boolean(row?.has_linkedin) || Boolean(row?.linkedin_skipped)) &&
+        Boolean(row?.onboarding_done);
+
+      await client.query(`
+        INSERT INTO user_onboarding_state
+          (user_id, status, current_step, started_at, updated_at, profile_setup_complete)
+        VALUES ($1, 'in_progress', 1, NOW(), NOW(), $2)
+        ON CONFLICT (user_id) DO UPDATE SET
+          profile_setup_complete = $2,
+          updated_at = NOW()
+      `, [userId, isComplete]);
+
+      return isComplete;
+    } finally {
+      client.release();
+    }
+  }
+
+  if (dbType === 'supabase') {
+    const supabase = getSupabaseClient();
+    const [resumeRes, linkedinRes, answerRes, stateRes] = await Promise.all([
+      supabase.from('resumes').select('id').eq('user_id', userId).limit(1),
+      supabase.from('linkedin_profiles').select('id').eq('user_id', userId).limit(1),
+      supabase.from('user_onboarding_answers')
+        .select('answer_json')
+        .eq('user_id', userId)
+        .eq('question_key', 'linkedin_pdf')
+        .limit(1),
+      supabase.from('user_onboarding_state').select('status').eq('user_id', userId).maybeSingle(),
+    ]);
+
+    const hasResume = (resumeRes.data?.length ?? 0) > 0;
+    const hasLinkedin = (linkedinRes.data?.length ?? 0) > 0;
+    const linkedinAnswer = answerRes.data?.[0]?.answer_json;
+    const linkedinSkipped = linkedinAnswer === 'skipped';
+    const onboardingDone = stateRes.data?.status === 'complete';
+    const isComplete = hasResume && (hasLinkedin || linkedinSkipped) && onboardingDone;
+
+    await supabase.from('user_onboarding_state').upsert(
+      {
+        user_id: userId,
+        status: stateRes.data?.status ?? 'in_progress',
+        current_step: 1,
+        profile_setup_complete: isComplete,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    );
+
+    return isComplete;
+  }
+
+  // SQLite
+  const db = getSQLiteDB();
+  const resumeRow = db.prepare('SELECT id FROM resumes WHERE user_id = ? LIMIT 1').get(userId);
+  const linkedinRow = db.prepare('SELECT id FROM linkedin_profiles WHERE user_id = ? LIMIT 1').get(userId);
+  const answerRow = db
+    .prepare("SELECT answer_json FROM user_onboarding_answers WHERE user_id = ? AND question_key = 'linkedin_pdf'")
+    .get(userId) as Record<string, unknown> | undefined;
+  const stateRow = db
+    .prepare('SELECT status FROM user_onboarding_state WHERE user_id = ?')
+    .get(userId) as Record<string, unknown> | undefined;
+
+  const hasResume = !!resumeRow;
+  const hasLinkedin = !!linkedinRow;
+  const rawAnswer = answerRow?.answer_json;
+  const linkedinSkipped =
+    rawAnswer === '"skipped"' ||
+    rawAnswer === 'skipped' ||
+    (typeof rawAnswer === 'string' && JSON.parse(rawAnswer) === 'skipped');
+  const onboardingDone = stateRow?.status === 'complete';
+  const isComplete = hasResume && (hasLinkedin || linkedinSkipped) && onboardingDone;
+
+  db.prepare(`
+    INSERT INTO user_onboarding_state
+      (user_id, status, current_step, started_at, updated_at, profile_setup_complete)
+    VALUES (?, 'in_progress', 1, datetime('now'), datetime('now'), ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      profile_setup_complete = excluded.profile_setup_complete,
+      updated_at = datetime('now')
+  `).run(userId, isComplete ? 1 : 0);
+
+  return isComplete;
 }
 
 export function getRequiredOnboardingQuestionCount(): number {

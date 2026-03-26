@@ -536,7 +536,7 @@ export function JobList({ onJobClick }: JobListProps) {
                                             <CompanyLogo
                                                 companyName={job.company || 'Company'}
                                                 logoUrl={job.company_logo_url}
-                                                size={42}
+                                                size={56}
                                             />
                                         </div>
 

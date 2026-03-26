@@ -4,11 +4,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useStore, useStoreActions } from '@/store/useStore';
-import { Map as MapIcon, SlidersHorizontal } from 'lucide-react';
+import { Map as MapIcon } from 'lucide-react';
 import { UserAccountSection } from './UserAccountSection';
 import { useAuth } from '@clerk/nextjs';
 import { AuthModal } from '@/components/modals/AuthModal';
-import { useRouter } from 'next/navigation';
+
 
 // Hook to detect compact logo mode (use "A" icon instead of full logo)
 function useCompactMode() {
@@ -83,7 +83,6 @@ export function Sidebar({
     const [authMessage, setAuthMessage] = useState<string>('');
     const isCompactMode = useCompactMode();
     const shouldAutoCollapse = useAutoCollapse();
-    const router = useRouter();
 
     // Effective collapsed state: user choice OR auto-collapse at 900px
     const isEffectivelyCollapsed = !sidebarOpen || shouldAutoCollapse;
@@ -175,16 +174,6 @@ export function Sidebar({
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
                     />
-
-                    <NavItem
-                        icon={<SlidersHorizontal size={18} />}
-                        label="Onboarding"
-                        onClick={() => handleNavClick(() => router.push('/onboarding'), true, 'Sign in to personalize your onboarding profile.')}
-                        collapsed={isEffectivelyCollapsed}
-                        disabled={!isSignedIn}
-                    />
-
-
 
                     <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
 

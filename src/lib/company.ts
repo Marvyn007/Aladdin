@@ -321,6 +321,33 @@ const BRAND_OVERRIDES: Record<string, string> = {
     'amazon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Amazon_logo.svg/1024px-Amazon_logo.svg.png',
 };
 
+/**
+ * Calls logo.dev's search API (requires secret key) to find the canonical
+ * domain and logo for a company by name. Returns null if not found or unconfigured.
+ */
+async function searchLogoDevByName(companyName: string): Promise<{ domain: string; logoUrl: string } | null> {
+    const secretKey = process.env.LOGO_DEV_SECRET_KEY;
+    if (!secretKey) return null;
+    try {
+        const res = await fetchWithTimeout(
+            `https://api.logo.dev/search?q=${encodeURIComponent(companyName)}`,
+            { headers: { Authorization: `Bearer ${secretKey}` } },
+            3000,
+        );
+        if (!res.ok) return null;
+        const data = (await res.json()) as Array<{ name: string; domain: string; logo_url?: string }>;
+        if (!Array.isArray(data) || data.length === 0) return null;
+        const hit = data[0];
+        if (!hit.domain) return null;
+        // Build CDN URL using publishable key (falls back to secret key stripped to pk_ equiv)
+        const pubKey = process.env.LOGO_API_KEY || process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN || secretKey;
+        const logoUrl = hit.logo_url || `https://img.logo.dev/${hit.domain}?token=${pubKey}&size=128`;
+        return { domain: hit.domain, logoUrl };
+    } catch {
+        return null;
+    }
+}
+
 export async function resolveProviderLogo(companyName: string | null, targetDomain: string | null): Promise<LogoCandidate | null> {
     const provider = process.env.LOGO_PROVIDER || 'logo.dev';
     if (provider === 'none') return null;
@@ -341,20 +368,37 @@ export async function resolveProviderLogo(companyName: string | null, targetDoma
         }
     }
 
-    if (provider === 'logo.dev' && process.env.LOGO_API_KEY && normalizedDomain) {
-        const logoDevUrl = `https://img.logo.dev/${encodeURIComponent(normalizedDomain)}?token=${process.env.LOGO_API_KEY}&size=120`;
-        try {
-            const check = await fetchWithTimeout(logoDevUrl, { method: 'HEAD' }, 1500);
-            if (check.ok) {
-                return {
-                    domain: normalizedDomain,
-                    logoUrl: logoDevUrl,
-                    source: 'provider:logo.dev',
-                    confidence: 'provider',
-                };
+    // logo.dev: try search API first (finds canonical domain by name, most accurate)
+    if (provider === 'logo.dev' && companyName) {
+        const searchResult = await searchLogoDevByName(companyName);
+        if (searchResult) {
+            return {
+                domain: searchResult.domain,
+                logoUrl: searchResult.logoUrl,
+                source: 'provider:logo.dev',
+                confidence: 'provider',
+            };
+        }
+    }
+
+    // logo.dev: fall back to CDN URL with known/guessed domain
+    if (provider === 'logo.dev' && normalizedDomain) {
+        const pubKey = process.env.LOGO_API_KEY || process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN;
+        if (pubKey) {
+            const logoDevUrl = `https://img.logo.dev/${encodeURIComponent(normalizedDomain)}?token=${pubKey}&size=128`;
+            try {
+                const check = await fetchWithTimeout(logoDevUrl, { method: 'HEAD' }, 1500);
+                if (check.ok) {
+                    return {
+                        domain: normalizedDomain,
+                        logoUrl: logoDevUrl,
+                        source: 'provider:logo.dev',
+                        confidence: 'provider',
+                    };
+                }
+            } catch (error) {
+                console.warn('[Company] logo.dev CDN check failed', error);
             }
-        } catch (error) {
-            console.warn('[Company] logo.dev check failed', error);
         }
     }
 

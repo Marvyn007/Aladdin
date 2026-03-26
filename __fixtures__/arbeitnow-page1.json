@@ -1,0 +1,56 @@
+{
+  "data": [
+    {
+      "slug": "hr-project-people-manager-teilzeit-stuttgart-86397",
+      "company_name": "FMC Human Ressource",
+      "title": "HR Project & People Manager (m/w/d) - Teilzeit",
+      "description": "<p>Wir sind ein international tätiger Employer-of-Record-Dienstleister und unterstützen unsere Kunden dabei, Mitarbeiter in verschiedenen Ländern rechtssicher zu beschäftigen.</p><h2>Aufgaben</h2><ul><li>Operative Betreuung unserer EOR-Projekte in Deutschland</li><li>Laufende Betreuung der Mitarbeitenden als HR-Ansprechperson</li></ul><h2>Benefits</h2><ul><li>Teilzeitstelle mit ca. 20 Stunden pro Woche</li><li>Arbeitsort: 80% Homeoffice</li></ul>",
+      "remote": false,
+      "url": "https://www.arbeitnow.com/jobs/companies/fmc-human-ressource/hr-project-people-manager-teilzeit-stuttgart-86397",
+      "tags": ["Administration"],
+      "job_types": ["berufserfahren"],
+      "location": "Stuttgart",
+      "created_at": 1774110628
+    },
+    {
+      "slug": "remote-technical-account-manager-dach-munich-214173",
+      "company_name": "SolarEdge",
+      "title": "Technical Account Manager - DACH",
+      "description": "<p><strong>Are you ready to power the future?</strong></p><p>At SolarEdge (NASDAQ: SEDG), we're a global leader in smart energy technology.</p><h3>Your tasks:</h3><ul><li>You are a key point of contact for defined accounts</li><li>You will work closely with technical support to solve escalated problems</li></ul>",
+      "remote": true,
+      "url": "https://www.arbeitnow.com/jobs/companies/solaredge/remote-technical-account-manager-dach-munich-214173",
+      "tags": ["Remote"],
+      "job_types": ["Full-time"],
+      "location": "Munich",
+      "created_at": 1774107732
+    },
+    {
+      "slug": "senior-software-engineer-berlin-345678",
+      "company_name": "N26",
+      "title": "Senior Software Engineer (Backend)",
+      "description": "<p>Join N26, Europe's leading mobile bank, as a Senior Backend Engineer.</p><h3>Requirements</h3><ul><li>5+ years experience with Java or Kotlin</li><li>Experience with microservices architecture</li><li>Knowledge of AWS or GCP</li></ul><h3>Benefits</h3><ul><li>Competitive salary</li><li>Remote-friendly culture</li></ul>",
+      "remote": true,
+      "url": "https://www.arbeitnow.com/jobs/companies/n26/senior-software-engineer-berlin-345678",
+      "tags": ["Engineering", "Remote"],
+      "job_types": ["Full-time"],
+      "location": "Berlin",
+      "created_at": 1774100000
+    }
+  ],
+  "links": {
+    "first": "https://www.arbeitnow.com/api/job-board-api?page=1",
+    "last": "https://www.arbeitnow.com/api/job-board-api?page=50",
+    "prev": null,
+    "next": "https://www.arbeitnow.com/api/job-board-api?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 50,
+    "path": "https://www.arbeitnow.com/api/job-board-api",
+    "per_page": 100,
+    "to": 100,
+    "total": 4823,
+    "terms": "By using the Arbeitnow job board API you agree to our terms."
+  }
+}

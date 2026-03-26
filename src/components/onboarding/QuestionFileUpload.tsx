@@ -2,8 +2,6 @@
 
 import { useRef, useState } from 'react';
 import { Info, Upload } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { OnboardingQuestion } from '@/lib/onboarding';
 
@@ -35,14 +33,12 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate type
     if (file.type !== 'application/pdf') {
       setError('Only PDF files are accepted.');
       event.currentTarget.value = '';
       return;
     }
 
-    // Validate size (10MB)
     if (file.size > 10 * 1024 * 1024) {
       setError('File must be 10 MB or smaller.');
       event.currentTarget.value = '';
@@ -86,25 +82,54 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Button
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
           type="button"
-          variant="outline"
-          size="sm"
           disabled={uploading}
           onClick={() => fileInputRef.current?.click()}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 20px',
+            borderRadius: 10,
+            fontSize: 15,
+            fontWeight: 500,
+            cursor: uploading ? 'not-allowed' : 'pointer',
+            border: '1.5px solid var(--ot-ghost-border)',
+            background: 'var(--ot-ghost-bg)',
+            color: 'var(--ot-ghost-color)',
+            outline: 'none',
+            opacity: uploading ? 0.6 : 1,
+            transition: 'all 0.15s ease',
+          }}
         >
-          <Upload className="mr-2 h-4 w-4" />
+          <Upload style={{ width: 16, height: 16 }} />
           {uploading ? 'Uploading...' : value ? 'Replace file' : 'Upload PDF'}
-        </Button>
+        </button>
 
         {showInfoTooltip && (
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger className="rounded-full p-1 text-muted-foreground hover:text-foreground">
-                <Info className="h-4 w-4" />
-                <span className="sr-only">How to download LinkedIn PDF</span>
+              <TooltipTrigger
+                style={{
+                  borderRadius: '50%',
+                  padding: 6,
+                  color: 'var(--ot-text-muted)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Info style={{ width: 16, height: 16 }} />
+                <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
+                  How to download LinkedIn PDF
+                </span>
               </TooltipTrigger>
               <TooltipContent side="right" className="max-w-xs whitespace-pre-line">
                 {LINKEDIN_INSTRUCTIONS}
@@ -118,23 +143,36 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
         ref={fileInputRef}
         type="file"
         accept="application/pdf"
-        className="hidden"
+        style={{ display: 'none' }}
         onChange={handleFileChange}
       />
 
       {value && (
-        <Badge variant="secondary" className="gap-1">
-          <Upload className="h-3 w-3" />
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            borderRadius: 9999,
+            fontSize: 13,
+            fontWeight: 500,
+            border: '1px solid var(--ot-pill-border)',
+            background: 'var(--ot-pill-bg)',
+            color: 'var(--ot-pill-color)',
+          }}
+        >
+          <Upload style={{ width: 12, height: 12 }} />
           {value.filename}
-        </Badge>
+        </div>
       )}
 
       {error && (
-        <p className="text-xs text-destructive">{error}</p>
+        <p style={{ fontSize: 13, color: 'var(--color-destructive)' }}>{error}</p>
       )}
 
       {question.helperText && !error && (
-        <p className="text-xs text-muted-foreground">{question.helperText}</p>
+        <p style={{ fontSize: 13, color: 'var(--ot-text-muted)' }}>{question.helperText}</p>
       )}
     </div>
   );

@@ -19,8 +19,8 @@ export function QuestionMultiSelect({ question, value, onChange }: QuestionMulti
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         {question.options?.map((option) => {
           const selected = value.includes(option.value);
           return (
@@ -31,27 +31,27 @@ export function QuestionMultiSelect({ question, value, onChange }: QuestionMulti
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '7px 14px',
-                borderRadius: '9999px',
-                fontSize: '13px',
+                gap: 8,
+                padding: '10px 18px',
+                borderRadius: 9999,
+                fontSize: 15,
                 fontWeight: 500,
                 cursor: 'pointer',
-                border: `1.5px solid ${selected ? '#6366f1' : 'rgba(255,255,255,0.1)'}`,
-                background: selected ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.04)',
-                color: selected ? '#a5b4fc' : 'rgba(255,255,255,0.65)',
+                border: `1.5px solid ${selected ? 'var(--ot-pill-selected-border)' : 'var(--ot-pill-border)'}`,
+                background: selected ? 'var(--ot-pill-selected-bg)' : 'var(--ot-pill-bg)',
+                color: selected ? 'var(--ot-pill-selected-color)' : 'var(--ot-pill-color)',
                 transition: 'all 0.15s ease',
                 outline: 'none',
               }}
             >
-              {selected && <Check style={{ width: 12, height: 12, flexShrink: 0 }} />}
+              {selected && <Check style={{ width: 13, height: 13, flexShrink: 0 }} />}
               {option.label}
             </button>
           );
         })}
       </div>
       {question.helperText && (
-        <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>{question.helperText}</p>
+        <p style={{ fontSize: 13, color: 'var(--ot-text-muted)' }}>{question.helperText}</p>
       )}
     </div>
   );

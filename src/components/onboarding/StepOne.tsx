@@ -9,24 +9,26 @@ interface StepOneProps {
 }
 
 const cardStyle: React.CSSProperties = {
-  borderRadius: 14,
-  border: '1px solid rgba(255,255,255,0.07)',
-  background: 'rgba(255,255,255,0.03)',
-  padding: '20px 22px',
-  marginBottom: 16,
+  borderRadius: 16,
+  border: '1px solid var(--ot-card-border)',
+  background: 'var(--ot-card-bg)',
+  backdropFilter: 'blur(8px)',
+  padding: '24px 28px',
+  marginBottom: 18,
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: 15,
+  fontSize: 18,
   fontWeight: 600,
-  color: 'rgba(255,255,255,0.92)',
-  marginBottom: 4,
+  color: 'var(--ot-text)',
+  marginBottom: 6,
 };
 
 const descStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: 'rgba(255,255,255,0.4)',
-  marginBottom: 16,
+  fontSize: 14,
+  color: 'var(--ot-text-muted)',
+  marginBottom: 18,
+  lineHeight: 1.5,
 };
 
 export function StepOne({ questions, answers, setAnswers }: StepOneProps) {

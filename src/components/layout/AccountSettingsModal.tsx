@@ -14,8 +14,9 @@ import { ActivityGraph } from '@/components/profile/ActivityGraph';
 import { InterviewExperienceModal } from '@/components/modals/InterviewExperienceModal';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { Pencil, Trash2, ExternalLink, AlertCircle, Clock as ClockIcon, CheckCircle2, Plus, Loader2 } from 'lucide-react';
+import { ONBOARDING_QUESTIONS } from '@/lib/onboarding';
 
-type TabType = 'profile' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
+type TabType = 'profile' | 'preferences' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
 
 interface AccountSettingsModalProps {
     isOpen: boolean;
@@ -175,6 +176,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
 
     const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
         { id: 'profile', label: 'Profile', icon: <ProfileIcon /> },
+        { id: 'preferences', label: 'Preferences', icon: <PreferencesIcon /> },
         { id: 'touch-grass', label: 'Touch the grass', icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.5-3.3.3-1.09.88-2.16 1.7-3.2.3 2.5.8 4 1.3 5.2z"></path></svg> },
         { id: 'documents', label: 'My Documents', icon: <DocumentsIcon /> },
         { id: 'reviews', label: 'Interview Experiences', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg> },
@@ -503,6 +505,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                                 isMobile={isMobile}
                             />
                         )}
+                        {activeTab === 'preferences' && <PreferencesTab />}
                         {activeTab === 'touch-grass' && <TouchGrassTab />}
                         {activeTab === 'documents' && <DocumentsTab isMobile={isMobile} />}
                         {activeTab === 'appearance' && (
@@ -1588,6 +1591,228 @@ function SecurityIcon() {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         </svg>
+    );
+}
+
+function PreferencesIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+            <circle cx="8" cy="6" r="2" fill="currentColor" stroke="none" />
+            <circle cx="16" cy="12" r="2" fill="currentColor" stroke="none" />
+            <circle cx="10" cy="18" r="2" fill="currentColor" stroke="none" />
+        </svg>
+    );
+}
+
+/* ─── Preferences Tab ─────────────────────────────────── */
+
+// Preference questions exclude file-type questions (resume, linkedin handled in Documents tab)
+const PREF_QUESTIONS = ONBOARDING_QUESTIONS.filter((q) => q.type !== 'file');
+
+function PreferencesTab() {
+    const [answers, setAnswers] = useState<Record<string, unknown>>({});
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetch('/api/onboarding')
+            .then((r) => r.json())
+            .then((snapshot) => {
+                const loaded: Record<string, unknown> = {};
+                for (const [key, rec] of Object.entries(snapshot.answersByKey ?? {})) {
+                    loaded[key] = (rec as { value: unknown }).value;
+                }
+                setAnswers(loaded);
+            })
+            .catch(() => { /* non-critical */ })
+            .finally(() => setLoading(false));
+    }, []);
+
+    const handleSave = async () => {
+        setSaving(true);
+        setSavedMsg(null);
+        try {
+            const res = await fetch('/api/onboarding', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currentStep: 1,
+                    answers: PREF_QUESTIONS.map((q) => ({ questionKey: q.key, value: answers[q.key] ?? null })),
+                }),
+            });
+            if (res.ok) {
+                setSavedMsg('Preferences saved!');
+                setTimeout(() => setSavedMsg(null), 2500);
+            }
+        } catch { /* non-critical */ }
+        finally { setSaving(false); }
+    };
+
+    const toggle = (key: string, val: string) => {
+        setAnswers((prev) => {
+            const cur = Array.isArray(prev[key]) ? (prev[key] as string[]) : [];
+            return { ...prev, [key]: cur.includes(val) ? cur.filter((v) => v !== val) : [...cur, val] };
+        });
+    };
+
+    const setSingle = (key: string, val: string) => {
+        setAnswers((prev) => ({ ...prev, [key]: val }));
+    };
+
+    const setText = (key: string, val: string) => {
+        setAnswers((prev) => ({ ...prev, [key]: val }));
+    };
+
+    if (loading) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+            {PREF_QUESTIONS.map((q) => {
+                const cur = answers[q.key];
+                const selectedArr = Array.isArray(cur) ? (cur as string[]) : [];
+                const selectedSingle = typeof cur === 'string' ? cur : null;
+                const textVal = typeof cur === 'string' ? cur : '';
+
+                return (
+                    <div key={q.key}>
+                        {/* Question header */}
+                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {q.title}
+                        </p>
+                        {q.description && (
+                            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                                {q.description}
+                            </p>
+                        )}
+
+                        {/* multi_select — chip grid */}
+                        {q.type === 'multi_select' && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {(q.options ?? []).map((opt) => {
+                                    const selected = selectedArr.includes(opt.value);
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => toggle(q.key, opt.value)}
+                                            style={{
+                                                padding: '5px 12px',
+                                                borderRadius: 9999,
+                                                fontSize: 12,
+                                                fontWeight: selected ? 600 : 400,
+                                                border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                                                background: selected ? 'var(--accent-muted)' : 'transparent',
+                                                color: selected ? 'var(--accent)' : 'var(--text-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                outline: 'none',
+                                            }}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* single_select — option pills */}
+                        {q.type === 'single_select' && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {(q.options ?? []).map((opt) => {
+                                    const selected = selectedSingle === opt.value;
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => setSingle(q.key, opt.value)}
+                                            style={{
+                                                padding: '5px 14px',
+                                                borderRadius: 9999,
+                                                fontSize: 12,
+                                                fontWeight: selected ? 600 : 400,
+                                                border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                                                background: selected ? 'var(--accent-muted)' : 'transparent',
+                                                color: selected ? 'var(--accent)' : 'var(--text-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                outline: 'none',
+                                            }}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* text — textarea */}
+                        {q.type === 'text' && (
+                            <textarea
+                                value={textVal}
+                                onChange={(e) => setText(q.key, e.target.value)}
+                                placeholder={q.placeholder ?? ''}
+                                rows={3}
+                                style={{
+                                    width: '100%',
+                                    padding: '9px 12px',
+                                    borderRadius: 8,
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--background-secondary)',
+                                    color: 'var(--text-primary)',
+                                    fontSize: 13,
+                                    lineHeight: 1.55,
+                                    resize: 'vertical',
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    fontFamily: 'inherit',
+                                }}
+                            />
+                        )}
+                    </div>
+                );
+            })}
+
+            {/* Save button row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 4 }}>
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    style={{
+                        padding: '9px 22px',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        border: 'none',
+                        background: saving ? 'var(--accent-muted)' : 'var(--accent)',
+                        color: saving ? 'var(--accent)' : '#fff',
+                        cursor: saving ? 'not-allowed' : 'pointer',
+                        transition: 'background 0.15s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 7,
+                    }}
+                >
+                    {saving && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                    {saving ? 'Saving…' : 'Save preferences'}
+                </button>
+                {savedMsg && (
+                    <span style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}>
+                        {savedMsg}
+                    </span>
+                )}
+            </div>
+        </div>
     );
 }
 

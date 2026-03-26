@@ -10,16 +10,32 @@ interface QuestionTextProps {
 
 export function QuestionText({ question, value, onChange }: QuestionTextProps) {
   return (
-    <div className="space-y-2">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <textarea
         rows={4}
         value={value}
         placeholder={question.placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        style={{
+          width: '100%',
+          borderRadius: 10,
+          border: '1.5px solid var(--ot-card-border)',
+          background: 'var(--ot-pill-bg)',
+          padding: '12px 14px',
+          fontSize: 15,
+          color: 'var(--ot-text)',
+          outline: 'none',
+          resize: 'vertical',
+          fontFamily: 'inherit',
+          lineHeight: 1.6,
+          transition: 'border-color 0.15s ease',
+          boxSizing: 'border-box',
+        }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ot-primary)'; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ot-card-border)'; }}
       />
       {question.helperText && (
-        <p className="text-xs text-muted-foreground">{question.helperText}</p>
+        <p style={{ fontSize: 13, color: 'var(--ot-text-muted)' }}>{question.helperText}</p>
       )}
     </div>
   );

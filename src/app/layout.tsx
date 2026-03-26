@@ -8,6 +8,7 @@ import { ThemeRegistry } from "@/components/theme/ThemeRegistry";
 import { Analytics } from '@vercel/analytics/next';
 import { FilterProvider } from "@/contexts/FilterContext";
 import { cn } from "@/lib/utils";
+import { ProfileCompletionWidget } from "@/components/ProfileCompletionWidget";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -43,6 +44,7 @@ export default function RootLayout({
             <FilterProvider>
               {children}
             </FilterProvider>
+            <ProfileCompletionWidget />
           </ThemeRegistry>
           <Analytics />
         </body>
