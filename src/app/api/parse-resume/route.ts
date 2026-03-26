@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { parseResumePdf, parseLinkedInPdf } from "@/lib/resume-generation/parser";
+import { parsePdfToDynamicResume } from "@/lib/resume-generation/parser";
 import { convertFileToBuffer } from "@/lib/resume-generation/utils";
 
 export const runtime = "nodejs";
@@ -29,9 +29,7 @@ export async function POST(request: NextRequest) {
 
     const buffer = await convertFileToBuffer(file);
     const parsedResume =
-      uploadType === "linkedin"
-        ? await parseLinkedInPdf(buffer)
-        : await parseResumePdf(buffer);
+      await parsePdfToDynamicResume(buffer);
 
     return NextResponse.json({
       success: true,
