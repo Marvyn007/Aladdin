@@ -2,6 +2,7 @@
 
 import type { Metadata } from "next";
 import { Inter, Geist } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import { ClerkProvider } from '@clerk/nextjs';
 import { ThemeRegistry } from "@/components/theme/ThemeRegistry";
@@ -41,9 +42,11 @@ export default function RootLayout({
       <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
         <body className={inter.className} suppressHydrationWarning>
           <ThemeRegistry>
-            <FilterProvider>
-              {children}
-            </FilterProvider>
+            <Suspense>
+              <FilterProvider>
+                {children}
+              </FilterProvider>
+            </Suspense>
             <ProfileCompletionWidget />
           </ThemeRegistry>
           <Analytics />

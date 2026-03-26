@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "pipeline:test": "vitest src/lib/resumePipeline/ --run",
+    "pipeline:test": "vitest src/lib/resume-generation/tests/ --run",
     "daily-fetch": "node --loader ts-node/esm scripts/seed-data.ts"
   },
   "dependencies": {
