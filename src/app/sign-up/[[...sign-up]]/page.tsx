@@ -110,7 +110,7 @@ export default function SignUpPage() {
         setIsLoading(true)
         setError('')
         try {
-            await signUp.create({ firstName, lastName, emailAddress: email, password })
+            await signUp.create({ firstName, lastName, emailAddress: email, password, legalAccepted: true })
             await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
             setPendingVerification(true)
         } catch (err: unknown) {
@@ -127,13 +127,19 @@ export default function SignUpPage() {
         setIsLoading(true)
         setError('')
         try {
-            const result = await signUp.attemptEmailAddressVerification({ code })
+            let result = await signUp.attemptEmailAddressVerification({ code })
+
+            // If missing_requirements (e.g. legal not yet accepted), update and reload
+            if (result.status === 'missing_requirements') {
+                result = await signUp.update({ legalAccepted: true })
+            }
+
             if (result.status === 'complete') {
                 await setActive({ session: result.createdSessionId })
                 router.replace('/')
             } else {
                 console.log(JSON.stringify(result, null, 2))
-                setError('Verification failed. Please try again.')
+                setError('Could not complete sign up. Please try again.')
             }
         } catch (err: unknown) {
             console.error(JSON.stringify(err, null, 2))
@@ -381,6 +387,30 @@ export default function SignUpPage() {
                         >
                             {isLoading ? 'Processing…' : pendingVerification ? 'Verify email' : 'Create account'}
                         </button>
+
+                        {!pendingVerification && (
+                            <p className="text-center text-xs text-gray-400 leading-relaxed">
+                                By creating an account, you agree to our{' '}
+                                <a
+                                    href="https://myaladdin.app/terms"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline hover:text-gray-600"
+                                >
+                                    Terms of Service
+                                </a>{' '}
+                                and{' '}
+                                <a
+                                    href="https://myaladdin.app/privacy"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline hover:text-gray-600"
+                                >
+                                    Privacy Policy
+                                </a>
+                                .
+                            </p>
+                        )}
                     </form>
 
                     {/* Toggle to sign-in */}
