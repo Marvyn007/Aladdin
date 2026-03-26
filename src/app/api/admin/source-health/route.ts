@@ -31,7 +31,7 @@ export async function GET() {
       const avgDuration = successful.length > 0
         ? successful.reduce((sum, l) => sum + (l.durationMs ?? 0), 0) / successful.length
         : null
-      const totalJobs = successful.reduce((sum, l) => sum + (l.jobsFound ?? 0), 0)
+      const totalJobs = successful.reduce((sum, l) => sum + (l.jobsFetched ?? 0), 0)
 
       return {
         source,

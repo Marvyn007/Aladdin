@@ -174,7 +174,6 @@ function SortableJobCard({
                     <InterviewExperienceModal
                         isOpen={isReviewModalOpen}
                         onClose={() => setIsReviewModalOpen(false)}
-                        initialCompany={application.job?.company}
                     />
                 </>
             )}

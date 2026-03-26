@@ -62,7 +62,7 @@ export async function backfillJobs(): Promise<BackfillResult> {
   // Fetch all jobs that need backfill (missing source or externalId)
   const jobs = await prisma.job.findMany({
     where: {
-      OR: [{ source: null }, { externalId: null }],
+      OR: [{ source: 'imported' }, { externalId: '' }],
     },
     select: {
       id: true,

@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
         const searchParams = request.nextUrl.searchParams;
         const page = parseInt(searchParams.get('page') || '1', 10);
         const limit = parseInt(searchParams.get('limit') || '50', 10);
-        const sortBy = (searchParams.get('sort_by') || 'time') as 'time' | 'imported' | 'score' | 'relevance';
+        const rawSort = searchParams.get('sort_by') || 'time';
+        const sortBy = (['time', 'imported'].includes(rawSort) ? rawSort : 'time') as 'time' | 'imported';
         const sortDir = (searchParams.get('sort_dir') || 'desc') as 'asc' | 'desc';
         // 'my-jobs' endpoint handles user-specific job lists: 'fresh', 'saved', 'archived'
         const status = (searchParams.get('status') || 'saved') as 'fresh' | 'saved' | 'archived';

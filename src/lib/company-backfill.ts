@@ -75,7 +75,7 @@ export async function hydrateCompanyLogos(
       }
     } catch (error) {
       errors += 1;
-      logger.error(`ERR  ${row.name}: ${error?.message || error}`);
+      logger.error(`ERR  ${row.name}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     await sleeper(throttleMs);
