@@ -18,6 +18,7 @@ import { callLLM } from "@/lib/resume-generation/utils";
 import { MASTER_PROFILE_SYSTEM_PROMPT, buildMasterProfileUserPrompt } from "@/lib/resume-generation/prompts";
 import type { MasterProfile } from "@/lib/resume-generation/types";
 import { insertCoverLetter } from "@/lib/db";
+import { toPlainText } from "@/lib/plain-text";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,6 +42,7 @@ function createSSEStream(req: Request) {
 
         const body = await req.json();
         const { job_id, job_description } = body;
+        const plainJobDescription = toPlainText(job_description);
 
         if (!job_id) {
           sendEvent("error", { message: "Job ID is required" });
@@ -226,7 +228,7 @@ companyAddress: ${companyAddress || 'Not provided'}
 recipientName: ${recipientName || 'Not provided'}
 
 JOB DESCRIPTION:
-${job_description || 'Not provided'}
+${plainJobDescription || 'Not provided'}
 
 Write a tailored cover letter using the provided data. Use the provided date, recipient, and company address in the header if available. Do not invent achievements or metrics not present in the profile. Return PLAIN TEXT under 400 words.`;
 

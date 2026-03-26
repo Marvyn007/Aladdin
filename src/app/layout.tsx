@@ -1,12 +1,16 @@
 // Root layout component with Clerk authentication
 
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Geist } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from '@clerk/nextjs';
 import { ThemeRegistry } from "@/components/theme/ThemeRegistry";
 import { Analytics } from '@vercel/analytics/next';
 import { FilterProvider } from "@/contexts/FilterContext";
+import { cn } from "@/lib/utils";
+import { ProfileCompletionWidget } from "@/components/ProfileCompletionWidget";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,12 +38,13 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
         <body className={inter.className} suppressHydrationWarning>
           <ThemeRegistry>
             <FilterProvider>
               {children}
             </FilterProvider>
+            <ProfileCompletionWidget />
           </ThemeRegistry>
           <Analytics />
         </body>

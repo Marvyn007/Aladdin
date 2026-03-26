@@ -1,0 +1,440 @@
+﻿\next.config.ts:13 - default
+\vitest.config.ts:5 - default
+\scripts\seed-data.ts:157 - seedDatabase (used in module)
+\scripts\seed-data.ts:6 - SAMPLE_JOBS (used in module)
+\scripts\seed-data.ts:100 - SAMPLE_RESUME (used in module)
+\scripts\seed-data.ts:169 - default
+\src\proxy.ts:17 - default
+\src\proxy.ts:42 - config
+\tests\job-scraper-v2.test.ts:186 - validateScrapeResult (used in module)
+\src\app\layout.tsx:30 - default
+\src\app\layout.tsx:17 - metadata
+\src\app\page.tsx:6 - default
+\src\contexts\FilterContext.tsx:36 - formatFilterWithType
+\src\contexts\FilterContext.tsx:469 - useFilteredJobs
+\src\contexts\FilterContext.tsx:14 - FilterWithType (used in module)
+\src\contexts\FilterContext.tsx:58 - JobMatchResult (used in module)
+\src\lib\application-cache.ts:11 - ApplicationCacheKeys (used in module)
+\src\lib\auth-helper.ts:13 - getAuthenticatedUserId (used in module)
+\src\lib\auth-helper.ts:27 - withAuth
+\src\lib\auth-helper.ts:46 - isAuthenticated
+\src\lib\auth-helper.ts:58 - getUserIdOrNull
+\src\lib\cover-letter-service.ts:15 - GenerationResult (used in module)
+\src\lib\geocoding.ts:6 - GeoPoint (used in module)
+\src\lib\interview-validation.ts:12 - SALARY_HARD_CAP (used in module)
+\src\lib\interview-validation.ts:13 - SALARY_WARNING_CAP (used in module)
+\src\lib\interview-validation.ts:14 - MIN_COMMENT_LENGTH (used in module)
+\src\lib\interview-validation.ts:15 - MAX_DURATION_MINS (used in module)
+\src\lib\interview-validation.ts:17 - InterviewValidationResult (used in module)
+\src\lib\job-parser.ts:11 - parseJobHtml
+\src\lib\job-parser.ts:41 - parseJobFromDocument
+\src\lib\job-parser.ts:1 - JobParseResult (used in module)
+\src\lib\job-scraper-v2.ts:16 - ExtractionConfidence (used in module)
+\src\lib\keyword-extractor.ts:155 - extractKeywords (used in module)
+\src\lib\keyword-extractor.ts:217 - matchKeywords (used in module)
+\src\lib\keyword-extractor.ts:258 - calculateATSScore (used in module)
+\src\lib\keyword-extractor.ts:301 - generateKeywordSuggestions (used in module)
+\src\lib\keyword-extractor.ts:351 - analyzeJobForATS
+\src\lib\keyword-extractor.ts:145 - ExtractedKeywords (used in module)
+\src\lib\keyword-extractor.ts:207 - KeywordMatch (used in module)
+\src\lib\keyword-extractor.ts:246 - ATSScore (used in module)
+\src\lib\keyword-extractor.ts:291 - KeywordSuggestion (used in module)
+\src\lib\openai.ts:151 - scoreJob
+\src\lib\postgres.ts:89 - query (used in module)
+\src\lib\reactiveResumeClient.ts:120 - buildMinimalResumeData (used in module)
+\src\lib\reactiveResumeClient.ts:219 - importResume (used in module)
+\src\lib\reactiveResumeClient.ts:263 - createResume
+\src\lib\reactiveResumeClient.ts:313 - patchResume
+\src\lib\reactiveResumeClient.ts:362 - updateResume
+\src\lib\reactiveResumeClient.ts:369 - getResume
+\src\lib\reactiveResumeClient.ts:376 - getResumes
+\src\lib\reactiveResumeClient.ts:383 - exportResumePDF
+\src\lib\reactiveResumeClient.ts:395 - testConnection
+\src\lib\reactiveResumeClient.ts:423 - parseViaChat
+\src\lib\reactiveResumeClient.ts:33 - reactiveClient (used in module)
+\src\lib\reactiveResumeClient.ts:65 - client
+\src\lib\reactiveResumeClient.ts:67 - Resume (used in module)
+\src\lib\reactiveResumeClient.ts:83 - ReactiveResumeResponse
+\src\lib\reactiveResumeClient.ts:87 - ResumeData (used in module)
+\src\lib\reactiveResumeClient.ts:410 - ChatParseRequest (used in module)
+\src\lib\resume-cache.ts:35 - setCachedParse
+\src\lib\resume-cache.ts:50 - getCachedParse
+\src\lib\resume-cache.ts:68 - invalidateForUser
+\src\lib\resume-cache.ts:80 - clearCache
+\src\lib\resume-cache.ts:87 - getCacheSize
+\src\lib\resume-templates.ts:416 - renderClassicTemplate (used in module)
+\src\lib\resume-templates.ts:459 - renderModernTemplate (used in module)
+\src\lib\resume-templates.ts:625 - renderExecutiveTemplate (used in module)
+\src\lib\resume-templates.ts:741 - renderProfessionalTemplate (used in module)
+\src\lib\resume-templates.ts:879 - renderMinimalTemplate (used in module)
+\src\lib\resume-templates.ts:548 - EXECUTIVE_TEMPLATE_CSS (used in module)
+\src\lib\resume-templates.ts:666 - PROFESSIONAL_TEMPLATE_CSS (used in module)
+\src\lib\resume-templates.ts:802 - MINIMAL_TEMPLATE_CSS (used in module)
+\src\lib\resume-templates.ts:965 - TEMPLATE_CSS_MAP (used in module)
+\src\lib\scoring.ts:32 - calculateMatchScore
+\src\lib\sqlite.ts:271 - closeSQLiteDB
+\src\lib\supabase.ts:38 - checkSupabaseConnection
+\src\lib\text-cleaner.ts:146 - getBestDescription
+\src\lib\text-cleaner.ts:171 - isDescriptionComplete
+\src\lib\themes.ts:1 - ColorPalette (used in module)
+\src\lib\themes.ts:12 - ThemeDefinition (used in module)
+\src\lib\themes.ts:22 - DEFAULT_THEME_ID (used in module)
+\src\lib\themes.ts:26 - THEME_MODE_CODES (used in module)
+\src\lib\themes.ts:32 - COLOR_PALETTE_CODES (used in module)
+\src\lib\themes.ts:43 - THEME_MODE_FROM_CODE (used in module)
+\src\lib\themes.ts:48 - COLOR_PALETTE_FROM_CODE (used in module)
+\src\lib\username.ts:80 - generateUsernameSuggestions
+\src\lib\username.ts:151 - isReservedUsername
+\src\lib\username.ts:159 - normalizeUsername
+\src\lib\vector-math.ts:6 - magnitude (used in module)
+\src\lib\vector-math.ts:11 - normalize (used in module)
+\src\lib\vector-math.ts:18 - cosineSimilarity
+\src\store\useStore.ts:551 - useJobs
+\src\store\useStore.ts:552 - useSelectedJob
+\src\store\useStore.ts:553 - useApplications
+\src\store\useStore.ts:554 - useFilters
+\src\types\index.ts:4 - JobStatus (used in module)
+\src\types\index.ts:6 - Job (used in module)
+\src\types\index.ts:59 - JobWithPostedBy
+\src\types\index.ts:69 - JobWithApplication
+\src\types\index.ts:74 - Resume
+\src\types\index.ts:83 - ParsedResume (used in module)
+\src\types\index.ts:106 - ResumeRole (used in module)
+\src\types\index.ts:114 - ResumeEducation (used in module)
+\src\types\index.ts:122 - ResumeSkill (used in module)
+\src\types\index.ts:128 - ResumeProject (used in module)
+\src\types\index.ts:136 - LinkedInProfile
+\src\types\index.ts:145 - ApplicationColumn (used in module)
+\src\types\index.ts:154 - Application (used in module)
+\src\types\index.ts:166 - ApplicationWithJob
+\src\types\index.ts:171 - CoverLetter
+\src\types\index.ts:184 - ScoreBreakdown (used in module)
+\src\types\index.ts:191 - ScoreResult
+\src\types\index.ts:201 - CoverLetterResult
+\src\types\index.ts:206 - TailoredResumeResult
+\src\types\index.ts:213 - UploadResumeRequest
+\src\types\index.ts:218 - FindFreshRequest
+\src\types\index.ts:222 - BookmarkRequest
+\src\types\index.ts:228 - GenerateCoverLetterRequest
+\src\types\index.ts:234 - FilterState
+\src\types\index.ts:240 - AppSettings
+\src\types\index.ts:247 - BookmarkletPayload
+\src\types\index.ts:258 - ResumeContactInfo (used in module)
+\src\types\index.ts:268 - ResumeBullet (used in module)
+\src\types\index.ts:275 - ResumeSectionItem (used in module)
+\src\types\index.ts:287 - ResumeSection (used in module)
+\src\types\index.ts:296 - ResumeSkillsSection (used in module)
+\src\types\index.ts:298 - ResumeDesign (used in module)
+\src\types\index.ts:311 - TailoredResumeData (used in module)
+\src\types\index.ts:325 - KeywordAnalysis (used in module)
+\src\types\index.ts:339 - TailoredResumeGenerationResponse
+\src\types\index.ts:346 - ResumeDraft
+\src\types\index.ts:357 - LeakCheckResult
+\src\types\index.ts:363 - DEFAULT_RESUME_DESIGN
+\src\types\index.ts:375 - SeniorityLevel
+\src\types\index.ts:377 - ExtractedSkill (used in module)
+\src\types\index.ts:384 - JobExtractionResult (used in module)
+\src\types\index.ts:393 - CandidateSkill (used in module)
+\src\types\index.ts:401 - CandidateProfile
+\src\types\index.ts:418 - ScoreBreakdownV2 (used in module)
+\src\types\index.ts:427 - MatchedSkill (used in module)
+\src\types\index.ts:434 - ScoreResultV2
+\src\types\index.ts:447 - CachedExtraction
+\src\types\index.ts:459 - ConfidenceField (used in module)
+\src\types\index.ts:465 - CanonicalContactLink (used in module)
+\src\types\index.ts:471 - CanonicalContacts (used in module)
+\src\types\index.ts:478 - CanonicalEducation (used in module)
+\src\types\index.ts:489 - CanonicalExperience (used in module)
+\src\types\index.ts:501 - CanonicalProject (used in module)
+\src\types\index.ts:511 - CanonicalVolunteer (used in module)
+\src\types\index.ts:522 - CanonicalSkills (used in module)
+\src\types\index.ts:528 - CanonicalCertification (used in module)
+\src\types\index.ts:536 - CanonicalParsedResume (used in module)
+\src\types\index.ts:551 - GeneratedResumeSection (used in module)
+\src\types\index.ts:558 - GeneratedResumeSectionItem (used in module)
+\src\types\index.ts:567 - GeneratedResumeStructured (used in module)
+\src\types\index.ts:573 - ResumeParserStatus (used in module)
+\src\types\index.ts:581 - ResumeParserResponse
+\.next\dev\types\routes.d.ts:92 - ParamsOf
+\.next\dev\types\routes.d.ts:101 - PageRoutes (used in module)
+\.next\dev\types\routes.d.ts:101 - RedirectRoutes (used in module)
+\.next\dev\types\routes.d.ts:101 - RewriteRoutes (used in module)
+\src\app\application-tracker\page.tsx:6 - default
+\src\app\interview-experiences\page.tsx:6 - default
+\src\app\jobs-map\page.tsx:6 - default
+\src\app\sso-callback\page.tsx:5 - default
+\src\app\tracker\page.tsx:292 - default
+\src\components\common\SearchBar.tsx:25 - SearchBar
+\src\components\layout\JobDetail.tsx:15 - getCompanyColor (used in module)
+\src\components\layout\JobDetail.tsx:25 - getCompanyInitial (used in module)
+\src\components\layout\JobList.tsx:91 - getCompanyColor (used in module)
+\src\components\layout\JobList.tsx:101 - getCompanyInitial (used in module)
+\src\components\layout\KeywordsFilter.tsx:17 - KeywordsFilter
+\src\components\shared\CompanyAutocomplete.tsx:7 - getCompanyColor
+\src\components\shared\CompanyAutocomplete.tsx:17 - getCompanyInitial
+\src\lib\adapters\huggingface.ts:180 - isHuggingFaceAvailable
+\src\lib\adapters\huggingface.ts:6 - HFGenerationParams (used in module)
+\src\lib\adapters\ollama.ts:56 - truncateInput
+\src\lib\adapters\ollama.ts:210 - getCachedHealthStatus
+\src\lib\adapters\ollama.ts:220 - isOllamaHealthy
+\src\lib\adapters\ollama.ts:230 - callOllama
+\src\lib\adapters\ollama.ts:244 - generateWithOllama (used in module)
+\src\lib\adapters\ollama.ts:380 - resetOllamaCache
+\src\lib\adapters\ollama.ts:25 - INPUT_LIMITS
+\src\lib\adapters\ollama.ts:36 - OllamaHealthResult (used in module)
+\src\lib\adapters\ollama.ts:44 - OllamaGenerateResult (used in module)
+\src\lib\adapters\replicate.ts:2 - ReplicateResponse
+\src\lib\job-sources\index.ts:144 - JobSourceCoordinator
+\src\lib\job-sources\others.ts:4 - ZipRecruiterAdapter
+\src\lib\job-sources\others.ts:20 - JoobleAdapter
+\src\lib\job-sources\others.ts:64 - CareerjetAdapter
+\src\lib\job-sources\types.ts:1 - JobSourceConfig (used in module)
+\src\lib\resume-generation\ats.ts:35 - extractATSKeywords (used in module)
+\src\lib\resume-generation\ats.ts:74 - flattenATSKeywords (used in module)
+\src\lib\resume-generation\ats.ts:93 - computeMissingSkills
+\src\lib\resume-generation\ats.ts:125 - ATSContext (used in module)
+\src\lib\resume-generation\parser.ts:15 - extractRawText (used in module)
+\src\lib\resume-generation\parser.ts:57 - parseTextWithLLM (used in module)
+\src\lib\resume-generation\types.ts:31 - ResumeBasics (used in module)
+\src\lib\resume-generation\types.ts:45 - DynamicEntry (used in module)
+\src\lib\resume-generation\types.ts:57 - DynamicSection (used in module)
+\src\lib\resume-generation\types.ts:82 - MasterProfileEntry (used in module)
+\src\lib\resume-generation\types.ts:88 - MasterProfileSection (used in module)
+\src\lib\resume-generation\utils.ts:155 - truncate
+\src\lib\resume-generation\utils.ts:84 - LLMMessage (used in module)
+\src\lib\resume-generation\utils.ts:89 - CallLLMOptions (used in module)
+\src\lib\search\enhanced.ts:1087 - classifyQuery (used in module)
+\src\lib\search\enhanced.ts:1088 - normalizeText (used in module)
+\src\lib\search\enhanced.ts:1089 - tokenize (used in module)
+\src\lib\search\fuzzy.ts:163 - findFuzzyWordMatches (used in module)
+\src\lib\search\fuzzy.ts:193 - calculatePhraseFuzzyScore
+\src\lib\search\fuzzy.ts:336 - generateFuzzySqlConditions
+\src\lib\search\fuzzy.ts:348 - generateSimilarityCondition
+\src\lib\search\fuzzy.ts:424 - getCachedTrigrams (used in module)
+\src\lib\search\fuzzy.ts:448 - cachedTrigramSimilarity
+\src\lib\search\index.ts:35 - searchJobs
+\src\lib\search\index.ts:35 - classifyQuery (used in module)
+\src\lib\search\index.ts:35 - suggestCorrection (used in module)
+\src\lib\search\index.ts:35 - generateAlternatives (used in module)
+\src\lib\search\index.ts:38 - searchJobsEnhanced
+\src\lib\search\index.ts:39 - EnhancedSearchResponse
+\src\lib\search\index.ts:43 - SearchQuery
+\src\lib\search\index.ts:44 - SearchResponse (used in module)
+\src\lib\search\index.ts:45 - SearchResultJob
+\src\lib\search\index.ts:46 - SearchFilters
+\src\lib\search\index.ts:47 - SearchPagination
+\src\lib\search\index.ts:48 - MatchCategory
+\src\lib\search\index.ts:49 - QueryType
+\src\lib\search\index.ts:50 - QueryClassification
+\src\lib\search\index.ts:51 - MatchScore
+\src\lib\search\index.ts:52 - ScoringWeights
+\src\lib\search\index.ts:53 - SuggestionResponse
+\src\lib\search\index.ts:54 - TokenizedQuery
+\src\lib\search\index.ts:59 - normalizeText
+\src\lib\search\index.ts:60 - tokenize
+\src\lib\search\index.ts:61 - extractPhrases
+\src\lib\search\index.ts:62 - classifyQueryFromTokenizer
+\src\lib\search\index.ts:63 - createTokenizedQuery
+\src\lib\search\index.ts:64 - containsAllTokens
+\src\lib\search\index.ts:65 - containsAnyToken
+\src\lib\search\index.ts:66 - countMatchingTokens
+\src\lib\search\index.ts:67 - isLikelyCompanyName
+\src\lib\search\index.ts:68 - isLikelyLocation
+\src\lib\search\index.ts:73 - calculateTitleScore
+\src\lib\search\index.ts:74 - calculateCompanyScore
+\src\lib\search\index.ts:75 - calculateLocationScore
+\src\lib\search\index.ts:76 - calculateSemanticScore
+\src\lib\search\index.ts:77 - calculateTotalScore
+\src\lib\search\index.ts:78 - getWeightsForQueryType
+\src\lib\search\index.ts:79 - scoreJobResult
+\src\lib\search\index.ts:80 - detectMatchCategories
+\src\lib\search\index.ts:81 - generateMatchDetails
+\src\lib\search\index.ts:82 - generateMatchSnippet
+\src\lib\search\index.ts:83 - isRelevantScore
+\src\lib\search\index.ts:84 - SCORE_THRESHOLDS
+\src\lib\search\index.ts:89 - getQueryEmbedding
+\src\lib\search\index.ts:90 - clearEmbeddingCache
+\src\lib\search\index.ts:91 - getCacheStats
+\src\lib\search\index.ts:92 - cosineSimilarity
+\src\lib\search\index.ts:93 - normalizeSimilarity
+\src\lib\search\index.ts:94 - distanceToSimilarity
+\src\lib\search\index.ts:95 - expandQueryForSemantic
+\src\lib\search\index.ts:96 - generateRichEmbedding
+\src\lib\search\index.ts:97 - isSimilarityRelevant
+\src\lib\search\index.ts:98 - SIMILARITY_THRESHOLDS
+\src\lib\search\index.ts:103 - levenshteinDistance
+\src\lib\search\index.ts:104 - levenshteinSimilarity
+\src\lib\search\index.ts:105 - isFuzzyMatch
+\src\lib\search\index.ts:106 - generateTrigrams
+\src\lib\search\index.ts:107 - trigramSimilarity
+\src\lib\search\index.ts:108 - meetsFuzzyThreshold
+\src\lib\search\index.ts:109 - suggestCorrectionFromFuzzy
+\src\lib\search\index.ts:110 - generateAlternativesFromFuzzy
+\src\lib\search\index.ts:111 - fuzzyMatchFallback
+\src\lib\search\index.ts:112 - FUZZY_THRESHOLDS
+\src\lib\search\index.ts:116 - DEFAULT_WEIGHTS
+\src\lib\search\index.ts:116 - QUERY_TYPE_WEIGHTS
+\src\lib\search\scoring.ts:182 - calculateFuzzyScore
+\src\lib\search\semantic.ts:123 - findTopKSimilar
+\src\lib\search\semantic.ts:240 - extractJobTextForEmbedding
+\src\lib\search\semantic.ts:281 - embeddingToPostgresVector
+\src\lib\search\semantic.ts:289 - parsePostgresVector
+\src\lib\search\semantic.ts:304 - filterBySimilarityThreshold
+\src\lib\search\semantic.ts:315 - combineSimilarities
+\src\lib\search\synonyms.ts:167 - getSynonymSuggestions
+\src\lib\search\synonyms.ts:9 - TITLE_SYNONYMS (used in module)
+\src\lib\search\synonyms.ts:92 - LOCATION_SYNONYMS (used in module)
+\src\lib\search\synonyms.ts:112 - COMPANY_SYNONYMS (used in module)
+\src\lib\search\tokenizer.ts:286 - generateSqlPatterns
+\src\lib\search\tokenizer.ts:293 - extractBestPhrase
+\src\lib\search\tokenizer.ts:254 - expandQueryWithSynonyms (used in module)
+\src\lib\search\tokenizer.ts:254 - getSynonyms (used in module)
+\src\lib\search\tokenizer.ts:254 - isAbbreviation (used in module)
+\src\lib\search\tokenizer.ts:254 - getPrimaryExpansion (used in module)
+\src\lib\search\types.ts:27 - SearchTiming (used in module)
+\src\lib\search\types.ts:33 - MatchDetails (used in module)
+\src\lib\search\types.ts:149 - SuggestionOptions
+\src\lib\search\types.ts:158 - SmartSuggestion (used in module)
+\src\lib\search\types.ts:169 - TrendingSearch (used in module)
+\src\lib\search\types.ts:175 - SmartSuggestionResponse
+\src\lib\search\types.ts:188 - DatabaseJobMatch (used in module)
+\src\lib\search\types.ts:242 - SearchCache
+\src\app\api\add-bookmark\route.ts:71 - POST
+\src\app\api\ai-reset\route.ts:3 - POST
+\src\app\api\ai-status\route.ts:3 - GET
+\src\app\api\application\route.ts:18 - GET
+\src\app\api\application\route.ts:35 - POST
+\src\app\api\application\route.ts:87 - PUT
+\src\app\api\application\route.ts:131 - DELETE
+\src\app\api\archives\route.ts:9 - GET
+\src\app\api\categorize-skills\route.ts:4 - POST
+\src\app\api\companies\route.ts:4 - GET
+\src\app\api\company\route.ts:7 - POST
+\src\app\api\company-logos\route.ts:23 - GET
+\src\app\api\example-jobs\route.ts:11 - GET
+\src\app\api\example-jobs\route.ts:68 - POST
+\src\app\api\example-user-data\route.ts:11 - GET
+\src\app\api\example-user-data\route.ts:78 - DELETE
+\src\app\api\generate-cover-letter\route.ts:16 - POST
+\src\app\api\generate-cover-letter-stream\route.ts:290 - POST
+\src\app\api\generate-tailored-resume-stream\route.ts:172 - POST
+\src\app\api\import-job\route.ts:26 - POST
+\src\app\api\import-job\route.ts:21 - dynamic
+\src\app\api\import-job\route.ts:22 - maxDuration
+\src\app\api\interview-experiences\route.ts:7 - POST
+\src\app\api\interview-experiences\route.ts:99 - GET
+\src\app\api\job-sources-status\route.ts:8 - GET
+\src\app\api\jobs\route.ts:7 - GET
+\src\app\api\jobs\route.ts:5 - dynamic
+\src\app\api\my-jobs\route.ts:5 - GET
+\src\app\api\parse-resume\route.ts:8 - POST
+\src\app\api\parse-resume\route.ts:6 - runtime
+\src\app\api\render-resume-pdf\route.ts:14 - POST
+\src\app\api\render-resume-pdf\route.ts:12 - runtime
+\src\app\api\resume-export\route.ts:16 - POST
+\src\app\api\resume-export\route.ts:14 - runtime
+\src\app\api\run-ai-cleanup\route.ts:11 - POST
+\src\app\api\run-ai-cleanup\route.ts:8 - runtime
+\src\app\api\run-ai-cleanup\route.ts:9 - maxDuration
+\src\app\api\run-archiver\route.ts:7 - POST
+\src\app\api\run-finder\route.ts:12 - POST
+\src\app\api\run-finder\route.ts:8 - maxDuration
+\src\app\api\save-tailored-resume\route.ts:17 - POST
+\src\app\api\save-tailored-resume\route.ts:15 - runtime
+\src\app\api\settings\route.ts:6 - GET
+\src\app\api\settings\route.ts:24 - POST
+\src\app\api\tailored-resume\route.ts:13 - GET
+\src\app\api\tailored-resume\route.ts:48 - POST
+\src\app\api\tailored-resume\route.ts:11 - runtime
+\src\app\api\upload-linkedin\route.ts:11 - POST
+\src\app\api\upload-linkedin\route.ts:66 - GET
+\src\app\api\upload-linkedin\route.ts:9 - runtime
+\src\app\api\upload-resume\route.ts:15 - GET
+\src\app\api\upload-resume\route.ts:34 - POST
+\src\app\api\upload-resume\route.ts:78 - PATCH
+\src\app\api\upload-resume\route.ts:103 - DELETE
+\src\app\api\upload-resume\route.ts:12 - runtime
+\src\app\api\vote-job\route.ts:8 - POST
+\src\app\api\vote-job\route.ts:99 - GET
+\src\app\api\vote-job\route.ts:6 - dynamic
+\src\app\interview-experiences\[company_name]\page.tsx:6 - default
+\src\app\resume-editor\[jobId]\page.tsx:8 - default
+\src\app\sign-in\[[...sign-in]]\layout.tsx:8 - default
+\src\app\sign-in\[[...sign-in]]\layout.tsx:4 - metadata
+\src\app\sign-in\[[...sign-in]]\page.tsx:9 - default
+\src\app\sign-up\[[...sign-up]]\layout.tsx:8 - default
+\src\app\sign-up\[[...sign-up]]\layout.tsx:4 - metadata
+\src\app\sign-up\[[...sign-up]]\page.tsx:9 - default
+\src\app\api\cron\process-queue\route.ts:8 - GET
+\src\app\api\cron\process-queue\route.ts:6 - dynamic
+\src\app\api\debug\ai-status\route.ts:5 - GET
+\src\app\api\debug\ai-status\route.ts:3 - dynamic
+\src\app\api\debug\compose-response\route.ts:5 - GET
+\src\app\api\debug\db-check\route.ts:9 - GET
+\src\app\api\debug\db-check\route.ts:6 - runtime
+\src\app\api\debug\db-check\route.ts:7 - dynamic
+\src\app\api\debug\db-type\route.ts:7 - GET
+\src\app\api\debug\db-type\route.ts:4 - runtime
+\src\app\api\debug\db-type\route.ts:5 - dynamic
+\src\app\api\debug\diagnose-providers\route.ts:215 - GET
+\src\app\api\debug\diagnose-providers\route.ts:5 - dynamic
+\src\app\api\debug\diagnose-providers\route.ts:6 - maxDuration
+\src\app\api\debug\rest-check\route.ts:7 - GET
+\src\app\api\debug\rest-check\route.ts:4 - runtime
+\src\app\api\debug\rest-check\route.ts:5 - dynamic
+\src\app\api\debug\run-migration\route.ts:7 - POST
+\src\app\api\debug\run-migration\route.ts:4 - runtime
+\src\app\api\debug\run-migration\route.ts:5 - dynamic
+\src\app\api\debug\s3-test\route.ts:7 - GET
+\src\app\api\debug\s3-test\route.ts:4 - runtime
+\src\app\api\debug\s3-test\route.ts:5 - dynamic
+\src\app\api\debug\supabase-test\route.ts:8 - GET
+\src\app\api\debug\supabase-test\route.ts:5 - runtime
+\src\app\api\debug\supabase-test\route.ts:6 - dynamic
+\src\app\api\debug\test-huggingface\route.ts:12 - GET
+\src\app\api\debug\test-huggingface\route.ts:9 - dynamic
+\src\app\api\debug\test-huggingface\route.ts:10 - maxDuration
+\src\app\api\debug\test-ollama\route.ts:14 - GET
+\src\app\api\debug\test-ollama\route.ts:11 - dynamic
+\src\app\api\debug\test-ollama\route.ts:12 - maxDuration
+\src\app\api\interview-experiences\[id]\route.ts:6 - PUT
+\src\app\api\interview-experiences\[id]\route.ts:100 - DELETE
+\src\app\api\job\[id]\route.ts:8 - GET
+\src\app\api\job\[id]\route.ts:48 - PATCH
+\src\app\api\job\[id]\route.ts:86 - PUT
+\src\app\api\job\[id]\route.ts:141 - DELETE
+\src\app\api\jobs\geo\route.ts:8 - GET
+\src\app\api\jobs\geo\route.ts:124 - POST
+\src\app\api\linkedin\[id]\route.ts:8 - GET
+\src\app\api\linkedin\[id]\route.ts:35 - DELETE
+\src\app\api\linkedin\[id]\route.ts:6 - runtime
+\src\app\api\search\did-you-mean\route.ts:12 - GET
+\src\app\api\search\did-you-mean\route.ts:62 - POST
+\src\app\api\search\did-you-mean\route.ts:4 - dynamic
+\src\app\api\search\jobs\route.ts:46 - POST
+\src\app\api\search\jobs\route.ts:151 - GET
+\src\app\api\search\jobs\route.ts:6 - dynamic
+\src\app\api\search\smart-suggestions\route.ts:17 - GET
+\src\app\api\search\smart-suggestions\route.ts:453 - POST
+\src\app\api\search\smart-suggestions\route.ts:6 - dynamic
+\src\app\api\search\suggestions\route.ts:22 - GET
+\src\app\api\search\suggestions\route.ts:7 - dynamic
+\src\app\api\user\activity\route.ts:8 - GET
+\src\app\api\user\init\route.ts:11 - POST
+\src\app\api\user\interviews\route.ts:5 - GET
+\src\app\api\user\preferences\route.ts:5 - GET
+\src\app\api\user\profile\route.ts:12 - GET
+\src\app\api\user\profile\route.ts:35 - PUT
+\src\app\api\user\username\route.ts:11 - PUT
+\src\app\api\admin\interviews\flags\route.ts:5 - GET
+\src\app\api\cover-letters\[id]\generate-pdf\route.ts:10 - POST
+\src\app\api\cover-letters\[id]\generate-pdf\route.ts:5 - runtime
+\src\app\api\cover-letters\[id]\generate-pdf\route.ts:6 - maxDuration
+\src\app\api\interview-experiences\by-company\[company_name]\route.ts:4 - GET
+\src\app\api\resumes\[id]\download\route.ts:16 - GET
+\src\app\api\resumes\[id]\download\route.ts:14 - runtime
+\src\app\api\resumes\[id]\preview\route.ts:9 - GET
+\src\app\api\resumes\[id]\preview\route.ts:7 - runtime
+\src\app\api\user\preferences\filters\route.ts:7 - POST
+\src\app\api\user\username\generate\route.ts:10 - POST
+\src\app\api\user\username\validate\route.ts:11 - POST

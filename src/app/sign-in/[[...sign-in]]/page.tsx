@@ -5,6 +5,7 @@ import { useSignIn } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import { getClerkErrorMessage } from '@/lib/clerk-error'
 
 export default function SignInPage() {
     const { isLoaded, signIn, setActive } = useSignIn()
@@ -22,7 +23,7 @@ export default function SignInPage() {
         return signIn.authenticateWithRedirect({
             strategy,
             redirectUrl: '/sso-callback',
-            redirectUrlComplete: '/'
+            redirectUrlComplete: '/sso-callback'
         })
     }
 
@@ -41,15 +42,15 @@ export default function SignInPage() {
 
             if (result.status === 'complete') {
                 await setActive({ session: result.createdSessionId })
-                router.push('/')
+                router.replace('/')
             } else {
                 // Handle other statuses (e.g. MFA) if needed, 
                 // but for now we focus on basic auth matching the design
                 console.log('SignIn status:', result.status)
             }
-        } catch (err: any) {
-            console.error('Error:', err.errors[0])
-            setError(err.errors?.[0]?.message || 'Something went wrong')
+        } catch (err: unknown) {
+            console.error('Error:', err)
+            setError(getClerkErrorMessage(err, 'Something went wrong'))
         } finally {
             setIsLoading(false)
         }

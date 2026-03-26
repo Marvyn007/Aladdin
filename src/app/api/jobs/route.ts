@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllPublicJobs, getTotalPublicJobsCount, getLastJobIngestionTime, getJobs } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
+import { getOnboardingSnapshot } from '@/lib/onboarding-db';
+import { computePreferenceScore } from '@/lib/preference-scoring';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,9 +13,14 @@ export async function GET(request: NextRequest) {
         const page = parseInt(searchParams.get('page') || '1', 10);
         // Force limit to 50
         const limit = 50;
-        const sortBy = (searchParams.get('sort_by') || 'time') as 'time' | 'imported' | 'score';
+        const sortByRaw = (searchParams.get('sort_by') || 'time') as 'time' | 'imported' | 'score' | 'preferences';
         const sortDir = (searchParams.get('sort_dir') || 'desc') as 'asc' | 'desc';
         const statusParam = searchParams.get('status');
+
+        // Normalize sortBy for DB calls — 'preferences' and 'score' use time sort at DB level
+        // The API layer re-sorts by preference score after fetching (see below)
+        const dbSortBy: 'time' | 'imported' = (sortByRaw === 'imported') ? 'imported' : 'time';
+        const sortBy = sortByRaw;
 
         let jobs, total, lastUpdated;
 
@@ -21,7 +28,7 @@ export async function GET(request: NextRequest) {
         // 'fresh' is treated as default/all public stream for now, but annotating with user status
         if (userId && statusParam && statusParam !== 'fresh' && statusParam !== 'all') {
             [jobs, total, lastUpdated] = await Promise.all([
-                getJobs(userId, statusParam as any, page, limit, sortBy, sortDir),
+                getJobs(userId, statusParam as any, page, limit, dbSortBy, sortDir),
                 // We don't have a getTotalJobs(userId, status) helper exposed efficiently? 
                 // getJobs doesn't return total. We might need a separate count query or update getJobs.
                 // For now, let's use the public total/lastUpdated as fallback or implement count.
@@ -40,10 +47,28 @@ export async function GET(request: NextRequest) {
         } else {
             // Default: Public stream (annotated with user status if logged in)
             [jobs, total, lastUpdated] = await Promise.all([
-                getAllPublicJobs(page, limit, sortBy, sortDir, userId || null),
+                getAllPublicJobs(page, limit, sortByRaw === 'preferences' ? 'preferences' : dbSortBy, sortDir, userId || null),
                 getTotalPublicJobsCount(),
                 getLastJobIngestionTime()
             ]);
+        }
+
+        // Preference-based re-sort (per D-04, D-05, D-07)
+        // DB always returns jobs in time order; we re-sort in memory when sortBy=preferences
+        if (sortBy === 'preferences' && userId) {
+            try {
+                const snapshot = await getOnboardingSnapshot(userId);
+                if (snapshot.completed && snapshot.answers.length > 0) {
+                    jobs = jobs
+                        .map(job => ({ job, score: computePreferenceScore(job, snapshot.answersByKey) }))
+                        .sort((a, b) => b.score - a.score)
+                        .map(({ job }) => job);
+                }
+                // If not completed or no answers, jobs remain in default time order (soft degradation per D-05)
+            } catch (err) {
+                console.error('[Jobs API] Preference scoring failed, falling back to time sort:', err);
+                // Graceful fallback: return jobs in default order
+            }
         }
 
         const totalPages = Math.ceil(total / limit);

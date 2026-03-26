@@ -1,0 +1,187 @@
+﻿Folder: /.github
+File Count: 2
+Top 10 Largest Files:
+daily-fetch.yml (1392 bytes)
+pipeline-tests.yml (613 bytes)
+
+Folder: /.next
+File Count: 8799
+Top 10 Largest Files:
+00016295.sst (95404597 bytes)
+00016294.sst (94607772 bytes)
+00016293.sst (93257530 bytes)
+00016296.sst (71175040 bytes)
+00016297.sst (68670083 bytes)
+00015147.sst (24873458 bytes)
+trace (24164595 bytes)
+00016275.sst (15044327 bytes)
+00000069.sst (12865563 bytes)
+00000090.sst (11348345 bytes)
+
+Folder: /.venv
+File Count: 47878
+Top 10 Largest Files:
+torch_cpu.dll (264942080 bytes)
+cv2.pyd (89814528 bytes)
+torch_cpu.lib (29597848 bytes)
+opencv_videoio_ffmpeg4100_64.dll (26391552 bytes)
+libscipy_openblas64_-74a408729250596b0973e69fdd954eea.dll (20404736 bytes)
+libscipy_openblas-64eda39e79589aedb16f58e5547eb599.dll (20260864 bytes)
+torch_python.dll (18800128 bytes)
+_rust.pyd (9110528 bytes)
+sleef.lib (8812252 bytes)
+hf_xet.pyd (8186880 bytes)
+
+Folder: /data
+File Count: 1
+Top 10 Largest Files:
+9b389b7d-2f78-4c7f-9bbb-d5c570d5811d.json (8690 bytes)
+
+Folder: /debug
+File Count: 0
+Top 10 Largest Files:
+
+Folder: /docs
+File Count: 2
+Top 10 Largest Files:
+SEARCH_SYSTEM.md (12113 bytes)
+SEARCH_ARCHITECTURE.md (12048 bytes)
+
+Folder: /node_modules
+File Count: 59258
+Top 10 Largest Files:
+next-swc.win32-x64-msvc.node (125274112 bytes)
+chromium.br (57973447 bytes)
+skia.win32-x64-msvc.node (28346880 bytes)
+libonnxruntime.1.14.0.dylib (23843048 bytes)
+libonnxruntime.1.14.0.dylib (21163400 bytes)
+query_engine-windows.dll.node.tmp54756 (19261952 bytes)
+query_engine-windows.dll.node.tmp210840 (19261952 bytes)
+query_engine-windows.dll.node.tmp46096 (19261952 bytes)
+query_engine-windows.dll.node.tmp201612 (19261952 bytes)
+query_engine-windows.dll.node (19261952 bytes)
+
+Folder: /prisma
+File Count: 21
+Top 10 Largest Files:
+schema.prisma (21460 bytes)
+migration.sql (10317 bytes)
+migration.sql (9278 bytes)
+migration.sql (9272 bytes)
+migration.sql (6538 bytes)
+neon_init.sql (5078 bytes)
+004_make_user_id_non_nullable.sql (1870 bytes)
+005_global_jobs_refactor.sql (1699 bytes)
+005_recommendation_system.sql (1683 bytes)
+003_backfill_legacy_user.sql (1426 bytes)
+
+Folder: /public
+File Count: 42
+Top 10 Largest Files:
+gallery 7.png (1638429 bytes)
+gallery 4.png (1515735 bytes)
+gallery 8.png (1405385 bytes)
+gallery 5.png (1382680 bytes)
+gallery 6.png (1203824 bytes)
+gallery 1.jpg (905340 bytes)
+gallery 2.png (901440 bytes)
+gallery 3.png (724341 bytes)
+classic.jpg (291783 bytes)
+executive.png (262378 bytes)
+
+Folder: /python
+File Count: 20582
+Top 10 Largest Files:
+cv2.pyd (89814528 bytes)
+opencv_videoio_ffmpeg4100_64.dll (26391552 bytes)
+libscipy_openblas64_-74a408729250596b0973e69fdd954eea.dll (20404736 bytes)
+_rust.pyd (9110528 bytes)
+hf_xet.pyd (8186880 bytes)
+_avif.cp314-win_amd64.pyd (7833088 bytes)
+pdfium.dll (5802496 bytes)
+_pydantic_core.cp314-win_amd64.pyd (5427712 bytes)
+_multiarray_umath.cp314-win_amd64.pyd (3721728 bytes)
+haarcascade_frontalface_alt_tree.xml (2689040 bytes)
+
+Folder: /reports
+File Count: 8
+Top 10 Largest Files:
+ls-R.txt (50161410 bytes)
+grep-from.txt (93766 bytes)
+ts-prune.txt (48226 bytes)
+files.txt (23778 bytes)
+inventory.txt (1245 bytes)
+grep-require.txt (328 bytes)
+madge-src.json (10 bytes)
+depcheck.json (0 bytes)
+
+Folder: /scripts
+File Count: 39
+Top 10 Largest Files:
+seed-data.ts (7726 bytes)
+parse_pdf.py (7188 bytes)
+test-resume-compose.ts (7038 bytes)
+diagnose-ai.js (6343 bytes)
+backfill-legacy-user.js (6228 bytes)
+medical-check.ts (5849 bytes)
+process-embeddings.ts (5072 bytes)
+rebuild-companies.mjs (4874 bytes)
+migrate-data-to-neon.js (4312 bytes)
+test-global-isolation.ts (4237 bytes)
+
+Folder: /src
+File Count: 187
+Top 10 Largest Files:
+oldTailoredResumeEditor.txt (129492 bytes)
+db.ts (126357 bytes)
+AccountSettingsModal.tsx (91452 bytes)
+ContentPanel.tsx (72870 bytes)
+Dashboard.tsx (67653 bytes)
+FullPageResumeEditor.tsx (52706 bytes)
+favicon.ico (46326 bytes)
+JobDetail.tsx (45347 bytes)
+InterviewExperienceModal.tsx (38391 bytes)
+enhanced.ts (38273 bytes)
+
+Folder: /supabase
+File Count: 3
+Top 10 Largest Files:
+001_init.sql (6260 bytes)
+002_add_v2_job_fields.sql (2705 bytes)
+003_add_location_enrichment_fields.sql (1850 bytes)
+
+Folder: /temp
+File Count: 3
+Top 10 Largest Files:
+temp-merged.json (13541 bytes)
+temp-resume.json (6830 bytes)
+temp-linkedin.json (4732 bytes)
+
+Folder: /tests
+File Count: 14
+Top 10 Largest Files:
+resume-pipeline.test.ts (15660 bytes)
+job-validation.test.ts (13084 bytes)
+job-parsing.test.ts (10837 bytes)
+filter-matching.test.ts (10772 bytes)
+resume-sse.test.ts (9948 bytes)
+tailored-resume.test.ts (7775 bytes)
+score-jobs.test.ts (7622 bytes)
+resume-parser.test.ts (7559 bytes)
+job-scraper-v2.test.ts (6769 bytes)
+ai-router.test.ts (6528 bytes)
+
+Folder: /tmp
+File Count: 16
+Top 10 Largest Files:
+seed_5_reviews.js (6819 bytes)
+seed_amazon.js (2006 bytes)
+seed_shopify_review.js (1974 bytes)
+cleanup_tasmania.js (1709 bytes)
+clear_db_tasmania.js (1379 bytes)
+test_geocoding.js (1184 bytes)
+check_data.js (969 bytes)
+check_geo.js (882 bytes)
+inspect_jobs.js (875 bytes)
+check_openai_geo.js (854 bytes)
+

@@ -5,6 +5,7 @@ import { useSignUp } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import { getClerkErrorMessage } from '@/lib/clerk-error'
 
 export default function SignUpPage() {
     const { isLoaded, signUp, setActive } = useSignUp()
@@ -27,7 +28,7 @@ export default function SignUpPage() {
         return signUp.authenticateWithRedirect({
             strategy,
             redirectUrl: '/sso-callback',
-            redirectUrlComplete: '/'
+            redirectUrlComplete: '/sso-callback'
         })
     }
 
@@ -56,9 +57,9 @@ export default function SignUpPage() {
             await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
 
             setPendingVerification(true)
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(JSON.stringify(err, null, 2))
-            setError(err.errors?.[0]?.message || 'Something went wrong')
+            setError(getClerkErrorMessage(err, 'Something went wrong'))
         } finally {
             setIsLoading(false)
         }
@@ -84,11 +85,11 @@ export default function SignUpPage() {
 
             if (completeSignUp.status === 'complete') {
                 await setActive({ session: completeSignUp.createdSessionId })
-                router.push('/')
+                router.replace('/')
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(JSON.stringify(err, null, 2))
-            setError(err.errors?.[0]?.message || 'Verification failed')
+            setError(getClerkErrorMessage(err, 'Verification failed'))
         } finally {
             setIsLoading(false)
         }

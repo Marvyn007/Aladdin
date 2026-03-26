@@ -19,6 +19,8 @@ model User {
   firstName           String?                @map("first_name")
   lastName            String?                @map("last_name")
   appSettings         AppSettings?
+  onboardingAnswers   OnboardingAnswer[]
+  onboardingState     OnboardingState?
   applications        Application[]
   coverLetters        CoverLetter[]
   postedJobs          Job[]
@@ -34,6 +36,7 @@ model User {
   interviewExperiences InterviewExperience[]
   tailoredResumes      TailoredResume[]
   jobScores            JobScore[]
+  jobVotes             JobVote[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -53,6 +56,21 @@ model UserReputationVote {
   @@map("user_reputation_votes")
 }
 
+model JobVote {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id")
+  jobId     String   @map("job_id") @db.Uuid
+  value     Int                               // 1 = upvote, -1 = downvote
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId], map: "uniq_job_vote")
+  @@index([jobId], map: "idx_job_vote_job_id")
+  @@map("job_votes")
+}
+
 model Job {
   id                     String                   @id @default(uuid()) @db.Uuid
   title                  String
@@ -65,10 +83,10 @@ model Job {
   archived_at            DateTime?                @db.Timestamptz(6)
   normalizedText         String?                  @map("normalized_text")
   rawTextSummary         String?                  @map("raw_text_summary")
-  contentHash            String?                  @unique @map("content_hash")
+  contentHash            String?                  @map("content_hash") // @unique removed — cross-source clustering only, not primary dedupe
   createdAt              DateTime?                @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime?                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  isImported             Int?                     @default(0) @map("is_imported")
+  isImported             Int?                     @default(0) @map("is_imported") // @deprecated — use source === 'imported' instead
   originalPostedDate     String?                  @map("original_posted_date")
   originalPostedRaw      String?                  @map("original_posted_raw")
   originalPostedSource   String?                  @map("original_posted_source")
@@ -101,6 +119,22 @@ model Job {
   searchBoostScore       Float?                   @default(1.0) @map("search_boost_score")
   commonTitleCategory    String?                  @map("common_title_category")
   postedByUserId         String?                  @map("posted_by_user_id")
+
+  // ── Aggregation: Source identity (Phase 6: non-nullable after backfill) ──
+  source                 String                   @default("imported")     // 'greenhouse' | 'lever' | 'themuse' | 'arbeitnow' | 'himalayas' | 'imported'
+  externalId             String                   @default("")  @map("external_id") // native source ID or deterministic fallback hash
+
+  // ── Aggregation: Enriched fields ──
+  salaryMin              Float?                   @map("salary_min")
+  salaryMax              Float?                   @map("salary_max")
+  salaryCurrency         String?                  @map("salary_currency")
+  jobType                String?                  @map("job_type")         // fulltime | parttime | contract | internship
+  isRemote               Boolean                  @default(false) @map("is_remote")
+  experienceLevel        String?                  @map("experience_level") // entry | mid | senior | lead
+  skills                 Json                     @default("[]")           // string[] stored as jsonb
+  applyUrl               String?                  @map("apply_url")
+  expiresAt              DateTime?                @map("expires_at") @db.Timestamptz(6)
+
   applications           Application[]
   coverLetters           CoverLetter[]
   jobEmbedding           JobEmbedding?
@@ -111,6 +145,7 @@ model Job {
   userJobs               UserJob[]
   tailoredResumes         TailoredResume[]
   jobScores               JobScore[]
+  jobVotes                JobVote[]
 
   @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
   @@index([contentHash], map: "idx_jobs_content_hash")
@@ -128,6 +163,7 @@ model Job {
   @@index([search_location_tokens], map: "idx_jobs_search_location", type: Gin)
   @@index([search_title_tokens], map: "idx_jobs_search_title", type: Gin)
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_jobs_title_trgm", type: Gin)
+  @@unique([source, externalId], map: "uniq_jobs_source_external_id")
   @@map("jobs")
 }
 
@@ -247,6 +283,57 @@ model AppSettings {
 
   @@index([userId], map: "idx_app_settings_user_id")
   @@map("app_settings")
+}
+
+model OnboardingState {
+  id                   Int       @id @default(autoincrement())
+  userId               String    @unique @map("user_id")
+  status               String    @default("in_progress")
+  currentStep          Int       @default(1) @map("current_step")
+  startedAt            DateTime? @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt          DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt            DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  profileSetupComplete Boolean   @default(false) @map("profile_setup_complete")
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_onboarding_state_user")
+
+  @@index([userId], map: "idx_onboarding_state_user_id")
+  @@map("user_onboarding_state")
+}
+
+model OnboardingAnswer {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id")
+  questionKey    String    @map("question_key")
+  stepKey        String    @map("step_key")
+  questionLabel  String    @map("question_label")
+  answerType     String    @map("answer_type")
+  answerJson     Json?     @map("answer_json")
+  answerText     String?   @map("answer_text")
+  orderIndex     Int       @default(0) @map("order_index")
+  questionVersion String   @default("v1") @map("question_version")
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_onboarding_answers_user")
+
+  @@unique([userId, questionKey], map: "uniq_onboarding_answer")
+  @@index([userId, stepKey], map: "idx_onboarding_answers_user_step")
+  @@map("user_onboarding_answers")
+}
+
+model OnboardingAnswerHistory {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id")
+  questionKey   String    @map("question_key")
+  version       Int       @default(1)
+  answerJson    Json?     @map("answer_json")
+  answerText    String?   @map("answer_text")
+  changedAt     DateTime  @default(now()) @map("changed_at") @db.Timestamptz(6)
+  changeReason  String?   @map("change_reason")
+  
+  @@index([userId, questionKey, version], map: "idx_answer_history_user_question_version")
+  @@index([userId, questionKey], map: "idx_answer_history_user_question")
+  @@map("user_onboarding_answer_history")
 }
 
 model Company {
@@ -440,4 +527,73 @@ model JobScore {
   @@index([userId], map: "idx_job_score_user_id")
   @@index([jobId], map: "idx_job_score_job_id")
   @@map("job_scores")
+}
+
+// ── Job Aggregation: Queue ──
+// Spec: Section 1 & 6 — Neon-backed job queue with FOR UPDATE SKIP LOCKED
+model JobQueue {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String                                      // 'poll' | 'poll-bulk' | 'discover'
+  source      String?                                     // 'greenhouse' | 'lever' | 'themuse' | 'arbeitnow' | 'himalayas'
+  payload     Json      @default("{}")
+  status      String    @default("pending")               // pending | processing | completed | failed | dead
+  priority    Int       @default(2)                       // 1=high, 2=medium, 3=low, 4=lowest
+  runAt       DateTime  @default(now()) @map("run_at") @db.Timestamptz(6)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3) @map("max_attempts")
+  lastError   String?   @map("last_error")
+  lockedAt    DateTime? @map("locked_at") @db.Timestamptz(6)
+  lockedBy    String?   @map("locked_by")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  @@index([status, runAt, priority], map: "idx_job_queue_dequeue")
+  @@index([status, createdAt], map: "idx_job_queue_status_created")
+  @@map("job_queue")
+}
+
+// ── Job Aggregation: Tracked Companies ──
+// Spec: Section 3 — Companies tracked for per-company polling (Greenhouse/Lever)
+model TrackedCompany {
+  id             String    @id @default(uuid()) @db.Uuid
+  slug           String
+  name           String
+  ats            String                                         // 'greenhouse' | 'lever'
+  industry       String?
+  country        String?
+  websiteUrl     String?   @map("website_url")
+  logoUrl        String?   @map("logo_url")
+  addedBy        String    @default("seed") @map("added_by")   // 'seed' | 'discovery' | 'user' | 'admin'
+  isActive       Boolean   @default(true) @map("is_active")
+  suspectEmpty   Boolean   @default(false) @map("suspect_empty")
+  lastPolledAt   DateTime? @map("last_polled_at") @db.Timestamptz(6)
+  lastNonEmptyAt DateTime? @map("last_non_empty_at") @db.Timestamptz(6)
+  lastJobCount   Int       @default(0) @map("last_job_count")
+  errorCount     Int       @default(0) @map("error_count")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([slug, ats], map: "uniq_tracked_company_slug_ats")
+  @@index([ats, isActive], map: "idx_tracked_company_ats_active")
+  @@index([isActive, lastPolledAt], map: "idx_tracked_company_active_polled")
+  @@map("tracked_companies")
+}
+
+// ── Job Aggregation: Poll Logs ──
+// Spec: Section 5 — Observability for each source poll execution
+model SourcePollLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  source      String
+  slug        String?
+  jobsFetched Int      @map("jobs_fetched")
+  newJobs     Int      @map("new_jobs")
+  duplicates  Int
+  durationMs  Int      @map("duration_ms")
+  error       String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([source, createdAt], map: "idx_source_poll_log_source_created")
+  @@index([createdAt], map: "idx_source_poll_log_created")
+  @@map("source_poll_logs")
 }

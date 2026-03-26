@@ -19,7 +19,10 @@ export interface Job {
   normalized_text: string | null;
   raw_text_summary: string | null;
   content_hash: string | null;
+  /** @deprecated Use source === 'imported' instead */
   isImported?: boolean;
+  source?: string;
+  externalId?: string;
   original_posted_date?: string | null;
   original_posted_raw?: string | null;
   original_posted_source?: string | null;
@@ -29,6 +32,15 @@ export interface Job {
   import_tag?: string | null;
   raw_description_html?: string | null;
   job_description_plain?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  salaryCurrency?: string | null;
+  jobType?: 'fulltime' | 'parttime' | 'contract' | 'internship' | null;
+  isRemote?: boolean;
+  experienceLevel?: 'entry' | 'mid' | 'senior' | 'lead' | null;
+  skills?: string[] | null;
+  applyUrl?: string | null;
+  expiresAt?: string | null;
   date_posted_iso?: string | null;
   date_posted_display?: string | null;
   date_posted_relative?: boolean;

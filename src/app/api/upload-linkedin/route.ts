@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertLinkedInProfile, getLinkedInProfile, getAllLinkedInProfiles } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
+import { recomputeProfileSetupComplete } from '@/lib/onboarding-db';
 
 // Force Node.js runtime (not Edge) for file buffer handling
 export const runtime = 'nodejs';
@@ -45,6 +46,8 @@ export async function POST(request: NextRequest) {
             buffer
         );
 
+        // Recompute setup flag (non-blocking)
+        void recomputeProfileSetupComplete(userId).catch(() => undefined);
         return NextResponse.json({
             success: true,
             profile: {

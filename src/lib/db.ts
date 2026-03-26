@@ -20,6 +20,8 @@ import CryptoJS from 'crypto-js';
 import { getS3Client, uploadFileToS3, getSignedDownloadUrl, deleteFileFromS3, generateS3Key } from '@/lib/s3';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { encodeThemeMode, decodeThemeMode, encodeColorPalette, decodeColorPalette } from '@/lib/themes';
+import { generateFallbackId } from '@/lib/job-sources/helpers';
+import { inferSourceFromUrl } from '@/lib/job-sources/backfill';
 
 // Fail-fast check on module load (will run when server starts)
 checkRequiredEnv();
@@ -133,17 +135,18 @@ export async function updateUserEmbedding(userId: string, jobId: string, type: s
 export async function getAllPublicJobs(
     page: number = 1,
     limit: number = 50,
-    sortBy: 'time' | 'imported' = 'time',
+    sortBy: 'time' | 'imported' | 'preferences' = 'time',
     sortDir: 'asc' | 'desc' = 'desc',
     currentUserId: string | null = null
 ): Promise<Job[]> {
     const dbType = getDbType();
     const offset = (page - 1) * limit;
 
-    // Mapping
+    // Mapping — 'preferences' falls back to time sort at DB level; API layer re-sorts by score
     const sortColumn = {
         'time': 'fetched_at',
-        'imported': 'scraped_at'
+        'imported': 'scraped_at',
+        'preferences': 'fetched_at'
     }[sortBy] || 'fetched_at';
 
     if (dbType === 'postgres') {
@@ -236,8 +239,10 @@ export async function getAllPublicJobs(
         const db = getSQLiteDB();
         // SQLite local handling
         const rows = db.prepare(`
-            SELECT * FROM jobs 
-            ORDER BY ${sortColumn} ${sortDir.toUpperCase()}, id ASC
+            SELECT j.*, c.logo_url as company_logo_url
+            FROM jobs j 
+            LEFT JOIN companies c ON j.company = c.name
+            ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}, j.id ASC
             LIMIT ? OFFSET ?
         `).all(limit, offset) as Record<string, unknown>[];
 
@@ -345,8 +350,9 @@ export async function getJobs(
         const db = getSQLiteDB();
         // Simplified SQLite query - might need adjustment for JOINs if strictly needed but usually local doesn't have users table fully populated same way
         const rows = db.prepare(`
-            SELECT j.*, uj.status, uj.archived_at
+            SELECT j.*, uj.status, uj.archived_at, c.logo_url as company_logo_url
             FROM jobs j
+            LEFT JOIN companies c ON j.company = c.name
             JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
             WHERE (uj.status = ? OR (uj.status IS NULL AND ? = 'fresh'))
             ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}
@@ -536,13 +542,19 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
         let row;
         if (userId) {
             row = db.prepare(`
-                SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at
+                SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at, c.logo_url as company_logo_url
                 FROM jobs j
+                LEFT JOIN companies c ON j.company = c.name
                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
                 WHERE j.id = ?
             `).get(userId, id);
         } else {
-            row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(id);
+            row = db.prepare(`
+                SELECT j.*, c.logo_url as company_logo_url
+                FROM jobs j
+                LEFT JOIN companies c ON j.company = c.name
+                WHERE j.id = ?
+            `).get(id);
         }
 
         if (!row) return null;
@@ -579,6 +591,8 @@ export async function insertJob(
 
     const dbType = getDbType();
     const contentHash = generateContentHash(job.title, job.company, job.location, job.normalized_text || '');
+    const source = job.source || inferSourceFromUrl(job.source_url);
+    const externalId = job.externalId || generateFallbackId(job.title, job.company ?? '', job.location ?? '', job.source_url);
     let jobId: string | null = null;
 
     // Fetch user details for snapshotting
@@ -604,8 +618,8 @@ export async function insertJob(
             }
         }
 
-        // 1. Check/Insert Global Job
-        const existing = await pool.query('SELECT id FROM jobs WHERE content_hash = $1', [contentHash]);
+        // 1. Check/Insert Global Job — dedupe on (source, external_id)
+        const existing = await pool.query('SELECT id FROM jobs WHERE source = $1 AND external_id = $2', [source, externalId]);
         if (existing.rows.length > 0) {
             jobId = existing.rows[0].id;
         } else {
@@ -617,9 +631,9 @@ export async function insertJob(
                     original_posted_date, original_posted_raw, original_posted_source, location_display, import_tag,
                     raw_description_html, job_description_plain, date_posted_iso,
                     date_posted_display, date_posted_relative, source_host, scraped_at, extraction_confidence,
-                    posted_by_user_id
+                    posted_by_user_id, source, external_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
             `, [
                 jobId, job.title, job.company, job.location, job.source_url, job.posted_at,
                 job.normalized_text, job.raw_text_summary, contentHash, job.isImported ? 1 : 0,
@@ -629,7 +643,7 @@ export async function insertJob(
                 job.date_posted_display || null, job.date_posted_relative ? 1 : 0,
                 job.source_host || null, job.scraped_at || null,
                 job.extraction_confidence ? JSON.stringify(job.extraction_confidence) : null,
-                userId
+                userId, source, externalId
             ]);
         }
 
@@ -666,8 +680,8 @@ export async function insertJob(
             }
         }
 
-        // 1. Check Global Job
-        const { data: existing } = await client.from('jobs').select('id').eq('content_hash', contentHash).single();
+        // 1. Check Global Job — dedupe on (source, external_id)
+        const { data: existing } = await client.from('jobs').select('id').eq('source', source).eq('external_id', externalId).single();
 
         if (existing) {
             jobId = existing.id;
@@ -697,7 +711,9 @@ export async function insertJob(
                 source_host: job.source_host || null,
                 scraped_at: job.scraped_at || null,
                 extraction_confidence: job.extraction_confidence || null,
-                posted_by_user_id: userId
+                posted_by_user_id: userId,
+                source,
+                external_id: externalId,
             });
             if (insertError) throw insertError;
         }
@@ -717,7 +733,7 @@ export async function insertJob(
         return { ...job, id: jobId!, status: 'fresh', match_score: 0, matched_skills: null, missing_skills: null, why: null, content_hash: contentHash, fetched_at: new Date().toISOString() };
     } else {
         const db = getSQLiteDB();
-        const existing = db.prepare('SELECT id FROM jobs WHERE content_hash = ?').get(contentHash) as { id: string } | undefined;
+        const existing = db.prepare('SELECT id FROM jobs WHERE source = ? AND external_id = ?').get(source, externalId) as { id: string } | undefined;
 
         if (existing) {
             jobId = existing.id;
@@ -730,9 +746,9 @@ export async function insertJob(
                 original_posted_date, original_posted_raw, original_posted_source, location_display, import_tag,
                 raw_description_html, job_description_plain, date_posted_iso,
                 date_posted_display, date_posted_relative, source_host, scraped_at, extraction_confidence,
-                posted_by_user_id
+                posted_by_user_id, source, external_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 jobId, job.title, job.company, job.location, job.source_url, job.posted_at,
                 job.normalized_text, job.raw_text_summary, contentHash, job.isImported ? 1 : 0,
@@ -742,7 +758,7 @@ export async function insertJob(
                 job.date_posted_display || null, job.date_posted_relative ? 1 : 0,
                 job.source_host || null, job.scraped_at || null,
                 job.extraction_confidence ? JSON.stringify(job.extraction_confidence) : null,
-                userId
+                userId, source, externalId
             );
         }
 

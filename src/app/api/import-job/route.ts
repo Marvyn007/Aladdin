@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-    insertJob,
-    getDefaultResume,
-    getLinkedInProfile,
-    getResumeById,
-    updateResume,
-    getPostedByUserInfo,
-} from '@/lib/db';
-import { parseResumeFromPdf, verifyJobAuthenticity } from '@/lib/openai';
-import type { ParsedResume, ResumeSkill } from '@/types';
+import { getPostedByUserInfo } from '@/lib/db';
+import { importJob } from '@/lib/job-sources/import-service';
+import { verifyJobAuthenticity } from '@/lib/openai';
 import type { ScrapeResult } from '@/lib/job-scraper-fetch';
 import { scrapeJobPageFetch } from '@/lib/job-scraper-fetch';
 import {
@@ -21,7 +14,7 @@ import {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
 
 export async function POST(req: NextRequest) {
     try {
@@ -155,47 +148,30 @@ export async function POST(req: NextRequest) {
             scrapeResult = fetchedResult;
         }
 
-        const user = await currentUser();
-
-        const newJob = await insertJob(userId, {
+        const { job, isDuplicate } = await importJob({
             title: scrapeResult.title,
             company: scrapeResult.company,
             location: scrapeResult.location,
-            source_url: scrapeResult.source_url,
-            posted_at: scrapeResult.date_posted_iso || scrapeResult.scraped_at,
-            normalized_text: scrapeResult.job_description_plain,
-            raw_text_summary: scrapeResult.job_description_plain,
-            isImported: true,
-            original_posted_date: scrapeResult.date_posted_iso,
-            original_posted_raw: scrapeResult.date_posted_display,
-            original_posted_source: scrapeResult.date_posted_relative ? 'relative' : 'absolute',
-            location_display: scrapeResult.location,
-            import_tag: 'imported',
-            raw_description_html: scrapeResult.raw_description_html,
-            job_description_plain: scrapeResult.job_description_plain,
-            date_posted_iso: scrapeResult.date_posted_iso,
-            date_posted_display: scrapeResult.date_posted_display,
-            date_posted_relative: scrapeResult.date_posted_relative,
-            source_host: scrapeResult.source_host,
-            scraped_at: scrapeResult.scraped_at,
-            extraction_confidence: scrapeResult.confidence,
-            company_logo_url: scrapeResult.company_logo_url
-        }, user ? {
-            firstName: user.firstName,
-            lastName: user.lastName,
-            imageUrl: user.imageUrl
-        } : undefined);
+            sourceUrl: scrapeResult.source_url,
+            applyUrl: scrapeResult.source_url,
+            rawDescriptionHtml: scrapeResult.raw_description_html,
+            jobDescriptionPlain: scrapeResult.job_description_plain,
+            postedByUserId: userId,
+        });
 
-        console.log('[Import] Job inserted:', newJob.id);
+        if (isDuplicate) {
+            console.log('[Import] Duplicate detected, returning existing job:', job.id);
+        } else {
+            console.log('[Import] Job inserted:', job.id);
+        }
 
-        // Scoring and skill matching disabled
-
-        const postedByUser = await getPostedByUserInfo(newJob.id);
+        const postedByUser = await getPostedByUserInfo(job.id as string);
 
         return NextResponse.json({
             success: true,
+            isDuplicate,
             job: {
-                ...newJob,
+                ...job,
                 postedBy: postedByUser
             }
         });

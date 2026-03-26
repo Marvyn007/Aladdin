@@ -10,8 +10,11 @@ export function getSQLiteDB(): DatabaseType {
   if (db) return db;
 
   // Dynamic import to prevent Vercel build errors (fs/better-sqlite3)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require('better-sqlite3');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const path = require('path');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const fs = require('fs');
 
   const DB_PATH = path.join(process.cwd(), 'data', DB_NAME);
@@ -124,6 +127,35 @@ function initializeSchema(database: DatabaseType): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    -- Onboarding state table
+    CREATE TABLE IF NOT EXISTS user_onboarding_state (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT UNIQUE NOT NULL,
+      status TEXT CHECK (status IN ('in_progress', 'complete')) DEFAULT 'in_progress',
+      current_step INTEGER DEFAULT 1,
+      started_at TEXT DEFAULT (datetime('now')),
+      completed_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Onboarding answers table
+    CREATE TABLE IF NOT EXISTS user_onboarding_answers (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      user_id TEXT NOT NULL,
+      question_key TEXT NOT NULL,
+      step_key TEXT NOT NULL,
+      question_label TEXT NOT NULL,
+      answer_type TEXT NOT NULL,
+      answer_json TEXT,
+      answer_text TEXT,
+      order_index INTEGER DEFAULT 0,
+      question_version TEXT DEFAULT 'v1',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(user_id, question_key)
+    );
+
     -- AI Provider Stats table (for safety limits)
     CREATE TABLE IF NOT EXISTS ai_provider_stats (
       provider_name TEXT PRIMARY KEY,
@@ -164,6 +196,9 @@ function initializeSchema(database: DatabaseType): void {
     CREATE INDEX IF NOT EXISTS idx_applications_column ON applications(column_name);
     CREATE INDEX IF NOT EXISTS idx_resumes_default ON resumes(is_default);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS idx_onboarding_state_user_id ON user_onboarding_state(user_id);
+    CREATE INDEX IF NOT EXISTS idx_onboarding_answers_user_id ON user_onboarding_answers(user_id);
+    CREATE INDEX IF NOT EXISTS idx_onboarding_answers_question ON user_onboarding_answers(user_id, question_key);
   `);
 
   // Run migrations for existing databases

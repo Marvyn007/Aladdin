@@ -1,0 +1,12 @@
+﻿src/app/favicon.ico
+src/app/globals.css
+src/components/resume-editor/oldTailoredResumeEditor.txt
+src/lib/adapters/replicate.ts
+src/lib/job-parser.ts
+src/lib/keyword-extractor.ts
+src/lib/reactiveResumeClient.ts
+src/lib/resume-cache.ts
+src/lib/resume-generation/README.md
+src/lib/resume-generation/pipeline.ts
+src/lib/resume-generation/tests/parser.test.ts
+src/lib/resume-generation/tests/pipeline.test.ts

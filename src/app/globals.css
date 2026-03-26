@@ -153,17 +153,64 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 6px 12px;
-  font-size: 14px;
+  padding: 10px 16px;
+  font-size: 13px;
   font-weight: 500;
-  border-radius: var(--radius-md);
-  border: none;
+  border-radius: 10px;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.2s ease;
   text-decoration: none;
   white-space: nowrap;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 8px rgba(35, 131, 226, 0.25);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 12px rgba(35, 131, 226, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-outline:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
 }
 
 .btn-primary {
@@ -207,8 +254,8 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 12px;
-  transition: all var(--transition-fast);
+  padding: 16px;
+  transition: all var(--transition-normal);
 }
 
 .card:hover {
@@ -219,10 +266,15 @@ body {
   cursor: pointer;
 }
 
+.card-interactive:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-hover);
+}
+
 .card-interactive.selected {
-  background: var(--background-tertiary) !important;
-  border-color: var(--text-muted) !important;
-  box-shadow: none !important;
+  background: var(--surface) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-muted) !important;
 }
 
 /* ===== BADGE STYLES ===== */
@@ -412,6 +464,16 @@ body {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes profileWidgetPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 0;   transform: scale(1.18); }
+}
+
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -455,7 +517,8 @@ body {
 :root {
   --sidebar-width: 200px;
   --sidebar-width-collapsed: 68px;
-  --job-list-width: 630px;
+  --job-list-width: 1100px;
+  --job-detail-min-width: 350px;
   --mobile-header-height: 56px;
   --touch-target-min: 44px;
 }
@@ -921,10 +984,23 @@ body {
   }
 }
 
+/* ===== SPLIT VIEW (1200px - 1440px) ===== */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  :root {
+    --job-list-width: 570px;
+  }
+
+  .job-list-container {
+    width: var(--job-list-width);
+    min-width: var(--job-list-width);
+    max-width: var(--job-list-width);
+  }
+}
+
 /* ===== LARGE DESKTOP (> 1440px) ===== */
 @media (min-width: 1440px) {
   :root {
-    --job-list-width: 380px;
+    --job-list-width: 570px;
     --sidebar-width: 220px;
   }
 
