@@ -895,13 +895,13 @@ export function JobDetail({
                         ) : (
                             <button
                                 onClick={handleGenerateTailoredResume}
-                                disabled={isGeneratingResume || resumeStatus !== 'idle'}
-                                title={resumeStatus !== 'idle' ? 'Resume generation in progress' : undefined}
+                                disabled={isGeneratingResume || resumeStatus === 'generating'}
+                                title={resumeStatus === 'generating' ? 'Resume generation in progress' : undefined}
                                 className="btn btn-secondary"
                                 style={{
                                     ...gatedStyle,
-                                    opacity: resumeStatus !== 'idle' ? 0.5 : undefined,
-                                    cursor: resumeStatus !== 'idle' ? 'not-allowed' : undefined,
+                                    opacity: resumeStatus === 'generating' ? 0.5 : undefined,
+                                    cursor: resumeStatus === 'generating' ? 'not-allowed' : undefined,
                                 }}
                             >
                                 {isGeneratingResume ? (
