@@ -63,7 +63,7 @@ export function ResumeGenerationWidget() {
         transition: 'box-shadow 0.2s ease',
         width: 200,
       }}
-      onMouseEnter={(e) => { if (isGenerating || isComplete) e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.18)'; }}
+      onMouseEnter={(e) => { if (isGenerating || isComplete || isError) e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.18)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'; }}
     >
       <div style={{ position: 'relative', flexShrink: 0 }}>
