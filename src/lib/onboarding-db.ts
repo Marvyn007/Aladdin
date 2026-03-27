@@ -31,6 +31,7 @@ export interface OnboardingSnapshot {
   progress: number;
   completed: boolean;
   profileSetupComplete: boolean;
+  allRequiredAnswered: boolean;
 }
 
 export interface SaveOnboardingAnswerInput {
@@ -546,6 +547,7 @@ export async function getOnboardingSnapshot(userId: string): Promise<OnboardingS
     progress,
     completed: state.status === 'complete' || progress >= 100,
     profileSetupComplete: state.profileSetupComplete,
+    allRequiredAnswered: requiredTotal > 0 && requiredAnswered === requiredTotal,
   };
 }
 
