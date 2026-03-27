@@ -82,6 +82,7 @@ function createSSEStream(req: Request) {
           const byteArray = await s3Response.Body.transformToByteArray();
           resumeBuffer = Buffer.from(byteArray);
         } catch (e: any) {
+          console.error("[generate-tailored-resume-stream] S3 resume fetch error:", e);
           sendEvent("error", {
             message: "Failed to download resume from storage.",
           });
@@ -126,12 +127,12 @@ function createSSEStream(req: Request) {
             onProgress: (event, data) => sendEvent(event, data),
           });
 
-          // ── Stage 6: Done ──────────────────────────────────────────
+          // ── Stage 7: Done ──────────────────────────────────────────
           sendEvent("stage", {
-            stageId: "stage6_export",
+            stageId: "stage7_export",
             name: "Finalizing resume...",
           });
-          sendEvent("complete", { stageId: "stage6_export" });
+          sendEvent("complete", { stageId: "stage7_export" });
 
           let finalSkills = result.skills || {};
           if (Array.isArray(finalSkills)) {
