@@ -282,9 +282,6 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
 
     const handleSkillChange = (category: string, value: string) => {
         setSkillDrafts(prev => ({ ...prev, [category]: value }));
-    };
-
-    const handleSkillBlur = (category: string, value: string) => {
         onChange({
             ...resume,
             skills: {
@@ -293,6 +290,9 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
             },
             updatedAt: new Date().toISOString(),
         });
+    };
+
+    const handleSkillBlur = (category: string) => {
         setSkillDrafts(prev => {
             const next = { ...prev };
             delete next[category];
@@ -792,7 +792,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                 onBlur={(e) => {
                                                     e.target.style.borderColor = '#e5e7eb';
                                                     e.target.style.boxShadow = 'none';
-                                                    handleSkillBlur(category, e.target.value);
+                                                    handleSkillBlur(category);
                                                 }}
                                                 placeholder={`List ${category} separated by commas...`}
                                             />
