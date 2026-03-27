@@ -25,6 +25,7 @@ import { ManualImportModal } from '@/components/modals/ManualImportModal';
 import { FilterModal } from '@/components/modals/FilterModal';
 import { AuthModal } from '@/components/modals/AuthModal';
 import { useStore, useStoreActions } from '@/store/useStore';
+import { useResumeGeneration } from '@/contexts/ResumeGenerationContext';
 import { useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -365,6 +366,7 @@ export function Dashboard({
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
+    const { openModal: openResumeModal } = useResumeGeneration();
 
     // Derive active state mainly from props/URL
     const isJobBoard = defaultActiveView === 'jobs';
@@ -1018,7 +1020,7 @@ export function Dashboard({
             if (res.ok) {
                 const data = await res.json();
                 if (data.exists) {
-                    window.location.href = `/resume-editor/${jobId}`;
+                    router.push(`/resume-editor/${jobId}`);
                     return;
                 }
             }
@@ -1026,15 +1028,14 @@ export function Dashboard({
             console.error('Error checking for existing tailored resume:', error);
         }
 
-        setTailoredResumeModal({
-            isOpen: true,
+        openResumeModal({
             jobId,
             jobTitle: job.title,
             company: job.company,
             jobDescription: getPlainTextJobDescription(job),
-            jobUrl: job.source_url || null,
-            linkedinProfileUrl: null,
-            linkedinData: null,
+            jobUrl: job.source_url ?? undefined,
+            linkedinProfileUrl: undefined,
+            linkedinData: undefined,
         });
     };
 
@@ -1505,18 +1506,8 @@ export function Dashboard({
                 />
             )}
 
-            {/* Tailored Resume Editor */}
-            <TailoredResumeEditor
-                isOpen={tailoredResumeModal.isOpen}
-                onClose={() => setTailoredResumeModal(prev => ({ ...prev, isOpen: false }))}
-                jobId={tailoredResumeModal.jobId || ''}
-                jobTitle={tailoredResumeModal.jobTitle}
-                company={tailoredResumeModal.company}
-                jobDescription={tailoredResumeModal.jobDescription}
-                jobUrl={tailoredResumeModal.jobUrl || undefined}
-                linkedinProfileUrl={tailoredResumeModal.linkedinProfileUrl || undefined}
-                linkedinData={tailoredResumeModal.linkedinData || undefined}
-            />
+            {/* Tailored Resume Editor — state managed by ResumeGenerationContext */}
+            <TailoredResumeEditor />
 
             {/* Resume Selector Modal */}
             {activeModal === 'resume-selector' && (

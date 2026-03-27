@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { JobEditModal } from '@/components/modals/JobEditModal';
 import { useStoreActions } from '@/store/useStore';
+import { useResumeGeneration } from '@/contexts/ResumeGenerationContext';
 import type { Job } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -559,6 +560,7 @@ export function JobDetail({
     const [hasTailoredResume, setHasTailoredResume] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const { toggleJobStatus } = useStoreActions();
+    const { status: resumeStatus } = useResumeGeneration();
 
     // The DB row spreads posted_by_user_id (snake_case); postedByUserId (camelCase) is only set in some mappers.
     const jobPosterId = job?.posted_by_user_id || job?.postedByUserId || job?.postedBy?.id || null;
@@ -893,9 +895,14 @@ export function JobDetail({
                         ) : (
                             <button
                                 onClick={handleGenerateTailoredResume}
-                                disabled={isGeneratingResume}
+                                disabled={isGeneratingResume || resumeStatus !== 'idle'}
+                                title={resumeStatus !== 'idle' ? 'Resume generation in progress' : undefined}
                                 className="btn btn-secondary"
-                                style={gatedStyle}
+                                style={{
+                                    ...gatedStyle,
+                                    opacity: resumeStatus !== 'idle' ? 0.5 : undefined,
+                                    cursor: resumeStatus !== 'idle' ? 'not-allowed' : undefined,
+                                }}
                             >
                                 {isGeneratingResume ? (
                                     <>
