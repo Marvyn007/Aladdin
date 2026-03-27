@@ -419,32 +419,41 @@ interface ContactItem {
   href?: string;
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildContactItems(contact: ResumeContactInfo): ContactItem[] {
   const hidden = new Set(contact.hiddenContactFields || []);
   const items: ContactItem[] = [];
 
   if (!hidden.has('location') && contact.location) {
-    items.push({ text: contact.location });
+    items.push({ text: escapeHtml(contact.location) });
   }
   if (!hidden.has('phone') && contact.phone) {
-    items.push({ text: contact.phone });
+    items.push({ text: escapeHtml(contact.phone) });
   }
   if (!hidden.has('email') && contact.email) {
-    items.push({ text: contact.email, href: `mailto:${contact.email}` });
+    items.push({ text: escapeHtml(contact.email), href: `mailto:${contact.email}` });
   }
   if (!hidden.has('linkedin') && contact.linkedin) {
     const url = contact.linkedin.startsWith('http') ? contact.linkedin : `https://${contact.linkedin}`;
-    items.push({ text: contact.linkedin, href: url });
+    items.push({ text: escapeHtml(contact.linkedin), href: url });
   }
   if (!hidden.has('website') && contact.website) {
     const display = contact.website.replace(/^https?:\/\//, '');
     const url = contact.website.startsWith('http') ? contact.website : `https://${contact.website}`;
-    items.push({ text: display, href: url });
+    items.push({ text: escapeHtml(display), href: url });
   }
   if (!hidden.has('github')) {
     (contact.github || []).forEach(g => {
       const url = g.startsWith('http') ? g : `https://${g}`;
-      items.push({ text: g, href: url });
+      items.push({ text: escapeHtml(g), href: url });
     });
   }
   (contact.customFields || []).forEach(f => {
@@ -453,9 +462,9 @@ function buildContactItems(contact: ResumeContactInfo): ContactItem[] {
       if (isUrl) {
         const url = f.value.startsWith('http') ? f.value : `https://${f.value}`;
         const display = f.value.replace(/^https?:\/\//, '');
-        items.push({ text: `${f.label}: ${display}`, href: url });
+        items.push({ text: `${escapeHtml(f.label)}: ${escapeHtml(display)}`, href: url });
       } else {
-        items.push({ text: `${f.label}: ${f.value}` });
+        items.push({ text: `${escapeHtml(f.label)}: ${escapeHtml(f.value)}` });
       }
     }
   });
