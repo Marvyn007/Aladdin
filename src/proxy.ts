@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
@@ -18,16 +18,18 @@ const isProtectedRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
     console.log(`[Proxy] Request hitting: ${req.nextUrl.pathname}`);
-    const { userId, sessionClaims } = await auth();
+    const { userId } = await auth();
 
-    // Admin route protection
+    // Admin route protection — fetch live metadata since publicMetadata is not in JWT by default
     if (isAdminRoute(req)) {
         if (!userId) {
             const signInUrl = new URL('/sign-in', req.url);
             signInUrl.searchParams.set('redirect_url', req.url);
             return NextResponse.redirect(signInUrl);
         }
-        const role = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role;
+        const client = await clerkClient();
+        const user = await client.users.getUser(userId);
+        const role = (user.publicMetadata as { role?: string })?.role;
         if (role !== 'admin') {
             return NextResponse.rewrite(new URL('/not-found', req.url));
         }
