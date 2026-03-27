@@ -7,8 +7,9 @@ import { useRouter } from 'next/navigation';
 import { useStore, useStoreActions } from '@/store/useStore';
 import { Map as MapIcon } from 'lucide-react';
 import { UserAccountSection } from './UserAccountSection';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { AuthModal } from '@/components/modals/AuthModal';
+import type { Resume } from '@/types';
 
 
 // Hook to detect compact logo mode (use "A" icon instead of full logo)
@@ -78,8 +79,10 @@ export function Sidebar({
     isMobileOpen,
     onCloseMobile
 }: SidebarProps) {
-    const { sidebarOpen, toggleSidebar, setActiveModal, viewMode, setViewMode, resumes, defaultResume } = useStore();
+    const { sidebarOpen, toggleSidebar, setActiveModal, viewMode, setViewMode } = useStore();
     const { isSignedIn, isLoaded, userId } = useAuth();
+    const { user } = useUser();
+    const isAdmin = user?.publicMetadata?.role === 'admin';
     const router = useRouter();
     const [authModalOpen, setAuthModalOpen] = useState(false);
     const [authMessage, setAuthMessage] = useState<string>('');
@@ -104,15 +107,27 @@ export function Sidebar({
         }
     };
 
-    const handleOpenResumeEditor = () => {
+    const handleOpenResumeEditor = async () => {
         if (!isSignedIn || !userId) {
             setAuthMessage('Sign in to use the Resume Editor.');
             setAuthModalOpen(true);
             return;
         }
-        if (!defaultResume) {
-            setResumeEditorWarning(resumes.length === 0 ? 'no-resume' : 'no-default');
-            return;
+        try {
+            const res = await fetch('/api/upload-resume');
+            const data = await res.json();
+            const allResumes: Resume[] = data.resumes || [];
+            const hasDefault = allResumes.some((r) => r.is_default);
+            if (allResumes.length === 0) {
+                setResumeEditorWarning('no-resume');
+                return;
+            }
+            if (!hasDefault) {
+                setResumeEditorWarning('no-default');
+                return;
+            }
+        } catch {
+            // If the check fails, let the server-side guard handle it
         }
         if (onCloseMobile) onCloseMobile();
         router.push(`/resume-editor/base/${userId}`);
@@ -125,11 +140,11 @@ export function Sidebar({
                 onClose={() => setAuthModalOpen(false)}
             />
 
-            {/* Yellow Warning Modal — no default resume */}
+            {/* Resume Editor info modal */}
             {resumeEditorWarning && (
                 <>
                     <div
-                        style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.3)' }}
+                        style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.25)' }}
                         onClick={() => setResumeEditorWarning(null)}
                     />
                     <div style={{
@@ -138,44 +153,49 @@ export function Sidebar({
                         left: '50%',
                         transform: 'translate(-50%, -50%)',
                         zIndex: 9001,
-                        background: '#fffbeb',
-                        border: '1px solid #fcd34d',
-                        borderRadius: 14,
-                        padding: '24px 28px',
-                        maxWidth: 380,
+                        background: '#fff',
+                        borderRadius: 16,
+                        padding: '28px 28px 24px',
+                        maxWidth: 360,
                         width: 'calc(100vw - 48px)',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
                         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif',
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
-                                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                                    <line x1="12" y1="9" x2="12" y2="13" />
-                                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                                </svg>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: '#92400e' }}>One quick thing</span>
-                            </div>
-                            <button
-                                onClick={() => setResumeEditorWarning(null)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#9ca3af', lineHeight: 1 }}
-                                aria-label="Dismiss"
-                            >
-                                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
-                                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                            </button>
+                        {/* Close button */}
+                        <button
+                            onClick={() => setResumeEditorWarning(null)}
+                            style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: '#9ca3af', lineHeight: 1, borderRadius: 6 }}
+                            aria-label="Dismiss"
+                        >
+                            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+
+                        {/* Blue icon circle */}
+                        <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <line x1="10" y1="9" x2="8" y2="9" />
+                            </svg>
                         </div>
-                        <p style={{ fontSize: 13, color: '#78350f', lineHeight: 1.6, margin: '0 0 16px' }}>
+
+                        <p style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: '0 0 8px', lineHeight: 1.3 }}>
+                            {resumeEditorWarning === 'no-resume' ? 'No resume uploaded' : 'No default resume set'}
+                        </p>
+                        <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6, margin: '0 0 20px' }}>
                             {resumeEditorWarning === 'no-resume'
-                                ? "You haven't uploaded a resume yet. Head to My Resumes to upload one first."
-                                : "No default resume selected. Go to My Resumes and mark one as your default."}
+                                ? "Upload a resume in My Resumes first, then come back to edit it here."
+                                : "You have resumes, but none is set as default. Open My Resumes and mark one as your default."}
                         </p>
                         <button
                             onClick={() => { setResumeEditorWarning(null); setActiveModal('resume-selector'); }}
-                            style={{ padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = '#b45309'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = '#d97706'; }}
+                            style={{ width: '100%', padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: '#3b82f6', color: '#fff', border: 'none', cursor: 'pointer', transition: 'background 0.15s' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#2563eb'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = '#3b82f6'; }}
                         >
                             Go to My Resumes
                         </button>
@@ -231,6 +251,16 @@ export function Sidebar({
 
                 {/* Navigation */}
                 <nav style={{ flex: 1, padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto' }}>
+                    {/* Admin (Admin only) */}
+                    {isAdmin && (
+                        <NavItem
+                            icon={<ShieldIcon />}
+                            label="Admin"
+                            onClick={() => router.push(`/admin/${userId}`)}
+                            collapsed={isEffectivelyCollapsed}
+                        />
+                    )}
+
                     {/* Search/Filter */}
                     <NavItem
                         icon={<SearchIcon />}
@@ -297,6 +327,7 @@ function NavItem({
     collapsed,
     style,
     disabled = false,
+    highlighted = false,
 }: {
     icon: React.ReactNode;
     label: string;
@@ -306,6 +337,7 @@ function NavItem({
     collapsed?: boolean;
     style?: React.CSSProperties;
     disabled?: boolean;
+    highlighted?: boolean;
 }) {
     return (
         <button
@@ -318,13 +350,13 @@ function NavItem({
                 gap: '10px',
                 padding: collapsed ? '8px' : '8px 10px',
                 justifyContent: collapsed ? 'center' : 'flex-start',
-                background: active ? 'var(--accent-muted)' : 'transparent',
+                background: highlighted ? 'rgba(239, 68, 68, 0.08)' : (active ? 'var(--accent-muted)' : 'transparent'),
                 border: 'none',
                 borderRadius: '6px',
                 cursor: loading ? 'wait' : 'pointer',
-                color: disabled ? 'var(--text-tertiary)' : (active ? 'var(--accent)' : 'var(--text-secondary)'),
+                color: disabled ? 'var(--text-tertiary)' : (highlighted ? '#dc2626' : (active ? 'var(--accent)' : 'var(--text-secondary)')),
                 fontSize: '13px',
-                fontWeight: 500,
+                fontWeight: highlighted ? 600 : 500,
                 transition: 'all 0.15s ease',
                 width: '100%',
                 textAlign: 'left',
@@ -425,6 +457,12 @@ const EditIcon = () => (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+);
+
+const ShieldIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
 );
 
