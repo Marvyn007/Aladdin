@@ -92,6 +92,220 @@ function SortableSectionCard({
     );
 }
 
+// ── Contact link row types and helpers ───────────────────────────────────────
+type ContactLinkRow = {
+    id: string;           // 'linkedin' | 'website' | 'github' | 'custom-<uuid>'
+    label: string;
+    inputType: string;
+    value: string;
+    placeholder: string;
+    fieldKey: string;     // key for hiddenContactFields lookup
+    isCustom: boolean;
+    customFieldId?: string;
+};
+
+function deriveContactLinkRows(contact: ResumeContactInfo): ContactLinkRow[] {
+    const natural: ContactLinkRow[] = [
+        {
+            id: 'linkedin',
+            label: 'LinkedIn Profile',
+            inputType: 'text',
+            value: contact.linkedin ?? '',
+            placeholder: 'linkedin.com/in/yourname',
+            fieldKey: 'linkedin',
+            isCustom: false,
+        },
+        {
+            id: 'website',
+            label: 'Website',
+            inputType: 'url',
+            value: contact.website ?? '',
+            placeholder: 'https://',
+            fieldKey: 'website',
+            isCustom: false,
+        },
+        {
+            id: 'github',
+            label: 'GitHub URLs',
+            inputType: 'text',
+            value: (contact.github ?? []).join(', '),
+            placeholder: 'Comma separated links',
+            fieldKey: 'github',
+            isCustom: false,
+        },
+        ...(contact.customFields ?? []).map(cf => ({
+            id: `custom-${cf.id}`,
+            label: cf.label,
+            inputType: 'text',
+            value: cf.value,
+            placeholder: 'https:// or text',
+            fieldKey: cf.id,
+            isCustom: true,
+            customFieldId: cf.id,
+        })),
+    ];
+
+    const order = contact.linkFieldOrder;
+    if (!order || order.length === 0) return natural;
+
+    // Self-healing: filter stale keys, append any new ones not yet in order
+    const byId = Object.fromEntries(natural.map(r => [r.id, r]));
+    const validOrder = order.filter(k => k in byId);
+    const inOrder = new Set(validOrder);
+    const appended = natural.filter(r => !inOrder.has(r.id));
+    return [...validOrder.map(k => byId[k]), ...appended];
+}
+
+function SortableContactLinkRow({
+    row,
+    isHidden,
+    onToggleHide,
+    onValueChange,
+    onLabelChange,
+    onRemove,
+}: {
+    row: ContactLinkRow;
+    isHidden: boolean;
+    onToggleHide: () => void;
+    onValueChange: (value: string) => void;
+    onLabelChange?: (label: string) => void;
+    onRemove?: () => void;
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: row.id });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: '8px',
+                transform: CSS.Transform.toString(transform) ?? undefined,
+                transition: transition ?? undefined,
+                opacity: isDragging ? 0.85 : 1,
+                background: isDragging ? '#f8fafc' : 'transparent',
+                borderRadius: isDragging ? '8px' : undefined,
+            }}
+        >
+            {/* Drag handle */}
+            <div
+                {...attributes}
+                {...listeners}
+                style={{
+                    cursor: 'grab',
+                    color: '#d1d5db',
+                    display: 'flex',
+                    alignItems: 'center',
+                    paddingBottom: '8px',
+                    flexShrink: 0,
+                    touchAction: 'none',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#9ca3af'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#d1d5db'; }}
+            >
+                <GripVertical size={14} />
+            </div>
+
+            {row.isCustom ? (
+                <>
+                    <div style={{ flex: '0 0 120px' }}>
+                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Label</label>
+                        <input
+                            type="text"
+                            value={row.label}
+                            onChange={(e) => onLabelChange?.(e.target.value)}
+                            style={{ width: '100%', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 12px', fontSize: '13px', color: '#111827', outline: 'none' }}
+                            onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
+                            onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                        />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Value / URL</label>
+                        <input
+                            type="text"
+                            value={row.value}
+                            onChange={(e) => onValueChange(e.target.value)}
+                            placeholder="https:// or text"
+                            style={{ width: '100%', background: isHidden ? '#f9fafb' : '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 12px', fontSize: '14px', color: isHidden ? '#9ca3af' : '#111827', outline: 'none', opacity: isHidden ? 0.6 : 1 }}
+                            onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
+                            onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                        />
+                    </div>
+                </>
+            ) : (
+                <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        {row.label}
+                    </label>
+                    <input
+                        type={row.inputType}
+                        value={row.value}
+                        onChange={(e) => onValueChange(e.target.value)}
+                        placeholder={row.placeholder}
+                        style={{
+                            width: '100%',
+                            background: isHidden ? '#f9fafb' : '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '10px',
+                            padding: '10px 12px',
+                            fontSize: '14px',
+                            fontWeight: 400,
+                            color: isHidden ? '#9ca3af' : '#111827',
+                            outline: 'none',
+                            transition: 'all 0.15s ease',
+                            opacity: isHidden ? 0.6 : 1,
+                        }}
+                        onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                    />
+                </div>
+            )}
+
+            {/* Hide/show toggle */}
+            <button
+                onClick={onToggleHide}
+                title={isHidden ? 'Show on resume' : 'Hide from resume'}
+                style={{
+                    marginTop: row.isCustom ? 0 : '22px',
+                    padding: '8px',
+                    border: 'none',
+                    borderRadius: '8px',
+                    background: isHidden ? '#fee2e2' : '#f0fdf4',
+                    color: isHidden ? '#ef4444' : '#22c55e',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                }}
+            >
+                <EyeIcon visible={!isHidden} />
+            </button>
+
+            {/* Delete button — custom fields only */}
+            {row.isCustom && onRemove && (
+                <button
+                    onClick={onRemove}
+                    title="Remove field"
+                    style={{ padding: '8px', border: 'none', borderRadius: '8px', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                        <path d="M10 11v6"/><path d="M14 11v6"/>
+                    </svg>
+                </button>
+            )}
+        </div>
+    );
+}
+
 interface ContentPanelProps {
     resume: TailoredResumeData;
     onChange: (resume: TailoredResumeData) => void;
@@ -112,6 +326,24 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
         onChange({
             ...resume,
             sections: arrayMove(resume.sections, oldIndex, newIndex),
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const handleContactLinkDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const rows = deriveContactLinkRows(resume.contact);
+        const ids = rows.map(r => r.id);
+        const oldIndex = ids.indexOf(active.id as string);
+        const newIndex = ids.indexOf(over.id as string);
+        if (oldIndex === -1 || newIndex === -1) return;
+        onChange({
+            ...resume,
+            contact: {
+                ...resume.contact,
+                linkFieldOrder: arrayMove(ids, oldIndex, newIndex),
+            },
             updatedAt: new Date().toISOString(),
         });
     };
@@ -497,14 +729,12 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
 
                 {editingContact ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {/* Core fields — name, email, phone, location — not draggable */}
                         {[
                             { key: 'name', label: 'Full Name', type: 'text', value: resume.contact.name, placeholder: 'John Doe', alwaysVisible: true },
                             { key: 'email', label: 'Email Address', type: 'email', value: resume.contact.email, placeholder: 'john@example.com', alwaysVisible: false },
                             { key: 'phone', label: 'Phone Number', type: 'tel', value: resume.contact.phone, placeholder: '+1 (555) 000-0000', alwaysVisible: false },
                             { key: 'location', label: 'Location', type: 'text', value: resume.contact.location || '', placeholder: 'New York, NY', alwaysVisible: false },
-                            { key: 'linkedin', label: 'LinkedIn Profile', type: 'text', value: resume.contact.linkedin, placeholder: 'linkedin.com/in/yourname', alwaysVisible: false },
-                            { key: 'website', label: 'Website', type: 'url', value: resume.contact.website || '', placeholder: 'https://', alwaysVisible: false },
-                            { key: 'github', label: 'GitHub URLs', type: 'text', value: (resume.contact.github || []).join(', '), placeholder: 'Comma separated links', alwaysVisible: false },
                         ].map(field => {
                             const isHidden = !field.alwaysVisible && (resume.contact.hiddenContactFields || []).includes(field.key);
                             return (
@@ -516,13 +746,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                         <input
                                             type={field.type}
                                             value={field.value}
-                                            onChange={(e) => {
-                                                if (field.key === 'github') {
-                                                    updateContact('github', e.target.value.split(',').map(s => s.trim()).filter(Boolean));
-                                                } else {
-                                                    updateContact(field.key as keyof ResumeContactInfo, e.target.value);
-                                                }
-                                            }}
+                                            onChange={(e) => updateContact(field.key as keyof ResumeContactInfo, e.target.value)}
                                             placeholder={field.placeholder}
                                             style={{
                                                 width: '100%',
@@ -537,14 +761,8 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                 transition: 'all 0.15s ease',
                                                 opacity: isHidden ? 0.6 : 1,
                                             }}
-                                            onFocus={(e) => {
-                                                e.target.style.borderColor = '#3b82f6';
-                                                e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                            }}
-                                            onBlur={(e) => {
-                                                e.target.style.borderColor = '#e5e7eb';
-                                                e.target.style.boxShadow = 'none';
-                                            }}
+                                            onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
+                                            onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
                                         />
                                     </div>
                                     {!field.alwaysVisible && (
@@ -571,51 +789,44 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                             );
                         })}
 
-                        {/* Custom fields */}
-                        {(resume.contact.customFields || []).map(field => {
-                            const isHidden = (resume.contact.hiddenContactFields || []).includes(field.id);
-                            return (
-                                <div key={field.id} style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-                                    <div style={{ flex: '0 0 120px' }}>
-                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Label</label>
-                                        <input
-                                            type="text"
-                                            value={field.label}
-                                            onChange={(e) => updateCustomField(field.id, 'label', e.target.value)}
-                                            style={{ width: '100%', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 12px', fontSize: '13px', color: '#111827', outline: 'none' }}
-                                            onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
-                                            onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                        {/* Link rows — linkedin, website, github, custom fields — draggable */}
+                        <DndContext collisionDetection={closestCenter} onDragEnd={handleContactLinkDragEnd}>
+                            <SortableContext
+                                items={deriveContactLinkRows(resume.contact).map(r => r.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {deriveContactLinkRows(resume.contact).map(row => {
+                                    const isHidden = (resume.contact.hiddenContactFields || []).includes(row.fieldKey);
+                                    return (
+                                        <SortableContactLinkRow
+                                            key={row.id}
+                                            row={row}
+                                            isHidden={isHidden}
+                                            onToggleHide={() => toggleContactFieldVisibility(row.fieldKey)}
+                                            onValueChange={(value) => {
+                                                if (row.id === 'github') {
+                                                    updateContact('github', value.split(',').map(s => s.trim()).filter(Boolean));
+                                                } else if (row.isCustom && row.customFieldId) {
+                                                    updateCustomField(row.customFieldId, 'value', value);
+                                                } else {
+                                                    updateContact(row.fieldKey as keyof ResumeContactInfo, value);
+                                                }
+                                            }}
+                                            onLabelChange={
+                                                row.isCustom && row.customFieldId
+                                                    ? (label) => updateCustomField(row.customFieldId!, 'label', label)
+                                                    : undefined
+                                            }
+                                            onRemove={
+                                                row.isCustom && row.customFieldId
+                                                    ? () => removeCustomField(row.customFieldId!)
+                                                    : undefined
+                                            }
                                         />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Value / URL</label>
-                                        <input
-                                            type="text"
-                                            value={field.value}
-                                            onChange={(e) => updateCustomField(field.id, 'value', e.target.value)}
-                                            placeholder="https:// or text"
-                                            style={{ width: '100%', background: isHidden ? '#f9fafb' : '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 12px', fontSize: '14px', color: isHidden ? '#9ca3af' : '#111827', outline: 'none', opacity: isHidden ? 0.6 : 1 }}
-                                            onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
-                                            onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => toggleContactFieldVisibility(field.id)}
-                                        title={isHidden ? 'Show on resume' : 'Hide from resume'}
-                                        style={{ padding: '8px', border: 'none', borderRadius: '8px', background: isHidden ? '#fee2e2' : '#f0fdf4', color: isHidden ? '#ef4444' : '#22c55e', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                                    >
-                                        <EyeIcon visible={!isHidden} />
-                                    </button>
-                                    <button
-                                        onClick={() => removeCustomField(field.id)}
-                                        title="Remove field"
-                                        style={{ padding: '8px', border: 'none', borderRadius: '8px', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                                    </button>
-                                </div>
-                            );
-                        })}
+                                    );
+                                })}
+                            </SortableContext>
+                        </DndContext>
 
                         {/* Quick-add chips */}
                         <div style={{ marginTop: '4px' }}>
