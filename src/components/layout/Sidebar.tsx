@@ -250,6 +250,15 @@ export function Sidebar({
                         disabled={!isSignedIn}
                     />
 
+                    {/* Resume Editor (Protected) */}
+                    <NavItem
+                        icon={<EditIcon />}
+                        label="Resume Editor"
+                        onClick={handleOpenResumeEditor}
+                        collapsed={isEffectivelyCollapsed}
+                        disabled={!isSignedIn}
+                    />
+
                     <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
 
                     {/* My Resumes (Protected) */}
@@ -257,15 +266,6 @@ export function Sidebar({
                         icon={<ResumeIcon />}
                         label="My Resumes"
                         onClick={() => handleNavClick(() => setActiveModal('resume-selector'), true, "Sign in to manage resumes.")}
-                        collapsed={isEffectivelyCollapsed}
-                        disabled={!isSignedIn}
-                    />
-
-                    {/* Resume Editor (Protected) */}
-                    <NavItem
-                        icon={<EditIcon />}
-                        label="Resume Editor"
-                        onClick={handleOpenResumeEditor}
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
                     />
