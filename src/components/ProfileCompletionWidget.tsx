@@ -17,6 +17,7 @@ interface InitialFiles {
 interface Snapshot {
   completed: boolean;
   profileSetupComplete: boolean;
+  allRequiredAnswered: boolean;
   answersByKey?: Record<string, { value: unknown }>;
 }
 
@@ -488,8 +489,8 @@ export function ProfileCompletionWidget() {
       if (!snapshotRes.ok) return;
       const snapshot = await snapshotRes.json() as Snapshot;
 
-      // Source of truth: DB flag
-      if (snapshot.profileSetupComplete) {
+      // Source of truth: all required preference questions answered
+      if (snapshot.allRequiredAnswered) {
         setSetupComplete(true);
         return;
       }
@@ -524,7 +525,7 @@ export function ProfileCompletionWidget() {
 
       const resumeDone = !!resumeFile;
       const linkedinDone = !!linkedinFile || linkedinSkipped;
-      const prefsDone = snapshot.completed;
+      const prefsDone = snapshot.allRequiredAnswered;
 
       setInitialFiles({ resume: resumeFile, linkedin: linkedinFile });
       setStepDone({ resume: resumeDone, linkedin: linkedinDone, prefs: prefsDone });
@@ -543,6 +544,21 @@ export function ProfileCompletionWidget() {
     if (!isSignedIn) { setSetupComplete(true); return; }
     void checkStatus();
   }, [isLoaded, isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-check when the user returns to this tab/window (e.g. after editing preferences)
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    const handleFocus = () => { void checkStatus(); };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-check on navigation back from /onboarding
   useEffect(() => {
