@@ -11,9 +11,9 @@ import { renderResumeHtml } from '@/lib/resume-templates';
 import { generatePDFFromElement } from '@/lib/client-pdf';
 
 const GOOGLE_FONTS_MAP: Record<string, string> = {
-    'Inter': 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-    'Roboto': 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap',
-    'Open Sans': 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap',
+    "'Inter', 'Segoe UI', sans-serif": 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
+    "'Roboto', sans-serif": 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap',
+    "'Open Sans', sans-serif": 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap',
 };
 
 function injectFontsForPdf(html: string, fontFamily: string): string {
@@ -384,11 +384,10 @@ export function FullPageResumeEditor({
         setIsDownloading(true);
         const companyStr = company ? `${company.replace(/[^a-zA-Z0-9]/g, '_')}_` : '';
         const downloadFilename = `Tailored_Resume_${companyStr}${jobId.substring(0, 4)}.pdf`;
+        const baseHtml = renderResumeHtml(resume);
+        const html = injectFontsForPdf(baseHtml, resume.design.fontFamily);
 
         try {
-            const baseHtml = renderResumeHtml(resume);
-            const html = injectFontsForPdf(baseHtml, resume.design?.fontFamily ?? '');
-
             const response = await fetch('/api/resume-export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -413,9 +412,9 @@ export function FullPageResumeEditor({
 
         } catch (error) {
             console.error('Server PDF failed, falling back to client-side:', error);
-            // Fallback: render into a hidden off-screen container and use html2canvas
+            // Fallback: render into a hidden off-screen container and use html2canvas.
+            // Note: html2canvas cannot load external CSS URLs so font injection is intentionally skipped here.
             try {
-                const baseHtml = renderResumeHtml(resume);
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(baseHtml, 'text/html');
 
