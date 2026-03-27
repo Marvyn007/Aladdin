@@ -23,6 +23,7 @@ function injectFontsForPdf(html: string, fontFamily: string): string {
     return html.replace('</head>', `${linkTag}</head>`);
 }
 
+
 interface FullPageResumeEditorProps {
     jobId: string;
     jobTitle: string;
@@ -46,7 +47,8 @@ export function FullPageResumeEditor({
     initialResumeData,
     initialKeywords
 }: FullPageResumeEditorProps) {
-    const [resume, setResume] = useState<TailoredResumeData>(initialResumeData);
+    const [resume, setResume] = useState<TailoredResumeData>(initialResumeData);       // preview (debounced)
+    const [editorResume, setEditorResume] = useState<TailoredResumeData>(initialResumeData); // inputs (immediate)
     const [keywords, setKeywords] = useState<KeywordAnalysis | null>(initialKeywords);
     const [isSaving, setIsSaving] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
@@ -92,6 +94,7 @@ export function FullPageResumeEditor({
             const prev = history[historyIndex - 1];
             setHistoryIndex(historyIndex - 1);
             setResume(prev);
+            setEditorResume(prev);
             setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
         }
     }, [canUndo, history, historyIndex]);
@@ -102,6 +105,7 @@ export function FullPageResumeEditor({
             const next = history[historyIndex + 1];
             setHistoryIndex(historyIndex + 1);
             setResume(next);
+            setEditorResume(next);
             setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
         }
     }, [canRedo, history, historyIndex]);
@@ -322,12 +326,14 @@ export function FullPageResumeEditor({
 
     // Debounced preview update
     const updatePreview = useCallback((newResume: TailoredResumeData) => {
+        // Immediately update editor inputs so typing is instant
+        setEditorResume(newResume);
         setIsPreviewUpdating(true);
-        
+
         if (debounceTimerRef.current) {
             clearTimeout(debounceTimerRef.current);
         }
-        
+
         debounceTimerRef.current = setTimeout(() => {
             setResume(newResume);
             setIsPreviewUpdating(false);
@@ -361,7 +367,7 @@ export function FullPageResumeEditor({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     jobId,
-                    resumeData: resume,
+                    resumeData: editorResume,
                     keywordsData: keywords,
                 }),
             });
@@ -384,8 +390,8 @@ export function FullPageResumeEditor({
         setIsDownloading(true);
         const companyStr = company ? `${company.replace(/[^a-zA-Z0-9]/g, '_')}_` : '';
         const downloadFilename = `Tailored_Resume_${companyStr}${jobId.substring(0, 4)}.pdf`;
-        const baseHtml = renderResumeHtml(resume);
-        const html = injectFontsForPdf(baseHtml, resume.design.fontFamily);
+        const baseHtml = renderResumeHtml(editorResume);
+        const html = injectFontsForPdf(baseHtml, editorResume.design.fontFamily);
 
         try {
             const response = await fetch('/api/resume-export', {
@@ -985,7 +991,7 @@ export function FullPageResumeEditor({
                                 )}
                                 
                                 <ContentPanel
-                                    resume={resume}
+                                    resume={editorResume}
                                     onChange={(data) => updatePreview({ ...data, updatedAt: new Date().toISOString() })}
                                 />
                             </div>
