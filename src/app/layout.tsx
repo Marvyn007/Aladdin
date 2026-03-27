@@ -10,6 +10,9 @@ import { Analytics } from '@vercel/analytics/next';
 import { FilterProvider } from "@/contexts/FilterContext";
 import { cn } from "@/lib/utils";
 import { ProfileCompletionWidget } from "@/components/ProfileCompletionWidget";
+import { ResumeGenerationProvider } from "@/contexts/ResumeGenerationContext";
+import { ResumeGenerationWidget } from "@/components/ResumeGenerationWidget";
+import { ResumeReadyToast } from "@/components/ResumeReadyToast";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -42,12 +45,16 @@ export default function RootLayout({
       <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
         <body className={inter.className} suppressHydrationWarning>
           <ThemeRegistry>
-            <Suspense>
-              <FilterProvider>
-                {children}
-              </FilterProvider>
-            </Suspense>
-            <ProfileCompletionWidget />
+            <ResumeGenerationProvider>
+              <Suspense>
+                <FilterProvider>
+                  {children}
+                </FilterProvider>
+              </Suspense>
+              <ProfileCompletionWidget />
+              <ResumeGenerationWidget />
+              <ResumeReadyToast />
+            </ResumeGenerationProvider>
           </ThemeRegistry>
           <Analytics />
         </body>
