@@ -1,10 +1,9 @@
 'use client';
 
 import { createContext, useContext, useRef, useState, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import type { ParsingStage } from '@/components/resume-editor/ParsingProgress';
 import type { TailoredResumeData } from '@/types';
-import { DEFAULT_RESUME_DESIGN } from '@/types';
+import { toEditorFormat } from '@/lib/resume-generation/toEditorFormat';
 
 export type GenerationStatus = 'idle' | 'generating' | 'complete' | 'error';
 
@@ -257,55 +256,14 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
               }
 
               let skillsFlat: string[] = [];
-              let skillsRecord: Record<string, string[]> = {};
               if (Array.isArray(parsed.skills)) {
-                skillsFlat = parsed.skills;
-                skillsRecord = { Skills: parsed.skills };
+                skillsFlat = parsed.skills as string[];
               } else if (parsed.skills && typeof parsed.skills === 'object') {
-                skillsRecord = parsed.skills as Record<string, string[]>;
-                skillsFlat = Object.values(skillsRecord).flat();
-              }
-
-              const mappedSections = (parsed.sections ?? []).map((sec: any) => ({
-                id: uuidv4(),
-                type: sec.name.toLowerCase().replace(/[^a-z]/g, ''),
-                title: sec.name,
-                items: (sec.entries ?? []).map((entry: any) => ({
-                  id: uuidv4(),
-                  title: entry.title ?? '',
-                  subtitle: entry.subtitle ?? '',
-                  location: entry.location ?? '',
-                  dates: entry.startDate && entry.endDate
-                    ? `${entry.startDate} - ${entry.endDate}`
-                    : (entry.startDate ?? entry.dates ?? ''),
-                  bullets: (entry.bullets ?? []).map((b: string) => ({ id: uuidv4(), text: b })),
-                })),
-              }));
-
-              if (!mappedSections.some((s: any) => s.type === 'skills')) {
-                mappedSections.push({ id: uuidv4(), type: 'skills', title: 'Skills', items: [] });
+                skillsFlat = Object.values(parsed.skills as Record<string, string[]>).flat();
               }
 
               const resumeData: TailoredResumeData = {
-                id: uuidv4(),
-                contact: {
-                  name: parsed.basics?.name ?? parsed.basics?.full_name ?? '',
-                  email: parsed.basics?.email ?? '',
-                  phone: parsed.basics?.phone ?? '',
-                  linkedin: parsed.basics?.linkedin ?? '',
-                  location: parsed.basics?.location ?? '',
-                  github: parsed.basics?.website
-                    ? [parsed.basics.website]
-                    : parsed.basics?.portfolio
-                    ? [parsed.basics.portfolio]
-                    : [],
-                },
-                summary: parsed.summary ?? '',
-                sections: mappedSections,
-                skills: skillsRecord,
-                design: DEFAULT_RESUME_DESIGN,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
+                ...toEditorFormat(parsed, { jobId: jobId ?? undefined, jobTitle: jobTitle ?? undefined }),
                 jobId,
                 jobTitle,
               };
