@@ -54,8 +54,6 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
     // Profile form state
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
-    const [customUsername, setCustomUsername] = useState('');
-    const [usernameError, setUsernameError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     // Initialize form with user data
@@ -65,24 +63,6 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
             setLastName(user.lastName || '');
         }
     }, [user]);
-
-    // Fetch custom username from our API
-    useEffect(() => {
-        if (isOpen && user) {
-            fetch('/api/user/profile')
-                .then(res => res.json())
-                .then(data => {
-                    setCustomUsername(data.username || '');
-                })
-                .catch(err => console.error('Failed to fetch username:', err));
-        }
-    }, [isOpen, user]);
-
-    // Clear messages on input change
-    useEffect(() => {
-        setUsernameError(null);
-        setSuccessMessage(null);
-    }, [customUsername]);
 
     // Close on escape key
     useEffect(() => {
@@ -109,52 +89,14 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
     const handleUpdateProfile = async () => {
         if (!user) return;
         setIsUpdating(true);
-        setUsernameError(null);
         setSuccessMessage(null);
 
         try {
-            // Update Clerk profile (firstName, lastName)
-            await user.update({
-                firstName,
-                lastName,
-            });
-
-            // Update custom username via our API
-            if (customUsername !== undefined) {
-                const res = await fetch('/api/user/profile', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: customUsername })
-                });
-
-                const data = await res.json();
-
-                if (!res.ok) {
-                    setUsernameError(data.error || 'Failed to update username');
-                    return;
-                }
-
-                setSuccessMessage('Profile updated successfully!');
-                setTimeout(() => setSuccessMessage(null), 3000);
-            }
+            await user.update({ firstName, lastName });
+            setSuccessMessage('Profile updated successfully!');
+            setTimeout(() => setSuccessMessage(null), 3000);
         } catch (error) {
             console.error('Failed to update profile:', error);
-            setUsernameError('Failed to update profile. Please try again.');
-        } finally {
-            setIsUpdating(false);
-        }
-    };
-
-    const handleGenerateUsername = async () => {
-        setIsUpdating(true);
-        try {
-            const res = await fetch('/api/user/init', { method: 'POST' });
-            const data = await res.json();
-            if (data.username) {
-                setCustomUsername(data.username);
-            }
-        } catch (error) {
-            console.error('Failed to generate username:', error);
         } finally {
             setIsUpdating(false);
         }
@@ -492,15 +434,11 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                                 user={user}
                                 firstName={firstName}
                                 lastName={lastName}
-                                username={customUsername}
                                 setFirstName={setFirstName}
                                 setLastName={setLastName}
-                                setUsername={setCustomUsername}
                                 handlePhotoUpload={handlePhotoUpload}
                                 handleUpdateProfile={handleUpdateProfile}
-                                handleGenerateUsername={handleGenerateUsername}
                                 isUpdating={isUpdating}
-                                usernameError={usernameError}
                                 successMessage={successMessage}
                                 isMobile={isMobile}
                             />
@@ -532,15 +470,11 @@ function ProfileTab({
     user,
     firstName,
     lastName,
-    username,
     setFirstName,
     setLastName,
-    setUsername,
     handlePhotoUpload,
     handleUpdateProfile,
-    handleGenerateUsername,
     isUpdating,
-    usernameError,
     successMessage,
     isMobile,
 }: {
@@ -548,29 +482,17 @@ function ProfileTab({
     user: any;
     firstName: string;
     lastName: string;
-    username: string;
     setFirstName: (v: string) => void;
     setLastName: (v: string) => void;
-    setUsername: (v: string) => void;
     handlePhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleUpdateProfile: () => void;
-    handleGenerateUsername: () => void;
     isUpdating: boolean;
-    usernameError: string | null;
     successMessage: string | null;
     isMobile?: boolean;
 }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [savedUsername, setSavedUsername] = useState(username);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isSavingUsername, setIsSavingUsername] = useState(false);
-    const [localUsernameError, setLocalUsernameError] = useState<string | null>(null);
-    const [usernameSaved, setUsernameSaved] = useState(true);
     const [reputation, setReputation] = useState<number>(0);
     const [loadingReputation, setLoadingReputation] = useState(true);
-
-    // Track if username has unsaved changes
-    const hasUnsavedUsername = username !== savedUsername;
 
     // Fetch user's reputation from database
     const refreshReputation = () => {
@@ -591,91 +513,6 @@ function ProfileTab({
         refreshReputation();
     }, [user?.id]);
 
-    // Update savedUsername when it changes externally
-    useEffect(() => {
-        setSavedUsername(username);
-        setUsernameSaved(true);
-    }, []); // Only on mount
-
-    // Client-side validation
-    const validateLocally = (value: string): string | null => {
-        if (!value || value.trim().length === 0) return null; // Empty is valid
-        const trimmed = value.trim();
-        if (trimmed.length < 10) return 'Username must be at least 10 characters.';
-        if (trimmed.length > 30) return 'Username must be 30 characters or less.';
-        if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
-            return 'Username can only contain letters, numbers, hyphens, and underscores (no spaces).';
-        }
-        if (/^[-_]/.test(trimmed) || /[-_]$/.test(trimmed)) {
-            return 'Username cannot start or end with a hyphen or underscore.';
-        }
-        // Check reserved words
-        const lower = trimmed.toLowerCase();
-        const reserved = ['user', 'admin', 'root', 'system', 'guest', 'anonymous', 'null', 'undefined', 'test', 'demo', 'default', 'unknown', 'moderator', 'staff', 'support', 'official', 'verified', 'legacy', 'deleted', 'banned'];
-        if (reserved.some(word => lower === word || lower.includes(word))) {
-            return 'This username contains a reserved word.';
-        }
-        return null;
-    };
-
-    const handleUsernameChange = (value: string) => {
-        setUsername(value);
-        setUsernameSaved(false);
-        const error = validateLocally(value);
-        setLocalUsernameError(error);
-    };
-
-    const handleGenerate = async () => {
-        setIsGenerating(true);
-        setLocalUsernameError(null);
-        try {
-            const res = await fetch('/api/user/username/generate', { method: 'POST' });
-            const data = await res.json();
-            if (data.success && data.username) {
-                setUsername(data.username);
-                setUsernameSaved(false);
-                setLocalUsernameError(null);
-            }
-        } catch (error) {
-            console.error('Failed to generate username:', error);
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    const handleSaveUsername = async () => {
-        if (localUsernameError) return;
-
-        setIsSavingUsername(true);
-        setLocalUsernameError(null);
-
-        try {
-            const res = await fetch('/api/user/username', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username.trim() || null })
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                setLocalUsernameError(data.error || 'Failed to save username');
-                return;
-            }
-
-            setSavedUsername(data.username || '');
-            setUsernameSaved(true);
-            // Optionally show success toast (using successMessage state would require lifting this)
-        } catch (error) {
-            console.error('Failed to save username:', error);
-            setLocalUsernameError('Failed to save username. Please try again.');
-        } finally {
-            setIsSavingUsername(false);
-        }
-    };
-
-    const displayError = localUsernameError || usernameError;
-    const canSaveUsername = !localUsernameError && hasUnsavedUsername && !isSavingUsername;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -877,81 +714,6 @@ function ProfileTab({
                         }}
                     />
                 </div>
-            </div>
-
-            {/* Username Field with Generate and Save Buttons */}
-            <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                        Username
-                    </label>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                    <input
-                        type="text"
-                        value={username}
-                        onChange={(e) => handleUsernameChange(e.target.value)}
-                        placeholder="Leave empty to use your name"
-                        style={{
-                            flex: 1,
-                            padding: '10px 12px',
-                            borderRadius: '8px',
-                            border: `1px solid ${displayError ? '#ef4444' : 'var(--border)'}`,
-                            background: 'var(--background-secondary)',
-                            color: 'var(--text-primary)',
-                            fontSize: '14px',
-                            outline: 'none',
-                        }}
-                    />
-                    <button
-                        onClick={handleGenerate}
-                        disabled={isGenerating}
-                        aria-label="Generate a new quirky username"
-                        style={{
-                            padding: '10px 14px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            background: 'var(--accent)',
-                            color: 'white',
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            cursor: isGenerating ? 'not-allowed' : 'pointer',
-                            opacity: isGenerating ? 0.7 : 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'all 0.15s ease',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M23 4v6h-6" />
-                            <path d="M1 20v-6h6" />
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                        </svg>
-                        {isGenerating ? 'Generating...' : 'Generate'}
-                    </button>
-                </div>
-
-
-
-                {/* Error Message */}
-                {displayError && (
-                    <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                        </svg>
-                        {displayError}
-                    </p>
-                )}
-
-
-
-                <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '6px' }}>
-                    Must be at least 10 characters. Letters, numbers, hyphens, and underscores only.
-                </p>
             </div>
 
             <div>
