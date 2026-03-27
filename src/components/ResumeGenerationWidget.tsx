@@ -24,10 +24,10 @@ export function ResumeGenerationWidget() {
     }
   };
 
-  const dotColor = isComplete ? '#22c55e' : isError ? '#ef4444' : '#f97316';
-  const bgColor = isComplete ? '#f0fdf4' : isError ? '#fef2f2' : '#fff7ed';
-  const borderColor = isComplete ? '#bbf7d0' : isError ? '#fecaca' : '#fed7aa';
-  const textColor = isComplete ? '#15803d' : isError ? '#dc2626' : '#c2410c';
+  const dotColor = '#ffffff';
+  const bgColor = isComplete ? '#22c55e' : isError ? '#ef4444' : '#f97316';
+  const borderColor = isComplete ? '#16a34a' : isError ? '#dc2626' : '#ea580c';
+  const textColor = '#ffffff';
   const label = isComplete ? 'Resume ready' : isError ? 'Generation failed' : 'Tailoring your resume...';
 
   return (
@@ -49,7 +49,7 @@ export function ResumeGenerationWidget() {
         cursor: isGenerating || isComplete || isError ? 'pointer' : 'default',
         userSelect: 'none',
         transition: 'box-shadow 0.2s ease',
-        maxWidth: 240,
+        width: 200,
       }}
       onMouseEnter={(e) => { if (isGenerating || isComplete) e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.18)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'; }}
