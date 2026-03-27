@@ -5,13 +5,25 @@ import { useResumeGeneration } from '@/contexts/ResumeGenerationContext';
 
 export function ResumeGenerationWidget() {
   const router = useRouter();
-  const { status, jobId, openProgressModal, dismissCompletion, cancelGeneration } = useResumeGeneration();
+  const { status, jobId, progress, openProgressModal, dismissCompletion, cancelGeneration } = useResumeGeneration();
 
   if (status === 'idle') return null;
 
   const isGenerating = status === 'generating';
   const isComplete = status === 'complete';
   const isError = status === 'error';
+
+  const STAGE_LABELS: Record<number, string> = {
+    0: 'Loading resume',
+    1: 'Parsing resume',
+    2: 'Reading LinkedIn',
+    3: 'Building profile',
+    4: 'Analyzing job',
+    5: 'Tailoring resume',
+    6: 'Finalizing…',
+  };
+
+  const generatingLabel = STAGE_LABELS[progress.currentStageIndex] ?? 'Tailoring resume';
 
   const handleClick = () => {
     if (isComplete && jobId) {
@@ -28,7 +40,7 @@ export function ResumeGenerationWidget() {
   const bgColor = isComplete ? '#22c55e' : isError ? '#ef4444' : '#f97316';
   const borderColor = isComplete ? '#16a34a' : isError ? '#dc2626' : '#ea580c';
   const textColor = '#ffffff';
-  const label = isComplete ? 'Resume ready' : isError ? 'Generation failed' : 'Tailoring your resume...';
+  const label = isComplete ? 'Resume ready' : isError ? 'Generation failed' : generatingLabel;
 
   return (
     <div
