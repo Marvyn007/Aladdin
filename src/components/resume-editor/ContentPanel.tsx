@@ -32,6 +32,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
     const [editingContact, setEditingContact] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
     const [bulletToDelete, setBulletToDelete] = useState<{ sectionId: string, itemId: string, bulletId: string } | null>(null);
+    const [skillDrafts, setSkillDrafts] = useState<Record<string, string>>({});
 
     const toggleSection = (sectionId: string) => {
         const newCollapsed = new Set(collapsedSections);
@@ -279,7 +280,11 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
         });
     };
 
-    const updateSkills = (category: string, value: string) => {
+    const handleSkillChange = (category: string, value: string) => {
+        setSkillDrafts(prev => ({ ...prev, [category]: value }));
+    };
+
+    const handleSkillBlur = (category: string, value: string) => {
         onChange({
             ...resume,
             skills: {
@@ -287,6 +292,11 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                 [category]: value.split(',').map(s => s.trim()).filter(Boolean),
             },
             updatedAt: new Date().toISOString(),
+        });
+        setSkillDrafts(prev => {
+            const next = { ...prev };
+            delete next[category];
+            return next;
         });
     };
 
@@ -757,8 +767,8 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                         <div key={category}>
                                             <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{category}</label>
                                             <textarea
-                                                value={Array.isArray(items) ? items.join(', ') : ''}
-                                                onChange={(e) => updateSkills(category, e.target.value)}
+                                                value={category in skillDrafts ? skillDrafts[category] : (Array.isArray(items) ? items.join(', ') : '')}
+                                                onChange={(e) => handleSkillChange(category, e.target.value)}
                                                 style={{ 
                                                     width: '100%', 
                                                     background: '#ffffff', 
@@ -782,6 +792,7 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                 onBlur={(e) => {
                                                     e.target.style.borderColor = '#e5e7eb';
                                                     e.target.style.boxShadow = 'none';
+                                                    handleSkillBlur(category, e.target.value);
                                                 }}
                                                 placeholder={`List ${category} separated by commas...`}
                                             />
