@@ -14,6 +14,15 @@ import type {
     ResumeContactInfo,
 } from '@/types';
 
+const QUICK_ADD_FIELDS = [
+  { label: 'Portfolio', placeholder: 'https://yourportfolio.com' },
+  { label: 'Twitter/X', placeholder: '@handle' },
+  { label: 'Dribbble', placeholder: 'dribbble.com/yourname' },
+  { label: 'Behance', placeholder: 'behance.net/yourname' },
+  { label: 'Blog', placeholder: 'yourblog.com' },
+  { label: 'Calendly', placeholder: 'calendly.com/yourname' },
+];
+
 interface ContentPanelProps {
     resume: TailoredResumeData;
     onChange: (resume: TailoredResumeData) => void;
@@ -86,6 +95,59 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
         onChange({
             ...resume,
             contact: { ...resume.contact, [field]: value },
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const toggleContactFieldVisibility = (fieldKey: string) => {
+        const current = resume.contact.hiddenContactFields || [];
+        const isHidden = current.includes(fieldKey);
+        onChange({
+            ...resume,
+            contact: {
+                ...resume.contact,
+                hiddenContactFields: isHidden
+                    ? current.filter(k => k !== fieldKey)
+                    : [...current, fieldKey],
+            },
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const addCustomField = (label: string) => {
+        const existing = resume.contact.customFields || [];
+        if (existing.some(f => f.label === label)) return;
+        onChange({
+            ...resume,
+            contact: {
+                ...resume.contact,
+                customFields: [...existing, { id: crypto.randomUUID(), label, value: '' }],
+            },
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const updateCustomField = (id: string, field: 'label' | 'value', val: string) => {
+        onChange({
+            ...resume,
+            contact: {
+                ...resume.contact,
+                customFields: (resume.contact.customFields || []).map(f =>
+                    f.id === id ? { ...f, [field]: val } : f
+                ),
+            },
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const removeCustomField = (id: string) => {
+        onChange({
+            ...resume,
+            contact: {
+                ...resume.contact,
+                customFields: (resume.contact.customFields || []).filter(f => f.id !== id),
+                hiddenContactFields: (resume.contact.hiddenContactFields || []).filter(k => k !== id),
+            },
             updatedAt: new Date().toISOString(),
         });
     };
@@ -236,8 +298,18 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
         });
     };
 
+    const EyeIcon = ({ visible }: { visible: boolean }) => visible ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+    ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+    );
+
     return (
-        <div className="content-panel" style={{ 
+        <div className="content-panel" style={{
             background: '#ffffff', 
             padding: '20px', 
             display: 'flex', 
@@ -342,205 +414,179 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                 </div>
 
                 {editingContact ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                        <div>
-                            <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Full Name</label>
-                            <input
-                                type="text"
-                                value={resume.contact.name}
-                                onChange={(e) => updateContact('name', e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    background: '#ffffff', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '10px', 
-                                    padding: '10px 12px', 
-                                    fontSize: '14px', 
-                                    fontWeight: 400,
-                                    color: '#111827',
-                                    outline: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#3b82f6';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Address</label>
-                            <input
-                                type="email"
-                                value={resume.contact.email}
-                                onChange={(e) => updateContact('email', e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    background: '#ffffff', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '10px', 
-                                    padding: '10px 12px', 
-                                    fontSize: '14px', 
-                                    fontWeight: 400,
-                                    color: '#111827',
-                                    outline: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#3b82f6';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone Number</label>
-                            <input
-                                type="tel"
-                                value={resume.contact.phone}
-                                onChange={(e) => updateContact('phone', e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    background: '#ffffff', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '10px', 
-                                    padding: '10px 12px', 
-                                    fontSize: '14px', 
-                                    fontWeight: 400,
-                                    color: '#111827',
-                                    outline: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#3b82f6';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LinkedIn Profile</label>
-                            <input
-                                type="text"
-                                value={resume.contact.linkedin}
-                                onChange={(e) => updateContact('linkedin', e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    background: '#ffffff', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '10px', 
-                                    padding: '10px 12px', 
-                                    fontSize: '14px', 
-                                    fontWeight: 400,
-                                    color: '#111827',
-                                    outline: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#3b82f6';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Location</label>
-                            <input
-                                type="text"
-                                value={resume.contact.location || ''}
-                                onChange={(e) => updateContact('location', e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    background: '#ffffff', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '10px', 
-                                    padding: '10px 12px', 
-                                    fontSize: '14px', 
-                                    fontWeight: 400,
-                                    color: '#111827',
-                                    outline: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                placeholder="e.g. New York, NY"
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#3b82f6';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Website</label>
-                            <input
-                                type="url"
-                                value={resume.contact.website || ''}
-                                onChange={(e) => updateContact('website', e.target.value)}
-                                style={{ 
-                                    width: '100%', 
-                                    background: '#ffffff', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '10px', 
-                                    padding: '10px 12px', 
-                                    fontSize: '14px', 
-                                    fontWeight: 400,
-                                    color: '#111827',
-                                    outline: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                placeholder="https://"
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#3b82f6';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
-                        </div>
-                        <div style={{ gridColumn: 'span 2' }}>
-                            <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>GitHub URLs</label>
-                            <input
-                                type="text"
-                                value={resume.contact.github?.join(', ') || ''}
-                                onChange={(e) => updateContact('github', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                                style={{ 
-                                    width: '100%', 
-                                    background: '#ffffff', 
-                                    border: '1px solid #e5e7eb', 
-                                    borderRadius: '10px', 
-                                    padding: '10px 12px', 
-                                    fontSize: '14px', 
-                                    fontWeight: 400,
-                                    color: '#111827',
-                                    outline: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                placeholder="Comma separated links"
-                                onFocus={(e) => {
-                                    e.target.style.borderColor = '#3b82f6';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
-                                }}
-                                onBlur={(e) => {
-                                    e.target.style.borderColor = '#e5e7eb';
-                                    e.target.style.boxShadow = 'none';
-                                }}
-                            />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {[
+                            { key: 'name', label: 'Full Name', type: 'text', value: resume.contact.name, placeholder: 'John Doe', alwaysVisible: true },
+                            { key: 'email', label: 'Email Address', type: 'email', value: resume.contact.email, placeholder: 'john@example.com', alwaysVisible: false },
+                            { key: 'phone', label: 'Phone Number', type: 'tel', value: resume.contact.phone, placeholder: '+1 (555) 000-0000', alwaysVisible: false },
+                            { key: 'location', label: 'Location', type: 'text', value: resume.contact.location || '', placeholder: 'New York, NY', alwaysVisible: false },
+                            { key: 'linkedin', label: 'LinkedIn Profile', type: 'text', value: resume.contact.linkedin, placeholder: 'linkedin.com/in/yourname', alwaysVisible: false },
+                            { key: 'website', label: 'Website', type: 'url', value: resume.contact.website || '', placeholder: 'https://', alwaysVisible: false },
+                            { key: 'github', label: 'GitHub URLs', type: 'text', value: (resume.contact.github || []).join(', '), placeholder: 'Comma separated links', alwaysVisible: false },
+                        ].map(field => {
+                            const isHidden = !field.alwaysVisible && (resume.contact.hiddenContactFields || []).includes(field.key);
+                            return (
+                                <div key={field.key} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                            {field.label}
+                                        </label>
+                                        <input
+                                            type={field.type}
+                                            value={field.value}
+                                            onChange={(e) => {
+                                                if (field.key === 'github') {
+                                                    updateContact('github', e.target.value.split(',').map(s => s.trim()).filter(Boolean));
+                                                } else {
+                                                    updateContact(field.key as keyof ResumeContactInfo, e.target.value);
+                                                }
+                                            }}
+                                            placeholder={field.placeholder}
+                                            style={{
+                                                width: '100%',
+                                                background: isHidden ? '#f9fafb' : '#ffffff',
+                                                border: '1px solid #e5e7eb',
+                                                borderRadius: '10px',
+                                                padding: '10px 12px',
+                                                fontSize: '14px',
+                                                fontWeight: 400,
+                                                color: isHidden ? '#9ca3af' : '#111827',
+                                                outline: 'none',
+                                                transition: 'all 0.15s ease',
+                                                opacity: isHidden ? 0.6 : 1,
+                                            }}
+                                            onFocus={(e) => {
+                                                e.target.style.borderColor = '#3b82f6';
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)';
+                                            }}
+                                            onBlur={(e) => {
+                                                e.target.style.borderColor = '#e5e7eb';
+                                                e.target.style.boxShadow = 'none';
+                                            }}
+                                        />
+                                    </div>
+                                    {!field.alwaysVisible && (
+                                        <button
+                                            onClick={() => toggleContactFieldVisibility(field.key)}
+                                            title={isHidden ? 'Show on resume' : 'Hide from resume'}
+                                            style={{
+                                                marginTop: '22px',
+                                                padding: '8px',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                background: isHidden ? '#fee2e2' : '#f0fdf4',
+                                                color: isHidden ? '#ef4444' : '#22c55e',
+                                                cursor: 'pointer',
+                                                flexShrink: 0,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                            }}
+                                        >
+                                            <EyeIcon visible={!isHidden} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+
+                        {/* Custom fields */}
+                        {(resume.contact.customFields || []).map(field => {
+                            const isHidden = (resume.contact.hiddenContactFields || []).includes(field.id);
+                            return (
+                                <div key={field.id} style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                                    <div style={{ flex: '0 0 120px' }}>
+                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Label</label>
+                                        <input
+                                            type="text"
+                                            value={field.label}
+                                            onChange={(e) => updateCustomField(field.id, 'label', e.target.value)}
+                                            style={{ width: '100%', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 12px', fontSize: '13px', color: '#111827', outline: 'none' }}
+                                            onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
+                                            onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                                        />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '6px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Value / URL</label>
+                                        <input
+                                            type="text"
+                                            value={field.value}
+                                            onChange={(e) => updateCustomField(field.id, 'value', e.target.value)}
+                                            placeholder="https:// or text"
+                                            style={{ width: '100%', background: isHidden ? '#f9fafb' : '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 12px', fontSize: '14px', color: isHidden ? '#9ca3af' : '#111827', outline: 'none', opacity: isHidden ? 0.6 : 1 }}
+                                            onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.08)'; }}
+                                            onBlur={(e) => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none'; }}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => toggleContactFieldVisibility(field.id)}
+                                        title={isHidden ? 'Show on resume' : 'Hide from resume'}
+                                        style={{ padding: '8px', border: 'none', borderRadius: '8px', background: isHidden ? '#fee2e2' : '#f0fdf4', color: isHidden ? '#ef4444' : '#22c55e', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                                    >
+                                        <EyeIcon visible={!isHidden} />
+                                    </button>
+                                    <button
+                                        onClick={() => removeCustomField(field.id)}
+                                        title="Remove field"
+                                        style={{ padding: '8px', border: 'none', borderRadius: '8px', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                                    </button>
+                                </div>
+                            );
+                        })}
+
+                        {/* Quick-add chips */}
+                        <div style={{ marginTop: '4px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 600, color: '#9ca3af', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Quick Add</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {QUICK_ADD_FIELDS
+                                    .filter(f => !(resume.contact.customFields || []).some(cf => cf.label === f.label))
+                                    .map(f => (
+                                        <button
+                                            key={f.label}
+                                            onClick={() => addCustomField(f.label)}
+                                            style={{
+                                                padding: '5px 10px',
+                                                fontSize: '12px',
+                                                fontWeight: 500,
+                                                borderRadius: '20px',
+                                                border: '1px solid #e5e7eb',
+                                                background: '#f9fafb',
+                                                color: '#374151',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                            }}
+                                            onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.background = '#eff6ff'; (e.currentTarget as HTMLElement).style.borderColor = '#3b82f6'; (e.currentTarget as HTMLElement).style.color = '#3b82f6'; }}
+                                            onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.background = '#f9fafb'; (e.currentTarget as HTMLElement).style.borderColor = '#e5e7eb'; (e.currentTarget as HTMLElement).style.color = '#374151'; }}
+                                        >
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                            {f.label}
+                                        </button>
+                                    ))
+                                }
+                                <button
+                                    onClick={() => addCustomField('Custom')}
+                                    style={{
+                                        padding: '5px 10px',
+                                        fontSize: '12px',
+                                        fontWeight: 500,
+                                        borderRadius: '20px',
+                                        border: '1px dashed #d1d5db',
+                                        background: 'transparent',
+                                        color: '#6b7280',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                    }}
+                                >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    Add custom
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ) : (
