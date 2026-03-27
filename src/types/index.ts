@@ -267,6 +267,12 @@ export interface BookmarkletPayload {
 // TAILORED RESUME TYPES
 // ============================================================================
 
+export interface ResumeContactField {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface ResumeContactInfo {
   name: string;
   email: string;
@@ -275,6 +281,8 @@ export interface ResumeContactInfo {
   linkedin: string;
   github: string[];
   website?: string;
+  customFields?: ResumeContactField[];
+  hiddenContactFields?: string[]; // field keys: 'phone','location','linkedin','github','website', or customField id
 }
 
 export interface ResumeBullet {
