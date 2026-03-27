@@ -3,7 +3,7 @@
  * Provides Classic and Modern template rendering for the two-panel editor
  */
 
-import type { TailoredResumeData, ResumeSection, ResumeSectionItem } from '@/types';
+import type { TailoredResumeData, ResumeSection, ResumeSectionItem, ResumeContactInfo } from '@/types';
 
 // Template CSS for Classic style - BLACK & WHITE ONLY
 export const CLASSIC_TEMPLATE_CSS = `
@@ -408,6 +408,81 @@ function renderSkillsSection(skills: TailoredResumeData['skills'], template: 'cl
   </div>
 </section>
   `;
+}
+
+// ============================================================================
+// CONTACT RENDERING HELPER — builds field list, skips empty, joins separators
+// ============================================================================
+
+interface ContactItem {
+  text: string;
+  href?: string;
+}
+
+function buildContactItems(contact: ResumeContactInfo): ContactItem[] {
+  const hidden = new Set(contact.hiddenContactFields || []);
+  const items: ContactItem[] = [];
+
+  if (!hidden.has('location') && contact.location) {
+    items.push({ text: contact.location });
+  }
+  if (!hidden.has('phone') && contact.phone) {
+    items.push({ text: contact.phone });
+  }
+  if (!hidden.has('email') && contact.email) {
+    items.push({ text: contact.email, href: `mailto:${contact.email}` });
+  }
+  if (!hidden.has('linkedin') && contact.linkedin) {
+    const url = contact.linkedin.startsWith('http') ? contact.linkedin : `https://${contact.linkedin}`;
+    items.push({ text: contact.linkedin, href: url });
+  }
+  if (!hidden.has('website') && contact.website) {
+    const display = contact.website.replace(/^https?:\/\//, '');
+    const url = contact.website.startsWith('http') ? contact.website : `https://${contact.website}`;
+    items.push({ text: display, href: url });
+  }
+  if (!hidden.has('github')) {
+    (contact.github || []).forEach(g => {
+      const url = g.startsWith('http') ? g : `https://${g}`;
+      items.push({ text: g, href: url });
+    });
+  }
+  (contact.customFields || []).forEach(f => {
+    if (!hidden.has(f.id) && f.value) {
+      const isUrl = f.value.startsWith('http') || f.value.startsWith('www.');
+      if (isUrl) {
+        const url = f.value.startsWith('http') ? f.value : `https://${f.value}`;
+        const display = f.value.replace(/^https?:\/\//, '');
+        items.push({ text: `${f.label}: ${display}`, href: url });
+      } else {
+        items.push({ text: `${f.label}: ${f.value}` });
+      }
+    }
+  });
+
+  return items;
+}
+
+function renderContactRow(contact: ResumeContactInfo, separator: string, linkClass?: string): string {
+  const items = buildContactItems(contact);
+  return items.map(item => {
+    if (item.href) {
+      const cls = linkClass ? ` class="${linkClass}"` : '';
+      return `<a href="${item.href}" target="${item.href.startsWith('mailto') ? '_self' : '_blank'}"${cls}>${item.text}</a>`;
+    }
+    return `<span>${item.text}</span>`;
+  }).join(separator);
+}
+
+function renderContactSidebarItems(contact: ResumeContactInfo, linkClass?: string): string {
+  const items = buildContactItems(contact);
+  return items.map(item => {
+    if (item.href) {
+      const cls = linkClass ? ` class="${linkClass}"` : '';
+      return `<div class="sidebar-item"><a href="${item.href}" target="${item.href.startsWith('mailto') ? '_self' : '_blank'}"${cls}>${item.text}</a></div>`;
+    }
+    return `<div class="sidebar-item">${item.text}</div>`;
+  }).join('');
 }
 
 /**
