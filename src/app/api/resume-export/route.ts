@@ -2,13 +2,12 @@
  * Resume PDF Export API Route
  * POST /api/resume-export
  *
- * Exports resume to PDF using the exact content from the editor.
+ * Accepts pre-rendered HTML from the client (same HTML the preview displays).
  * Returns application/pdf with dynamic filename.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { generatePdfBuffer, buildResumeFilename } from '@/lib/pdf-renderer';
-import type { TailoredResumeData } from '@/types';
+import { generatePdfBufferFromHtml, buildResumeFilename } from '@/lib/pdf-renderer';
 import { auth } from '@clerk/nextjs/server';
 
 export const runtime = 'nodejs';
@@ -21,17 +20,18 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { resume, jobTitle } = body as { resume: TailoredResumeData; jobTitle?: string };
+        const { html, jobTitle, contactName } = body as {
+            html: string;
+            jobTitle?: string;
+            contactName?: string;
+        };
 
-        if (!resume) {
-            return NextResponse.json(
-                { error: 'Resume data is required' },
-                { status: 400 }
-            );
+        if (!html) {
+            return NextResponse.json({ error: 'HTML is required' }, { status: 400 });
         }
 
-        const pdfBuffer = await generatePdfBuffer(resume);
-        const filename = buildResumeFilename(resume.contact?.name, jobTitle);
+        const pdfBuffer = await generatePdfBufferFromHtml(html);
+        const filename = buildResumeFilename(contactName, jobTitle);
 
         return new NextResponse(pdfBuffer as any, {
             headers: {
