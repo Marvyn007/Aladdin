@@ -44,14 +44,14 @@ export function ResumeReadyToast() {
     <>
       <style>{`
         @keyframes rg-toast-in {
-          from { opacity: 0; transform: translateX(calc(100% + 24px)); }
-          to   { opacity: 1; transform: translateX(0); }
+          from { opacity: 0; transform: translateY(calc(-100% - 24px)); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
       <div
         style={{
           position: 'fixed',
-          bottom: 24,
+          top: 24,
           right: 24,
           zIndex: 9100,
           maxWidth: 340,
