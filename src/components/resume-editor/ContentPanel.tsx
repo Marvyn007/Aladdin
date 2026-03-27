@@ -6,6 +6,19 @@
 'use client';
 
 import { useState } from 'react';
+import { GripVertical } from 'lucide-react';
+import {
+    DndContext,
+    closestCenter,
+    type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type {
     TailoredResumeData,
     ResumeSection,
@@ -23,6 +36,62 @@ const QUICK_ADD_FIELDS = [
   { label: 'Calendly', placeholder: 'calendly.com/yourname' },
 ];
 
+// ── Shared icon ──────────────────────────────────────────────────────────────
+function EyeIcon({ visible }: { visible: boolean }) {
+    return visible ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+    ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+    );
+}
+
+// ── Sortable section card (render-prop) ───────────────────────────────────────
+function SortableSectionCard({
+    id,
+    children,
+}: {
+    id: string;
+    children: (handleProps: Record<string, unknown>) => React.ReactNode;
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id });
+
+    return (
+        <div
+            ref={setNodeRef}
+            className="section-card"
+            style={{
+                background: '#ffffff',
+                borderRadius: '10px',
+                border: '1px solid #e8ebef',
+                overflow: 'hidden',
+                transform: CSS.Transform.toString(transform) ?? undefined,
+                transition: transition ?? 'all 0.15s ease',
+                opacity: isDragging ? 0.85 : 1,
+                boxShadow: isDragging
+                    ? '0 4px 16px rgba(0,0,0,0.12)'
+                    : '0 3px 10px rgba(0,0,0,0.03)',
+                zIndex: isDragging ? 999 : ('auto' as React.CSSProperties['zIndex']),
+                position: 'relative',
+            }}
+        >
+            {children({ ...attributes, ...listeners })}
+        </div>
+    );
+}
+
 interface ContentPanelProps {
     resume: TailoredResumeData;
     onChange: (resume: TailoredResumeData) => void;
@@ -33,6 +102,19 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
     const [bulletToDelete, setBulletToDelete] = useState<{ sectionId: string, itemId: string, bulletId: string } | null>(null);
     const [skillDrafts, setSkillDrafts] = useState<Record<string, string>>({});
+
+    const handleSectionDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const oldIndex = resume.sections.findIndex(s => s.id === active.id);
+        const newIndex = resume.sections.findIndex(s => s.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return;
+        onChange({
+            ...resume,
+            sections: arrayMove(resume.sections, oldIndex, newIndex),
+            updatedAt: new Date().toISOString(),
+        });
+    };
 
     const toggleSection = (sectionId: string) => {
         const newCollapsed = new Set(collapsedSections);
@@ -307,16 +389,6 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
             updatedAt: new Date().toISOString(),
         });
     };
-
-    const EyeIcon = ({ visible }: { visible: boolean }) => visible ? (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-        </svg>
-    ) : (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
-        </svg>
-    );
 
     return (
         <div className="content-panel" style={{
@@ -635,19 +707,14 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
             </div>
 
             {/* Resume Sections */}
-            {resume.sections.map((section) => (
-                <div
-                    key={section.id}
-                    className="section-card"
-                    style={{ 
-                        background: '#ffffff', 
-                        borderRadius: '10px', 
-                        border: '1px solid #e8ebef', 
-                        boxShadow: '0 3px 10px rgba(0,0,0,0.03)', 
-                        overflow: 'hidden',
-                        transition: 'all 0.15s ease'
-                    }}
+            <DndContext collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
+                <SortableContext
+                    items={resume.sections.map(s => s.id)}
+                    strategy={verticalListSortingStrategy}
                 >
+                    {resume.sections.map((section) => (
+                    <SortableSectionCard key={section.id} id={section.id}>
+                    {(handleProps) => (<>
                     {/* Section Header */}
                     <div
                         onClick={() => toggleSection(section.id)}
@@ -662,10 +729,35 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                         onMouseOver={(e) => e.currentTarget.style.background = '#f9fafb'}
                         onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ 
-                                width: '32px', 
-                                height: '32px', 
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {/* Drag handle */}
+                            <div
+                                {...handleProps}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    cursor: 'grab',
+                                    color: '#d1d5db',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    padding: '4px 2px',
+                                    borderRadius: '4px',
+                                    flexShrink: 0,
+                                    touchAction: 'none',
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.color = '#9ca3af';
+                                    e.currentTarget.style.background = '#f3f4f6';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = '#d1d5db';
+                                    e.currentTarget.style.background = 'transparent';
+                                }}
+                            >
+                                <GripVertical size={16} />
+                            </div>
+                            <div style={{
+                                width: '32px',
+                                height: '32px',
                                 borderRadius: '8px', 
                                 display: 'flex', 
                                 alignItems: 'center', 
@@ -1135,8 +1227,11 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                             )}
                         </div>
                     )}
-                </div>
+            </>)}
+            </SortableSectionCard>
             ))}
+                </SortableContext>
+            </DndContext>
             {/* Delete Confirmation Modal */}
             {bulletToDelete && (
                 <div style={{
