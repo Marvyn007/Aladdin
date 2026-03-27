@@ -920,7 +920,7 @@ export function FullPageResumeEditor({
                                                                         }
                                                                     }
                                                                 }
-                                                                setResume(prev => ({ ...prev, skills: updatedSkills, updatedAt: new Date().toISOString() }));
+                                                                updatePreview({ ...editorResume, skills: updatedSkills, updatedAt: new Date().toISOString() });
                                                                 setKeywords(prev => ({
                                                                     ...prev!,
                                                                     matched: prev!.matched.filter(match => match !== k),
@@ -962,7 +962,7 @@ export function FullPageResumeEditor({
                                                                         body: JSON.stringify({ currentSkills: currentSkillsObj, newSkills: [k] })
                                                                     });
                                                                     const data = await res.json();
-                                                                    setResume(prev => ({ ...prev, skills: data.updatedSkills || currentSkillsObj, updatedAt: new Date().toISOString() }));
+                                                                    updatePreview({ ...editorResume, skills: data.updatedSkills || currentSkillsObj, updatedAt: new Date().toISOString() });
                                                                     setKeywords(prev => ({
                                                                         ...prev!,
                                                                         matched: [...prev!.matched, k],
@@ -1050,18 +1050,18 @@ export function FullPageResumeEditor({
                             >
                                 <DesignPanel
                                     design={resume.design}
-                                    onChange={(design) => setResume(prev => ({ ...prev, design, updatedAt: new Date().toISOString() }))}
-                                    onReset={() => setResume(prev => ({ 
-                                        ...prev, 
-                                        design: { 
-                                            template: 'classic', 
-                                            fontFamily: "'Times New Roman', Georgia, serif", 
-                                            fontSize: 12, 
-                                            accentColor: '#1a365d', 
-                                            margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 } 
+                                    onChange={(design) => updatePreview({ ...editorResume, design, updatedAt: new Date().toISOString() })}
+                                    onReset={() => updatePreview({
+                                        ...editorResume,
+                                        design: {
+                                            template: 'classic',
+                                            fontFamily: "'Times New Roman', Georgia, serif",
+                                            fontSize: 12,
+                                            accentColor: '#1a365d',
+                                            margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 }
                                         },
-                                        updatedAt: new Date().toISOString() 
-                                    }))}
+                                        updatedAt: new Date().toISOString()
+                                    })}
                                 />
                             </div>
                         </div>
