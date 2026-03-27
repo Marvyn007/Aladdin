@@ -25,8 +25,8 @@ export function TailoredResumeEditor() {
 
   // Re-initialize textarea when modal opens with a new job
   useEffect(() => {
-    if (isModalOpen && initialJobDescription) {
-      setJobDescription(initialJobDescription);
+    if (isModalOpen) {
+      setJobDescription(initialJobDescription ?? '');
     }
   }, [isModalOpen, initialJobDescription]);
 
