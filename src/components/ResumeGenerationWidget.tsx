@@ -5,7 +5,7 @@ import { useResumeGeneration } from '@/contexts/ResumeGenerationContext';
 
 export function ResumeGenerationWidget() {
   const router = useRouter();
-  const { status, jobId, openProgressModal, dismissCompletion } = useResumeGeneration();
+  const { status, jobId, openProgressModal, dismissCompletion, cancelGeneration } = useResumeGeneration();
 
   if (status === 'idle') return null;
 
@@ -19,6 +19,8 @@ export function ResumeGenerationWidget() {
       dismissCompletion();
     } else if (isGenerating) {
       openProgressModal();
+    } else if (isError) {
+      cancelGeneration();
     }
   };
 
@@ -44,7 +46,7 @@ export function ResumeGenerationWidget() {
         background: bgColor,
         border: `1px solid ${borderColor}`,
         boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-        cursor: isGenerating || isComplete ? 'pointer' : 'default',
+        cursor: isGenerating || isComplete || isError ? 'pointer' : 'default',
         userSelect: 'none',
         transition: 'box-shadow 0.2s ease',
         maxWidth: 240,
