@@ -32,12 +32,38 @@ export async function generatePdfBuffer(resume: TailoredResumeData): Promise<Buf
             printBackground: true,
             preferCSSPageSize: false,
             pageRanges: '',
-            margin: {
-                top: '0.5in',
-                right: '0.5in',
-                bottom: '0.5in',
-                left: '0.5in',
-            },
+            margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        });
+
+        return Buffer.from(pdfBuffer);
+    } finally {
+        await browser.close();
+    }
+}
+
+/**
+ * Generate a PDF buffer from a pre-rendered HTML string.
+ * The client sends exactly the HTML the preview rendered, with fonts injected.
+ * Puppeteer margins are zeroed — all spacing comes from CSS.
+ */
+export async function generatePdfBufferFromHtml(html: string): Promise<Buffer> {
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    try {
+        const page = await browser.newPage();
+
+        await page.setContent(html, {
+            waitUntil: 'networkidle0',
+        });
+
+        const pdfBuffer = await page.pdf({
+            format: 'Letter',
+            printBackground: true,
+            preferCSSPageSize: false,
+            margin: { top: '0', right: '0', bottom: '0', left: '0' },
         });
 
         return Buffer.from(pdfBuffer);
