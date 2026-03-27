@@ -514,13 +514,7 @@ export function renderClassicTemplate(data: TailoredResumeData): string {
   <header>
     <h1>${contact.name}</h1>
     <div class="contact">
-      <span>${contact.phone}</span>
-      <span>|</span>
-      <a href="mailto:${contact.email}">${contact.email}</a>
-      <span>|</span>
-      ${(contact.github || []).map(g => `<a href="https://${g}" target="_blank">${g}</a>`).join(' | ')}
-      <span>|</span>
-      <a href="https://${contact.linkedin}" target="_blank">${contact.linkedin}</a>
+      ${renderContactRow(contact, ' <span>|</span> ')}
     </div>
   </header>
   ${sectionsHtml}
@@ -557,10 +551,7 @@ export function renderModernTemplate(data: TailoredResumeData): string {
   <header>
     <h1>${contact.name}</h1>
     <div class="contact">
-      <span>${contact.phone}</span>
-      <a href="mailto:${contact.email}">${contact.email}</a>
-      ${(contact.github || []).map(g => `<a href="https://${g}" target="_blank">${g}</a>`).join('')}
-      ${contact.linkedin ? `<a href="https://${contact.linkedin}" target="_blank">LinkedIn</a>` : ''}
+      ${renderContactRow(contact, ' ')}
     </div>
   </header>
   ${sectionsHtml}
@@ -721,10 +712,7 @@ export function renderExecutiveTemplate(data: TailoredResumeData): string {
     <header>
       <h1>${contact.name}</h1>
       <div class="contact">
-        <span>${contact.phone}</span><span>•</span>
-        <a href="mailto:${contact.email}">${contact.email}</a><span>•</span>
-        ${(contact.github || []).map(g => `<a href="https://${g}" target="_blank">${g}</a>`).join(' • ')}
-        ${contact.linkedin ? `<span>•</span><a href="https://${contact.linkedin}" target="_blank">${contact.linkedin}</a>` : ''}
+        ${renderContactRow(contact, ' <span>•</span> ')}
       </div>
     </header>
     ${sectionsHtml}
@@ -856,11 +844,7 @@ export function renderProfessionalTemplate(data: TailoredResumeData): string {
   <div class="sidebar">
     <section>
       <h2>Contact</h2>
-      <div class="sidebar-item">${contact.location || ''}</div>
-      <div class="sidebar-item">${contact.phone}</div>
-      <div class="sidebar-item"><a href="mailto:${contact.email}" class="link">${contact.email}</a></div>
-      ${contact.linkedin ? `<div class="sidebar-item"><a href="https://${contact.linkedin}" target="_blank" class="link">${contact.linkedin}</a></div>` : ''}
-      ${(contact.github || []).map(g => `<div class="sidebar-item"><a href="https://${g}" target="_blank" class="link">${g}</a></div>`).join('')}
+      ${renderContactSidebarItems(contact, 'link')}
     </section>
     ${sidebarSkillsHtml ? `<section><h2>Skills</h2><div class="sidebar-skills">${sidebarSkillsHtml}</div></section>` : ''}
     ${eduHtml}
@@ -974,11 +958,7 @@ export function renderMinimalTemplate(data: TailoredResumeData): string {
     <h1>${contact.name}</h1>
     ${data.summary ? `<div class="subtitle">${data.summary.substring(0, 200)}${data.summary.length > 200 ? '...' : ''}</div>` : ''}
     <div class="contact">
-      <span>${contact.location || ''}</span>
-      <a href="mailto:${contact.email}">${contact.email}</a>
-      <span>${contact.phone}</span>
-      ${(contact.github || []).map(g => `<a href="https://${g}" target="_blank">${g}</a>`).join('')}
-      ${contact.linkedin ? `<a href="https://${contact.linkedin}" target="_blank">${contact.linkedin}</a>` : ''}
+      ${renderContactRow(contact, ' ')}
     </div>
   </header>
   ${sectionsHtml}
