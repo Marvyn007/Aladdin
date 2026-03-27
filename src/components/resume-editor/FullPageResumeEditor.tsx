@@ -6,7 +6,22 @@ import { ChevronLeft, Home, Download, Save, Loader2, FileText, PanelLeftClose, P
 import type { TailoredResumeData, KeywordAnalysis } from '@/types';
 import { ContentPanel } from '@/components/resume-editor/ContentPanel';
 import { DesignPanel } from '@/components/resume-editor/DesignPanel';
-import { ResumePreview, getResumePreviewHtml } from '@/components/resume-editor/ResumePreview';
+import { ResumePreview } from '@/components/resume-editor/ResumePreview';
+import { renderResumeHtml } from '@/lib/resume-templates';
+import { generatePDFFromElement } from '@/lib/client-pdf';
+
+const GOOGLE_FONTS_MAP: Record<string, string> = {
+    'Inter': 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
+    'Roboto': 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap',
+    'Open Sans': 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap',
+};
+
+function injectFontsForPdf(html: string, fontFamily: string): string {
+    const url = GOOGLE_FONTS_MAP[fontFamily];
+    if (!url) return html; // system font (Times New Roman, Georgia, Arial, Helvetica) — no injection needed
+    const linkTag = `<link rel="stylesheet" href="${url}">`;
+    return html.replace('</head>', `${linkTag}</head>`);
+}
 
 interface FullPageResumeEditorProps {
     jobId: string;
@@ -367,30 +382,64 @@ export function FullPageResumeEditor({
 
     const handleDownloadPdf = async () => {
         setIsDownloading(true);
+        const companyStr = company ? `${company.replace(/[^a-zA-Z0-9]/g, '_')}_` : '';
+        const downloadFilename = `Tailored_Resume_${companyStr}${jobId.substring(0, 4)}.pdf`;
+
         try {
-            const html = getResumePreviewHtml(resume);
-            
-            const response = await fetch('/api/pdf', {
+            const baseHtml = renderResumeHtml(resume);
+            const html = injectFontsForPdf(baseHtml, resume.design?.fontFamily ?? '');
+
+            const response = await fetch('/api/resume-export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ html, isTailored: true }),
+                body: JSON.stringify({
+                    html,
+                    jobTitle,
+                    contactName: resume.contact?.name,
+                }),
             });
 
-            if (!response.ok) throw new Error('PDF generation failed');
+            if (!response.ok) throw new Error('Server PDF generation failed');
 
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            const companyStr = company ? `${company.replace(/[^a-zA-Z0-9]/g, '_')}_` : '';
-            a.download = `Tailored_Resume_${companyStr}${jobId.substring(0, 4)}.pdf`;
+            a.download = downloadFilename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+
         } catch (error) {
-            console.error('PDF error:', error);
-            alert('Failed to generate PDF. Please try again.');
+            console.error('Server PDF failed, falling back to client-side:', error);
+            // Fallback: render into a hidden off-screen container and use html2canvas
+            try {
+                const baseHtml = renderResumeHtml(resume);
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(baseHtml, 'text/html');
+
+                const container = document.createElement('div');
+                container.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:8.5in;background:white;';
+
+                // Copy <style> tags from the parsed document's <head>
+                doc.head.querySelectorAll('style').forEach((s) => {
+                    container.appendChild(s.cloneNode(true));
+                });
+                // Copy the resume body element
+                if (doc.body.firstElementChild) {
+                    container.appendChild(doc.body.firstElementChild.cloneNode(true));
+                }
+
+                document.body.appendChild(container);
+                try {
+                    await generatePDFFromElement(container, { filename: downloadFilename, format: 'letter' });
+                } finally {
+                    document.body.removeChild(container);
+                }
+            } catch {
+                alert('Failed to generate PDF. Please try again.');
+            }
         } finally {
             setIsDownloading(false);
         }
