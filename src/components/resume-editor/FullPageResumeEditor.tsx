@@ -400,7 +400,7 @@ export function FullPageResumeEditor({
                 body: JSON.stringify({
                     html,
                     jobTitle,
-                    contactName: resume.contact?.name,
+                    contactName: editorResume.contact?.name,
                 }),
             });
 
