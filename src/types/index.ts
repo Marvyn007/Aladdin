@@ -283,6 +283,7 @@ export interface ResumeContactInfo {
   website?: string;
   customFields?: ResumeContactField[];
   hiddenContactFields?: string[]; // field keys: 'phone','location','linkedin','github','website', or customField id
+  linkFieldOrder?: string[]; // ordered keys: 'linkedin'|'website'|'github'|'custom-<id>'
 }
 
 export interface ResumeBullet {
