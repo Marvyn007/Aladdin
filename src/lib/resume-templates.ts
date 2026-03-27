@@ -14,7 +14,7 @@ html, body {
 }
 
 .resume-classic {
-  font-family: 'Aptos', 'Aptos Body', 'Open Sans', 'Segoe UI', sans-serif;
+  font-family: var(--resume-font-family, 'Aptos', 'Aptos Body', 'Open Sans', 'Segoe UI', sans-serif);
   font-size: var(--resume-font-size, 10.5pt);
   color: #000;
   width: 8.5in;
@@ -32,7 +32,7 @@ html, body {
 
 .resume-classic header {
   text-align: center;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--resume-accent, #000);
   padding-bottom: 8px;
   margin-bottom: 12px;
 }
@@ -42,7 +42,7 @@ html, body {
   font-weight: 700;
   letter-spacing: 0px;
   margin: 0 0 4px 0;
-  color: #000;
+  color: var(--resume-accent, #000);
 }
 
 .resume-classic .contact {
@@ -77,10 +77,10 @@ html, body {
 .resume-classic section h2 {
   font-size: 13pt;
   font-weight: 700;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--resume-accent, #000);
   padding-bottom: 4px;
   margin-bottom: 6px;
-  color: #000;
+  color: var(--resume-accent, #000);
 }
 
 .resume-classic .entry {
