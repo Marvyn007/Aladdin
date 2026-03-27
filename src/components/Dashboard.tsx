@@ -447,26 +447,6 @@ export function Dashboard({
         currentStageIndex: 0,
     });
 
-    const [tailoredResumeModal, setTailoredResumeModal] = useState<{
-        isOpen: boolean;
-        jobId: string | null;
-        jobTitle: string;
-        company: string | null;
-        jobDescription: string;
-        jobUrl: string | null;
-        linkedinProfileUrl: string | null;
-        linkedinData: string | null;
-    }>({
-        isOpen: false,
-        jobId: null,
-        jobTitle: '',
-        company: null,
-        jobDescription: '',
-        jobUrl: null,
-        linkedinProfileUrl: null,
-        linkedinData: null,
-    });
-
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
