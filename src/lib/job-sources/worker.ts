@@ -131,6 +131,7 @@ export async function processTask(
       jobsFetched: jobs.length,
       newJobs,
       duplicates,
+      stale: 0,
       durationMs,
       error: null,
     })
@@ -159,6 +160,7 @@ export async function processTask(
       jobsFetched: 0,
       newJobs: 0,
       duplicates: 0,
+      stale: 0,
       durationMs,
       error: errorMsg,
     })
@@ -227,6 +229,7 @@ export async function processTaskBatch(
           jobsFetched: result.candidatesChecked,
           newJobs: result.added,
           duplicates: result.alreadyTracked,
+          stale: 0,
           durationMs,
           error: result.errors.length > 0 ? result.errors.join('; ') : null,
         })
