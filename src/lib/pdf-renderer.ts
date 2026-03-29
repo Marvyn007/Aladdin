@@ -9,7 +9,10 @@ import puppeteer from 'puppeteer';
 
 /**
  * Core Puppeteer render — launches browser, loads HTML, exports PDF, closes browser.
- * All spacing comes from CSS; no Puppeteer margin override.
+ *
+ * The PDF width is fixed at 8.5in (letter width).
+ * The PDF height matches the content height exactly — no forced page size, no scaling.
+ * This produces a single-page PDF that looks identical to the in-app preview.
  */
 async function renderHtmlToPdf(html: string): Promise<Buffer> {
     const browser = await puppeteer.launch({
@@ -20,14 +23,17 @@ async function renderHtmlToPdf(html: string): Promise<Buffer> {
     try {
         const page = await browser.newPage();
 
-        await page.setContent(html, {
-            waitUntil: 'networkidle0',
-        });
+        // 8.5in at 96dpi = 816px; tall enough viewport to render all content in one pass
+        await page.setViewport({ width: 816, height: 1056, deviceScaleFactor: 1 });
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+
+        // Measure actual content height so the PDF page is exactly as tall as the resume
+        const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
 
         const pdfBuffer = await page.pdf({
-            format: 'Letter',
+            width: '8.5in',
+            height: scrollHeight + 'px',
             printBackground: true,
-            preferCSSPageSize: false,
             margin: { top: '0', right: '0', bottom: '0', left: '0' },
         });
 
@@ -39,8 +45,6 @@ async function renderHtmlToPdf(html: string): Promise<Buffer> {
 
 /**
  * Generate a PDF buffer from a TailoredResumeData object.
- * Uses Puppeteer to render the resume HTML into a letter-sized PDF.
- * Supports multi-page output - content can flow to additional pages naturally.
  */
 export async function generatePdfBuffer(resume: TailoredResumeData): Promise<Buffer> {
     return renderHtmlToPdf(renderResumeHtml(resume));
@@ -49,7 +53,6 @@ export async function generatePdfBuffer(resume: TailoredResumeData): Promise<Buf
 /**
  * Generate a PDF buffer from a pre-rendered HTML string.
  * The client sends exactly the HTML the preview rendered, with fonts injected.
- * Puppeteer margins are zeroed — all spacing comes from CSS.
  */
 export async function generatePdfBufferFromHtml(html: string): Promise<Buffer> {
     return renderHtmlToPdf(html);

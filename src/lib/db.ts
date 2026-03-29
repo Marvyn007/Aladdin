@@ -134,7 +134,7 @@ export async function updateUserEmbedding(userId: string, jobId: string, type: s
  */
 export async function getAllPublicJobs(
     page: number = 1,
-    limit: number = 50,
+    limit: number = 1000,
     sortBy: 'time' | 'imported' | 'preferences' = 'time',
     sortDir: 'asc' | 'desc' = 'desc',
     currentUserId: string | null = null
@@ -144,10 +144,10 @@ export async function getAllPublicJobs(
 
     // Mapping — 'preferences' falls back to time sort at DB level; API layer re-sorts by score
     const sortColumn = {
-        'time': 'fetched_at',
+        'time': 'created_at',
         'imported': 'scraped_at',
-        'preferences': 'fetched_at'
-    }[sortBy] || 'fetched_at';
+        'preferences': 'created_at'
+    }[sortBy] || 'created_at';
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
@@ -262,7 +262,7 @@ export async function getJobs(
     userId: string,
     status: JobStatus = 'fresh',
     page: number = 1,
-    limit: number = 50,
+    limit: number = 1000,
     sortBy: 'time' | 'imported' = 'time',
     sortDir: 'asc' | 'desc' = 'desc'
 ): Promise<Job[]> {

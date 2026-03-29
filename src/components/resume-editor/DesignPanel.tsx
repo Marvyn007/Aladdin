@@ -74,15 +74,15 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 12px',
+                        gap: '5px',
+                        padding: '5px 10px',
                         background: '#eff6ff',
                         borderRadius: '16px',
                         fontSize: '11px',
                         fontWeight: 600,
                         color: '#3b82f6'
                     }}>
-                        <span>Applied:</span>
+                        <Check size={11} />
                         <span>{currentTemplateMeta.name}</span>
                     </div>
                 </div>
@@ -154,8 +154,6 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                     </div>
                 </div>
 
-                <hr style={{ border: 0, borderTop: '1px solid #e6e9ee', margin: 0 }} />
-
                 {/* Typography Settings */}
                 <div className="form-group" style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e6e9ee', boxShadow: '0 4px 10px rgba(11,24,40,0.04)', padding: '16px' }}>
                     <label style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#1e293b' }}>
@@ -206,8 +204,6 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                         </div>
                     </div>
                 </div>
-
-                <hr style={{ border: 0, borderTop: '1px solid #e6e9ee', margin: 0 }} />
 
                 {/* Color Settings */}
                 <div className="form-group" style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e6e9ee', boxShadow: '0 4px 10px rgba(11,24,40,0.04)', padding: '16px' }}>
@@ -262,8 +258,6 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                         </div>
                     </div>
                 </div>
-
-                <hr style={{ border: 0, borderTop: '1px solid #e6e9ee', margin: 0 }} />
 
                 {/* Margins */}
                 <div className="form-group" style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e6e9ee', boxShadow: '0 4px 10px rgba(11,24,40,0.04)', padding: '16px' }}>
@@ -325,7 +319,7 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                             e.currentTarget.style.color = '#64748b';
                         }}
                     >
-                        Reset Design to Defaults
+                        Reset to Defaults
                     </button>
                 </div>
             </div>

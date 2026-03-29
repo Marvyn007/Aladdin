@@ -158,7 +158,7 @@ export const useStore = create<AppState>()(
             searchSuggestions: [],
 
             // Initial Pagination & Sorting
-            pagination: { page: 1, limit: 50, total: 0, totalPages: 0 },
+            pagination: { page: 1, limit: 1000, total: 0, totalPages: 0 },
             sorting: { by: 'time', dir: 'desc' },
 
             sidebarOpen: true,
@@ -464,7 +464,7 @@ export const useStore = create<AppState>()(
             exitSearchMode: () => {
                 // Return to full listing with default pagination (limit 50, page 1)
                 const allJobs = get().jobs;
-                const defaultLimit = 50;
+                const defaultLimit = 1000;
 
                 set({
                     searchMode: false,
@@ -498,7 +498,7 @@ export const useStore = create<AppState>()(
                         body: JSON.stringify({
                             query: trimmedQuery,
                             page,
-                            limit: 50,
+                            limit: 1000,
                         }),
                     });
 

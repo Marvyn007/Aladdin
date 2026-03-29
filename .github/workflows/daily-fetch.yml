@@ -29,15 +29,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Archiver Agent
+      - name: Trigger Job Ingestion Cron (Tick)
         run: |
-          curl -X POST "${{ secrets.VERCEL_APP_URL }}/api/run-archiver" \
-            -H "Content-Type: application/json" || true
-
-      - name: Trigger Daily Finder
-        run: |
-          # Call the find-fresh endpoint with rescoring enabled
-          curl -X GET "${{ secrets.VERCEL_APP_URL }}/api/find-fresh?limit=300&rescore=true" \
+          # Trigger the master scheduler 'tick'
+          curl -X GET "${{ secrets.VERCEL_APP_URL }}/api/cron/tick?key=${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" || true
 
       - name: Log completion

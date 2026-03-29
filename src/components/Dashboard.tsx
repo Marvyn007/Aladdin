@@ -486,7 +486,7 @@ export function Dashboard({
         if (!isAuthLoaded) return;
 
         const page = parseInt(searchParams.get('page') || '1', 10);
-        const limit = parseInt(searchParams.get('limit') || '50', 10);
+        const limit = parseInt(searchParams.get('limit') || '1000', 10);
         const sortBy = searchParams.get('sort_by') as any || 'time';
         const sortDir = searchParams.get('sort_dir') as any || 'desc';
 

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Home, Download, Save, Loader2, FileText, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, GripHorizontal } from 'lucide-react';
+import { ChevronLeft, Home, Download, Save, Loader2, FileText, Palette, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, GripHorizontal } from 'lucide-react';
 import type { TailoredResumeData, KeywordAnalysis } from '@/types';
 import { ContentPanel } from '@/components/resume-editor/ContentPanel';
 import { DesignPanel } from '@/components/resume-editor/DesignPanel';
@@ -499,6 +499,8 @@ export function FullPageResumeEditor({
                             justifyContent: 'center',
                             transition: 'all 0.15s ease'
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#334155'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}
                     >
                         {leftCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
                     </button>
@@ -528,7 +530,7 @@ export function FullPageResumeEditor({
                         <Home size={18} />
                     </Link>
                     
-                    <span style={{ color: '#cbd5e1', fontSize: '16px' }}>/</span>
+                    <span style={{ color: '#cbd5e1', fontSize: '14px' }}>/</span>
 
                     <span style={{
                         fontSize: '14px',
@@ -541,14 +543,14 @@ export function FullPageResumeEditor({
 
                 {/* Right Section: Actions */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button 
-                        onClick={handleSave} 
+                    <button
+                        onClick={handleSave}
                         disabled={isSaving}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
-                            padding: '8px 14px',
+                            padding: '8px 16px',
                             background: '#ffffff',
                             border: '1px solid #e5e7eb',
                             borderRadius: '8px',
@@ -559,6 +561,8 @@ export function FullPageResumeEditor({
                             opacity: isSaving ? 0.7 : 1,
                             transition: 'all 0.15s ease'
                         }}
+                        onMouseEnter={(e) => { if (!isSaving) { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#d1d5db'; } }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
                     >
                         {isSaving ? <Loader2 size={14} className="animate-spin" style={{ color: '#2563eb' }} /> : (isSaved ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg></> : <Save size={14} />)} 
                         {isSaving ? 'Saving...' : (isSaved ? 'Saved!' : 'Save')}
@@ -607,6 +611,8 @@ export function FullPageResumeEditor({
                             justifyContent: 'center',
                             transition: 'all 0.15s ease'
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#334155'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}
                     >
                         {rightCollapsed ? <PanelRightOpen size={18} /> : <PanelRightClose size={18} />}
                     </button>
@@ -1038,7 +1044,7 @@ export function FullPageResumeEditor({
                                     justifyContent: 'center',
                                     color: '#2563eb'
                                 }}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                    <Palette size={16} />
                                 </div>
                                 <span style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>Design</span>
                             </div>

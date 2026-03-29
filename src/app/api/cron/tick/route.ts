@@ -145,6 +145,9 @@ function verifyCronSecret(request: Request): boolean {
 
   if (authHeader === `Bearer ${secret}`) return true
 
+  // Allow Vercel internal cron header (standard for automated crons)
+  if (request.headers.get('x-vercel-cron') === '1') return true
+
   const { searchParams } = new URL(request.url)
   if (searchParams.get('key') === secret) return true
 

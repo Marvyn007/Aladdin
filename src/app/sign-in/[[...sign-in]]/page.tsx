@@ -75,7 +75,7 @@ function Typewriter({
 const SIGN_IN_QUOTES = [
     'Your next opportunity is one login away.',
     'Smart job searching starts here.',
-    'Land the role you deserve — faster.',
+    'Land the role you deserve - faster.',
 ]
 
 export default function SignInPage() {
@@ -275,7 +275,7 @@ export default function SignInPage() {
                             &ldquo;<Typewriter text={SIGN_IN_QUOTES} speed={55} loop />&rdquo;
                         </p>
                         <cite className="block text-sm font-light text-white/60 not-italic">
-                            — Aladdin Team
+                            - Aladdin Team
                         </cite>
                     </blockquote>
                 </div>
