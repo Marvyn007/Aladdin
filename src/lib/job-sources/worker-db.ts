@@ -10,13 +10,19 @@ import type { DiscoveryCandidate } from './discovery-candidates'
  */
 export function createWorkerDb(prisma: PrismaClient): WorkerDb {
   return {
-    async upsertJob(job: NormalizedJob): Promise<{ isNew: boolean }> {
+    async upsertJob(job: NormalizedJob): Promise<{ isNew: boolean; stale: boolean }> {
+      // Priority 1 (authoritative): freshness gate — drop stale jobs before touching the DB
+      const { isFresh } = await import('./freshness')
+      if (!isFresh(job)) {
+        return { isNew: false, stale: true }
+      }
+
       const { validateJobDescription } = await import('../job-validation')
       const validation = validateJobDescription(job.jobDescriptionPlain || '')
       if (!validation.valid) {
-        // Silently drop invalid scraped jobs to avoid polluting logs with exceptions, 
+        // Silently drop invalid scraped jobs to avoid polluting logs with exceptions,
         // while preventing them from entering the database.
-        return { isNew: false }
+        return { isNew: false, stale: false }
       }
 
       // Primary dedupe: source + externalId
@@ -97,7 +103,7 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         }
       }
 
-      return { isNew: result.length > 0 }
+      return { isNew: result.length > 0, stale: false }
     },
 
     async updateTrackedCompany(
@@ -123,6 +129,7 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
       jobsFetched: number
       newJobs: number
       duplicates: number
+      stale: number
       durationMs: number
       error: string | null
     }): Promise<void> {
@@ -133,6 +140,7 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
           jobsFetched: log.jobsFetched,
           newJobs: log.newJobs,
           duplicates: log.duplicates,
+          stale: log.stale,
           durationMs: log.durationMs,
           error: log.error,
         },

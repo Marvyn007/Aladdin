@@ -55,7 +55,7 @@ export function resolveAdapter(source: SourceName): SourceAdapter {
 // Keeps worker logic testable without coupling to Prisma directly.
 
 export interface WorkerDb {
-  upsertJob(job: NormalizedJob): Promise<{ isNew: boolean }>
+  upsertJob(job: NormalizedJob): Promise<{ isNew: boolean; stale: boolean }>
   updateTrackedCompany(
     slug: string,
     ats: string,
@@ -67,6 +67,7 @@ export interface WorkerDb {
     jobsFetched: number
     newJobs: number
     duplicates: number
+    stale: number
     durationMs: number
     error: string | null
   }): Promise<void>
