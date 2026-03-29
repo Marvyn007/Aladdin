@@ -82,6 +82,7 @@ export interface TaskResult {
   jobsFetched: number
   newJobs: number
   duplicates: number
+  stale: number
   durationMs: number
   error: string | null
 }
@@ -107,10 +108,12 @@ export async function processTask(
     // Upsert each job, track new vs duplicate
     let newJobs = 0
     let duplicates = 0
+    let stale = 0
 
     for (const job of jobs) {
       const result = await db.upsertJob(job)
-      if (result.isNew) newJobs++
+      if (result.stale) stale++
+      else if (result.isNew) newJobs++
       else duplicates++
     }
 
@@ -131,7 +134,7 @@ export async function processTask(
       jobsFetched: jobs.length,
       newJobs,
       duplicates,
-      stale: 0,
+      stale,
       durationMs,
       error: null,
     })
@@ -146,6 +149,7 @@ export async function processTask(
       jobsFetched: jobs.length,
       newJobs,
       duplicates,
+      stale,
       durationMs,
       error: null,
     }
@@ -175,6 +179,7 @@ export async function processTask(
       jobsFetched: 0,
       newJobs: 0,
       duplicates: 0,
+      stale: 0,
       durationMs,
       error: errorMsg,
     }
@@ -242,6 +247,7 @@ export async function processTaskBatch(
           jobsFetched: result.candidatesChecked,
           newJobs: result.added,
           duplicates: result.alreadyTracked,
+          stale: 0,
           durationMs,
           error: null,
         })
@@ -255,6 +261,7 @@ export async function processTaskBatch(
           jobsFetched: 0,
           newJobs: 0,
           duplicates: 0,
+          stale: 0,
           durationMs: Date.now() - start,
           error: errorMsg,
         })
@@ -272,6 +279,7 @@ export async function processTaskBatch(
         jobsFetched: 0,
         newJobs: 0,
         duplicates: 0,
+        stale: 0,
         durationMs: 0,
         error: null,
       })
