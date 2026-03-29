@@ -34,6 +34,7 @@ export class TheMuseAdapter implements SourceAdapter {
 
   private lastRequestAt = 0
   private apiKey: string
+  private stalePagesInARow = 0
 
   constructor(apiKey: string) {
     this.apiKey = apiKey
@@ -72,7 +73,15 @@ export class TheMuseAdapter implements SourceAdapter {
       }
 
       const museData = data as MuseResponse
-      return museData.results.map((job) => this.normalize(job))
+      const normalized = museData.results.map((job) => this.normalize(job))
+
+      // Priority 2: bulk paging early exit
+      const { shouldStopPaging, isFresh } = await import('../freshness')
+      const { stop, newCounter } = shouldStopPaging(normalized, this.stalePagesInARow)
+      this.stalePagesInARow = stop ? 0 : newCounter
+
+      // Priority 3: pre-filter stale before returning
+      return normalized.filter((job) => isFresh(job))
     } finally {
       clearTimeout(timeout)
     }

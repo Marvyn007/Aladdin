@@ -1,5 +1,5 @@
 import type { QueueAdapter, QueueTask, SourceName } from '../queue/types'
-import { EXECUTION_BUDGET_MS } from '../queue/types'
+import { CYCLE_BUDGET_MS, CYCLE_HARD_LIMIT_MS } from './constants'
 import type { SourceAdapter, NormalizedJob, PollTarget } from './types'
 import { DISCOVERY_TIER_SCHEDULES } from './types'
 import type { DiscoveryTier } from './types'
@@ -55,7 +55,7 @@ export function resolveAdapter(source: SourceName): SourceAdapter {
 // Keeps worker logic testable without coupling to Prisma directly.
 
 export interface WorkerDb {
-  upsertJob(job: NormalizedJob): Promise<{ isNew: boolean }>
+  upsertJob(job: NormalizedJob): Promise<{ isNew: boolean; stale: boolean }>
   updateTrackedCompany(
     slug: string,
     ats: string,
@@ -67,6 +67,7 @@ export interface WorkerDb {
     jobsFetched: number
     newJobs: number
     duplicates: number
+    stale: number
     durationMs: number
     error: string | null
   }): Promise<void>
@@ -81,6 +82,7 @@ export interface TaskResult {
   jobsFetched: number
   newJobs: number
   duplicates: number
+  stale: number
   durationMs: number
   error: string | null
 }
@@ -106,10 +108,12 @@ export async function processTask(
     // Upsert each job, track new vs duplicate
     let newJobs = 0
     let duplicates = 0
+    let stale = 0
 
     for (const job of jobs) {
       const result = await db.upsertJob(job)
-      if (result.isNew) newJobs++
+      if (result.stale) stale++
+      else if (result.isNew) newJobs++
       else duplicates++
     }
 
@@ -130,6 +134,7 @@ export async function processTask(
       jobsFetched: jobs.length,
       newJobs,
       duplicates,
+      stale,
       durationMs,
       error: null,
     })
@@ -144,6 +149,7 @@ export async function processTask(
       jobsFetched: jobs.length,
       newJobs,
       duplicates,
+      stale,
       durationMs,
       error: null,
     }
@@ -158,6 +164,7 @@ export async function processTask(
       jobsFetched: 0,
       newJobs: 0,
       duplicates: 0,
+      stale: 0,
       durationMs,
       error: errorMsg,
     })
@@ -172,6 +179,7 @@ export async function processTask(
       jobsFetched: 0,
       newJobs: 0,
       duplicates: 0,
+      stale: 0,
       durationMs,
       error: errorMsg,
     }
@@ -190,10 +198,11 @@ export async function processTaskBatch(
   const results: TaskResult[] = []
 
   for (const task of tasks) {
-    // Check execution budget before starting each task
-    if (Date.now() - startTime >= EXECUTION_BUDGET_MS) {
+    // Check soft budget before starting each task — never interrupt a running task
+    const elapsed = Date.now() - startTime
+    if (elapsed >= CYCLE_BUDGET_MS) {
       console.warn(
-        `[worker] Execution budget exceeded (${Date.now() - startTime}ms >= ${EXECUTION_BUDGET_MS}ms). Stopping after ${results.length} tasks.`
+        `[worker] Cycle soft limit reached (${elapsed}ms >= ${CYCLE_BUDGET_MS}ms). Stopping after ${results.length} tasks.`
       )
       break
     }
@@ -226,6 +235,7 @@ export async function processTaskBatch(
           jobsFetched: result.candidatesChecked,
           newJobs: result.added,
           duplicates: result.alreadyTracked,
+          stale: 0,
           durationMs,
           error: result.errors.length > 0 ? result.errors.join('; ') : null,
         })
@@ -238,6 +248,7 @@ export async function processTaskBatch(
           jobsFetched: result.candidatesChecked,
           newJobs: result.added,
           duplicates: result.alreadyTracked,
+          stale: 0,
           durationMs,
           error: null,
         })
@@ -251,9 +262,19 @@ export async function processTaskBatch(
           jobsFetched: 0,
           newJobs: 0,
           duplicates: 0,
+          stale: 0,
           durationMs: Date.now() - start,
           error: errorMsg,
         })
+      }
+
+      // Hard limit check — diagnostic, ends cycle after current task
+      const totalElapsedAfterDiscover = Date.now() - startTime
+      if (totalElapsedAfterDiscover > CYCLE_HARD_LIMIT_MS) {
+        console.warn(
+          `[worker] Cycle hard limit exceeded (${totalElapsedAfterDiscover}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
+        )
+        break
       }
       continue
     }
@@ -268,15 +289,34 @@ export async function processTaskBatch(
         jobsFetched: 0,
         newJobs: 0,
         duplicates: 0,
+        stale: 0,
         durationMs: 0,
         error: null,
       })
+
+      // Hard limit check
+      const totalElapsedAfterUnknown = Date.now() - startTime
+      if (totalElapsedAfterUnknown > CYCLE_HARD_LIMIT_MS) {
+        console.warn(
+          `[worker] Cycle hard limit exceeded (${totalElapsedAfterUnknown}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
+        )
+        break
+      }
       continue
     }
 
     const adapter = resolveAdapter(task.source)
     const result = await processTask(task, adapter, queue, db)
     results.push(result)
+
+    // Hard limit check — diagnostic only, never interrupts a running task
+    const totalElapsed = Date.now() - startTime
+    if (totalElapsed > CYCLE_HARD_LIMIT_MS) {
+      console.warn(
+        `[worker] Cycle hard limit exceeded (${totalElapsed}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
+      )
+      break
+    }
   }
 
   return results

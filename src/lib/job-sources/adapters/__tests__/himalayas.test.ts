@@ -3,6 +3,11 @@ import { HimalayasAdapter } from '../himalayas'
 import type { NormalizedJob } from '../../types'
 import fixtureData from '../../../../../__fixtures__/himalayas-bulk.json'
 
+vi.mock('../../freshness', () => ({
+  isFresh: () => true,
+  shouldStopPaging: () => ({ stop: false, newCounter: 0 }),
+}))
+
 // Mock global fetch
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -220,7 +225,7 @@ describe('HimalayasAdapter', () => {
       })
 
       const jobs = await adapter.poll({ type: 'bulk', page: 1 })
-      expect(jobs[0].postedAt).toEqual(new Date(1774130397 * 1000))
+      expect(jobs[0].postedAt).toEqual(new Date(1774778400 * 1000))
     })
 
     it('sets expiresAt from expiryDate', async () => {

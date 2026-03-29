@@ -41,6 +41,7 @@ export class HimalayasAdapter implements SourceAdapter {
   name = 'himalayas' as const
 
   private lastRequestAt = 0
+  private stalePagesInARow = 0
 
   private async rateLimit(): Promise<void> {
     const elapsed = Date.now() - this.lastRequestAt
@@ -76,7 +77,15 @@ export class HimalayasAdapter implements SourceAdapter {
       }
 
       const himalayasData = data as HimalayasResponse
-      return himalayasData.jobs.map((job) => this.normalize(job))
+      const normalized = himalayasData.jobs.map((job) => this.normalize(job))
+
+      // Priority 2: bulk paging early exit
+      const { shouldStopPaging, isFresh } = await import('../freshness')
+      const { stop, newCounter } = shouldStopPaging(normalized, this.stalePagesInARow)
+      this.stalePagesInARow = stop ? 0 : newCounter
+
+      // Priority 3: pre-filter stale before returning
+      return normalized.filter((job) => isFresh(job))
     } finally {
       clearTimeout(timeout)
     }

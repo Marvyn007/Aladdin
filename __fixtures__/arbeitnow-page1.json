@@ -4,13 +4,13 @@
       "slug": "hr-project-people-manager-teilzeit-stuttgart-86397",
       "company_name": "FMC Human Ressource",
       "title": "HR Project & People Manager (m/w/d) - Teilzeit",
-      "description": "<p>Wir sind ein international tätiger Employer-of-Record-Dienstleister und unterstützen unsere Kunden dabei, Mitarbeiter in verschiedenen Ländern rechtssicher zu beschäftigen.</p><h2>Aufgaben</h2><ul><li>Operative Betreuung unserer EOR-Projekte in Deutschland</li><li>Laufende Betreuung der Mitarbeitenden als HR-Ansprechperson</li></ul><h2>Benefits</h2><ul><li>Teilzeitstelle mit ca. 20 Stunden pro Woche</li><li>Arbeitsort: 80% Homeoffice</li></ul>",
+      "description": "<p>We are an internationally active Employer-of-Record service provider supporting clients in employing staff across multiple countries.</p><h2>Tasks</h2><ul><li>Operational management of our EOR projects</li><li>Ongoing HR support and contact for employees</li></ul><h2>Benefits</h2><ul><li>Part-time role approx. 20 hours per week</li><li>Location: 80% remote / home office</li></ul>",
       "remote": false,
       "url": "https://www.arbeitnow.com/jobs/companies/fmc-human-ressource/hr-project-people-manager-teilzeit-stuttgart-86397",
       "tags": ["Administration"],
       "job_types": ["berufserfahren"],
       "location": "Stuttgart",
-      "created_at": 1774110628
+      "created_at": 1774778400
     },
     {
       "slug": "remote-technical-account-manager-dach-munich-214173",
@@ -22,7 +22,7 @@
       "tags": ["Remote"],
       "job_types": ["Full-time"],
       "location": "Munich",
-      "created_at": 1774107732
+      "created_at": 1774774800
     },
     {
       "slug": "senior-software-engineer-berlin-345678",
@@ -34,7 +34,7 @@
       "tags": ["Engineering", "Remote"],
       "job_types": ["Full-time"],
       "location": "Berlin",
-      "created_at": 1774100000
+      "created_at": 1774771200
     }
   ],
   "links": {

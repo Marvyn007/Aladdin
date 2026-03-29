@@ -3,6 +3,11 @@ import { TheMuseAdapter } from '../themuse'
 import type { NormalizedJob } from '../../types'
 import fixtureData from '../../../../../__fixtures__/themuse-page1.json'
 
+vi.mock('../../freshness', () => ({
+  isFresh: () => true,
+  shouldStopPaging: () => ({ stop: false, newCounter: 0 }),
+}))
+
 // Mock global fetch
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)

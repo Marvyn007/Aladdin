@@ -68,9 +68,11 @@ export class LeverAdapter implements SourceAdapter {
         )
       }
 
-      return (data as LeverPosting[]).map((posting) =>
+      const normalized = (data as LeverPosting[]).map((posting) =>
         this.normalize(posting, target.slug)
       )
+      const { isFresh } = await import('../freshness')
+      return normalized.filter((job) => isFresh(job))
     } finally {
       clearTimeout(timeout)
     }

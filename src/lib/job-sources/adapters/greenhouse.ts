@@ -70,7 +70,9 @@ export class GreenhouseAdapter implements SourceAdapter {
         )
       }
 
-      return data.jobs.map((job) => this.normalize(job, target.slug))
+      const normalized = data.jobs.map((job) => this.normalize(job, target.slug))
+      const { isFresh } = await import('../freshness')
+      return normalized.filter((job) => isFresh(job))
     } finally {
       clearTimeout(timeout)
     }

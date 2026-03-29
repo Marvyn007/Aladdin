@@ -9,7 +9,7 @@
       "team": "Platform",
       "allLocations": ["Toronto"]
     },
-    "createdAt": 1773335421350,
+    "createdAt": 1774778400000,
     "descriptionPlain": "As an Account Executive for Spotify Backstage, you will be responsible for driving revenue growth by building strong relationships with clients and understanding their technical needs related to Backstage.",
     "description": "<div>As an Account Executive for Spotify Backstage, you will be responsible for driving revenue growth.</div>",
     "id": "1ff4a4e3-897c-4eab-9ee2-aa7d1d07a9d6",
@@ -38,7 +38,7 @@
       "team": "Backend",
       "allLocations": ["New York, NY", "Remote US"]
     },
-    "createdAt": 1773248000000,
+    "createdAt": 1774778300000,
     "descriptionPlain": "We are looking for a Senior Backend Engineer to join the Content Platform team. You will design and build distributed systems that power Spotify's content delivery infrastructure.",
     "description": "<div>We are looking for a Senior Backend Engineer to join the Content Platform team.</div>",
     "id": "a2b3c4d5-6789-4abc-def0-123456789abc",
@@ -67,7 +67,7 @@
       "team": "Product Design",
       "allLocations": ["Stockholm, Sweden"]
     },
-    "createdAt": 1773161000000,
+    "createdAt": 1774778200000,
     "descriptionPlain": "Join our Product Design team to shape the future of music discovery. You will work on features that millions of users interact with daily.",
     "description": "<div>Join our Product Design team to shape the future of music discovery.</div>",
     "id": "b3c4d5e6-7890-4bcd-ef01-23456789abcd",
