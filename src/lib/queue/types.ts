@@ -71,9 +71,6 @@ export const ENQUEUE_CAP_PER_TICK = 50
 export const BURST_THRESHOLD = 20
 export const BURST_MAX_WORKERS = 3
 
-// Worker execution budget (ms) — stop processing if elapsed exceeds this
-export const EXECUTION_BUDGET_MS = 7000
-
 // Stale lock recovery: tasks processing longer than this get reset
 export const STALE_LOCK_MAX_AGE_MS = 60_000
 

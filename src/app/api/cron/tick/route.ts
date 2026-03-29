@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getQueue, EXECUTION_BUDGET_MS, BURST_THRESHOLD, BURST_MAX_WORKERS } from '@/lib/queue'
+import { getQueue, BURST_THRESHOLD, BURST_MAX_WORKERS } from '@/lib/queue'
 import { buildEnqueuePlan } from '@/lib/job-sources/scheduler'
 import { processTaskBatch } from '@/lib/job-sources/worker'
 import { createWorkerDb, createDiscoveryDb } from '@/lib/job-sources/worker-db'

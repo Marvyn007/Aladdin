@@ -1,5 +1,5 @@
 import type { QueueAdapter, QueueTask, SourceName } from '../queue/types'
-import { EXECUTION_BUDGET_MS } from '../queue/types'
+import { CYCLE_BUDGET_MS, CYCLE_HARD_LIMIT_MS } from './constants'
 import type { SourceAdapter, NormalizedJob, PollTarget } from './types'
 import { DISCOVERY_TIER_SCHEDULES } from './types'
 import type { DiscoveryTier } from './types'
@@ -198,10 +198,11 @@ export async function processTaskBatch(
   const results: TaskResult[] = []
 
   for (const task of tasks) {
-    // Check execution budget before starting each task
-    if (Date.now() - startTime >= EXECUTION_BUDGET_MS) {
+    // Check soft budget before starting each task — never interrupt a running task
+    const elapsed = Date.now() - startTime
+    if (elapsed >= CYCLE_BUDGET_MS) {
       console.warn(
-        `[worker] Execution budget exceeded (${Date.now() - startTime}ms >= ${EXECUTION_BUDGET_MS}ms). Stopping after ${results.length} tasks.`
+        `[worker] Cycle soft limit reached (${elapsed}ms >= ${CYCLE_BUDGET_MS}ms). Stopping after ${results.length} tasks.`
       )
       break
     }
@@ -289,6 +290,15 @@ export async function processTaskBatch(
     const adapter = resolveAdapter(task.source)
     const result = await processTask(task, adapter, queue, db)
     results.push(result)
+
+    // Hard limit check — diagnostic only, never interrupts a running task
+    const totalElapsed = Date.now() - startTime
+    if (totalElapsed > CYCLE_HARD_LIMIT_MS) {
+      console.warn(
+        `[worker] Cycle hard limit exceeded (${totalElapsed}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
+      )
+      break
+    }
   }
 
   return results
