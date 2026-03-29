@@ -546,7 +546,8 @@ model JobQueue {
   lockedBy    String?   @map("locked_by")
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(6)
+  lastNonEmptyAt DateTime? @map("last_non_empty_at") @db.Timestamptz(6)
 
   @@index([status, runAt, priority], map: "idx_job_queue_dequeue")
   @@index([status, createdAt], map: "idx_job_queue_status_created")
@@ -589,6 +590,7 @@ model SourcePollLog {
   jobsFetched Int      @map("jobs_fetched")
   newJobs     Int      @map("new_jobs")
   duplicates  Int
+  stale       Int      @default(0)
   durationMs  Int      @map("duration_ms")
   error       String?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
