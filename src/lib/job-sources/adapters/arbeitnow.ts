@@ -29,6 +29,7 @@ export class ArbeitnowAdapter implements SourceAdapter {
   name = 'arbeitnow' as const
 
   private lastRequestAt = 0
+  private stalePagesInARow = 0
 
   private async rateLimit(): Promise<void> {
     const elapsed = Date.now() - this.lastRequestAt
@@ -63,9 +64,17 @@ export class ArbeitnowAdapter implements SourceAdapter {
       }
 
       const arbeitnowData = data as ArbeitnowResponse
-      return arbeitnowData.data
+      const normalized = arbeitnowData.data
         .map((job) => this.normalize(job))
         .filter((job) => !this.isGermanDescription(job.jobDescriptionPlain || ''))
+
+      // Priority 2: bulk paging early exit
+      const { shouldStopPaging, isFresh } = await import('../freshness')
+      const { stop, newCounter } = shouldStopPaging(normalized, this.stalePagesInARow)
+      this.stalePagesInARow = stop ? 0 : newCounter
+
+      // Priority 3: pre-filter stale before returning
+      return normalized.filter((job) => isFresh(job))
     } finally {
       clearTimeout(timeout)
     }
