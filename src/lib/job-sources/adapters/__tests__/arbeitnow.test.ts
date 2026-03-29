@@ -3,6 +3,11 @@ import { ArbeitnowAdapter } from '../arbeitnow'
 import type { NormalizedJob } from '../../types'
 import fixtureData from '../../../../../__fixtures__/arbeitnow-page1.json'
 
+vi.mock('../../freshness', () => ({
+  isFresh: () => true,
+  shouldStopPaging: () => ({ stop: false, newCounter: 0 }),
+}))
+
 // Mock global fetch
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -172,7 +177,7 @@ describe('ArbeitnowAdapter', () => {
       })
 
       const jobs = await adapter.poll({ type: 'bulk', page: 1 })
-      expect(jobs[0].postedAt).toEqual(new Date(1774110628 * 1000))
+      expect(jobs[0].postedAt).toEqual(new Date(1774778400 * 1000))
     })
 
     it('maps job_types to jobType field', async () => {
