@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createWorkerDb } from '../worker-db'
 
 function makeJob(overrides: Partial<import('../types').NormalizedJob> = {}): import('../types').NormalizedJob {
@@ -41,6 +41,15 @@ describe('upsertJob freshness gate', () => {
 
   beforeEach(() => {
     prisma = makeMockPrisma()
+    // Stub fetch to prevent real Clearbit calls during tests
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('inserts a fresh job and returns isNew:true, stale:false', async () => {
