@@ -38,6 +38,7 @@ export async function GET(request: Request) {
         ats: true,
         isActive: true,
         lastPolledAt: true,
+        lastNonEmptyAt: true,
       },
     })
 

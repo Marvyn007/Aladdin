@@ -16,6 +16,7 @@ export interface SchedulerCompany {
   ats: string
   isActive: boolean
   lastPolledAt: Date | null
+  lastNonEmptyAt: Date | null
 }
 
 export interface BuildEnqueuePlanInput {
@@ -56,6 +57,7 @@ export function buildEnqueuePlan(input: BuildEnqueuePlanInput): EnqueueInput[] {
           source: schedule.source as SourceName,
           payload: { slug: company.slug },
           priority: schedule.priority,
+          lastNonEmptyAt: company.lastNonEmptyAt ?? company.lastPolledAt ?? null,
         })
       }
     }
@@ -72,6 +74,7 @@ export function buildEnqueuePlan(input: BuildEnqueuePlanInput): EnqueueInput[] {
         source: schedule.source as SourceName,
         payload: { page: 1 },
         priority: schedule.priority,
+        lastNonEmptyAt: null,
       })
     }
   }
@@ -86,6 +89,7 @@ export function buildEnqueuePlan(input: BuildEnqueuePlanInput): EnqueueInput[] {
         type: 'discover',
         priority: schedule.priority,
         payload: { tier },
+        lastNonEmptyAt: null,
       })
     }
   }

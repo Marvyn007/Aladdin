@@ -155,7 +155,7 @@ describe('NeonQueueAdapter', () => {
       expect(prisma.$queryRawUnsafe).toHaveBeenCalledOnce()
       const sql = prisma.$queryRawUnsafe.mock.calls[0][0] as string
       expect(sql).toContain('FOR UPDATE SKIP LOCKED')
-      expect(sql).toContain('ORDER BY priority ASC, run_at ASC')
+      expect(sql).toContain('ORDER BY priority ASC, last_non_empty_at DESC NULLS LAST, id ASC')
       expect(sql).toContain("status = 'pending'")
       expect(sql).toContain('run_at <= NOW()')
     })

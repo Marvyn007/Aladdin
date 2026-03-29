@@ -10,6 +10,7 @@ interface MockCompany {
   ats: string
   isActive: boolean
   lastPolledAt: Date | null
+  lastNonEmptyAt: Date | null
 }
 
 const FIFTEEN_MIN = 15 * 60 * 1000
@@ -22,6 +23,7 @@ function makeCompany(overrides: Partial<MockCompany> = {}): MockCompany {
     ats: 'greenhouse',
     isActive: true,
     lastPolledAt: null,
+    lastNonEmptyAt: null,
     ...overrides,
   }
 }

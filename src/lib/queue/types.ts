@@ -39,6 +39,7 @@ export interface EnqueueInput {
   priority?: number
   runAt?: Date
   maxAttempts?: number
+  lastNonEmptyAt?: Date | null
 }
 
 export interface QueueStats {

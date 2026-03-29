@@ -82,6 +82,7 @@ export class NeonQueueAdapter implements QueueAdapter {
         runAt: input.runAt ?? new Date(),
         maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
         attempts: 0,
+        lastNonEmptyAt: input.lastNonEmptyAt ?? null,
       },
     }))
   }
@@ -98,6 +99,7 @@ export class NeonQueueAdapter implements QueueAdapter {
         runAt: input.runAt ?? new Date(),
         maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
         attempts: 0,
+        lastNonEmptyAt: input.lastNonEmptyAt ?? null,
       })),
     }))
   }
@@ -116,7 +118,7 @@ export class NeonQueueAdapter implements QueueAdapter {
       WITH claimed AS (
         SELECT id FROM job_queue
         WHERE status = 'pending' AND run_at <= NOW()
-        ORDER BY priority ASC, run_at ASC
+        ORDER BY priority ASC, last_non_empty_at DESC NULLS LAST, id ASC
         FOR UPDATE SKIP LOCKED
         LIMIT $1
       )
