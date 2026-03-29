@@ -135,7 +135,7 @@ describe('GreenhouseAdapter', () => {
       await adapter.poll({ type: 'company', slug: 'stripe' })
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://boards-api.greenhouse.io/v1/boards/stripe/jobs',
+        'https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true',
         expect.objectContaining({ signal: expect.any(AbortSignal) })
       )
     })

@@ -211,7 +211,7 @@ describe('LeverAdapter', () => {
       })
 
       const jobs = await adapter.poll({ type: 'company', slug: 'spotify' })
-      expect(jobs[0].postedAt).toEqual(new Date(1773335421350))
+      expect(jobs[0].postedAt).toEqual(new Date(1774778400000))
     })
   })
 
