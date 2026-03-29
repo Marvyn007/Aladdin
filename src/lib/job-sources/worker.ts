@@ -267,6 +267,15 @@ export async function processTaskBatch(
           error: errorMsg,
         })
       }
+
+      // Hard limit check — diagnostic, ends cycle after current task
+      const totalElapsedAfterDiscover = Date.now() - startTime
+      if (totalElapsedAfterDiscover > CYCLE_HARD_LIMIT_MS) {
+        console.warn(
+          `[worker] Cycle hard limit exceeded (${totalElapsedAfterDiscover}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
+        )
+        break
+      }
       continue
     }
 
@@ -284,6 +293,15 @@ export async function processTaskBatch(
         durationMs: 0,
         error: null,
       })
+
+      // Hard limit check
+      const totalElapsedAfterUnknown = Date.now() - startTime
+      if (totalElapsedAfterUnknown > CYCLE_HARD_LIMIT_MS) {
+        console.warn(
+          `[worker] Cycle hard limit exceeded (${totalElapsedAfterUnknown}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
+        )
+        break
+      }
       continue
     }
 
