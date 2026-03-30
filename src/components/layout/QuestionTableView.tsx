@@ -290,7 +290,22 @@ export function QuestionTableView({ searchQuery }: { searchQuery: string }) {
                                             </button>
                                         </td>
                                         <td style={{ padding: '12px 24px' }}>
-                                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px', marginBottom: '4px' }}>{q.title}</div>
+                                            <a 
+                                                href={q.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                style={{ 
+                                                    fontWeight: 700, 
+                                                    color: '#0f172a', 
+                                                    fontSize: '15px', 
+                                                    textDecoration: 'none',
+                                                    transition: 'color 0.2s',
+                                                }}
+                                                onMouseOver={(e) => { e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.textDecoration = 'underline'; }}
+                                                onMouseOut={(e) => { e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.textDecoration = 'none'; }}
+                                            >
+                                                {q.title}
+                                            </a>
                                         </td>
                                         <td style={{ padding: '12px 24px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
