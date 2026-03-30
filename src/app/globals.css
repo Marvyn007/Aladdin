@@ -1108,3 +1108,24 @@ body {
     transform: translateY(-4px);
   }
 }
+
+.practice-icon {
+  mix-blend-mode: multiply;
+  filter: contrast(1.1);
+}
+
+.dark .practice-icon {
+  filter: invert(1) brightness(1.5);
+  mix-blend-mode: screen;
+}
+
+.no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}

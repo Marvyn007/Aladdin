@@ -8,6 +8,18 @@ const nextConfig: NextConfig = {
     return config;
   },
   turbopack: {},
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'img.logo.dev',
+      },
+      {
+        protocol: 'https',
+        hostname: 'logo.dev',
+      }
+    ]
+  }
 };
 
 export default nextConfig;

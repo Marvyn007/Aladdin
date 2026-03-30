@@ -37,6 +37,7 @@ model User {
   tailoredResumes      TailoredResume[]
   jobScores            JobScore[]
   jobVotes             JobVote[]
+  userLeetCodeProgress UserLeetCodeProgress[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -342,6 +343,7 @@ model Company {
   domain      String?
   logoUrl     String?   @map("logo_url")
   logoFetched          Boolean               @default(false) @map("logo_fetched")
+  hasPracticeQuestions Boolean               @default(false) @map("has_practice_questions")
   createdAt            DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime?             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   interviewExperiences InterviewExperience[]
@@ -598,4 +600,48 @@ model SourcePollLog {
   @@index([source, createdAt], map: "idx_source_poll_log_source_created")
   @@index([createdAt], map: "idx_source_poll_log_created")
   @@map("source_poll_logs")
+}
+
+model LeetCodeQuestion {
+  id              String   @id @default(uuid()) @db.Uuid
+  number          Int      @unique
+  title           String
+  url             String
+  difficulty      String
+  acceptanceRate  Float?   @map("acceptance_rate")
+  isPremium       Boolean  @default(false) @map("is_premium")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  companies       CompanyLeetCodeQuestion[]
+  userProgress    UserLeetCodeProgress[]
+
+  @@map("leetcode_questions")
+}
+
+model CompanyLeetCodeQuestion {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyName     String   @map("company_name")
+  questionId      String   @map("question_id") @db.Uuid
+  frequency       Float?   
+  
+  question        LeetCodeQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([companyName, questionId])
+  @@map("company_leetcode_questions")
+}
+
+model UserLeetCodeProgress {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id")
+  questionId     String   @map("question_id") @db.Uuid
+  status         String   @default("completed") // e.g., 'completed'
+  completedAt    DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question       LeetCodeQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId], map: "uniq_user_leetcode_progress")
+  @@index([userId], map: "idx_user_progress_user")
+  @@map("user_leetcode_progress")
 }

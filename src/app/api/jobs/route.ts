@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllPublicJobs, getTotalPublicJobsCount, getLastJobIngestionTime, getJobs } from '@/lib/db';
+import { getAllPublicJobs, getTotalPublicJobsCount, getLastJobIngestionTime, getJobs, getJobCount } from '@/lib/db';
 import { auth } from '@clerk/nextjs/server';
 import { getOnboardingSnapshot } from '@/lib/onboarding-db';
 import { computePreferenceScore } from '@/lib/preference-scoring';
@@ -28,19 +28,7 @@ export async function GET(request: NextRequest) {
         if (userId && statusParam && statusParam !== 'fresh' && statusParam !== 'all') {
             [jobs, total, lastUpdated] = await Promise.all([
                 getJobs(userId, statusParam as any, page, limit, dbSortBy, sortDir),
-                // We don't have a getTotalJobs(userId, status) helper exposed efficiently? 
-                // getJobs doesn't return total. We might need a separate count query or update getJobs.
-                // For now, let's use the public total/lastUpdated as fallback or implement count.
-                // Actually getTotalPublicJobsCount is wrong for filtered views.
-                // Ideally getJobs should return { jobs, total }.
-                // Let's rely on client-side or fallback for now to minimize changes, 
-                // but standard pagination requires total.
-                // Let's assume for this "Saved Layout" fix, simply returning the jobs correct is key.
-                // We'll use getTotalPublicJobsCount() as a dummy total to prevent crashes, 
-                // but this will break pagination count for Saved tab.
-                // However, fixing pagination completely requires updating db.ts exports.
-                // Let's check db.ts exports for count helpers.
-                getTotalPublicJobsCount(),
+                getJobCount(userId, statusParam as any),
                 getLastJobIngestionTime()
             ]);
         } else {
@@ -59,9 +47,9 @@ export async function GET(request: NextRequest) {
                 const snapshot = await getOnboardingSnapshot(userId);
                 if (snapshot.completed && snapshot.answers.length > 0) {
                     jobs = jobs
-                        .map(job => ({ job, score: computePreferenceScore(job, snapshot.answersByKey) }))
-                        .sort((a, b) => b.score - a.score)
-                        .map(({ job }) => job);
+                        .map((job: any) => ({ job, score: computePreferenceScore(job, snapshot.answersByKey) }))
+                        .sort((a: any, b: any) => b.score - a.score)
+                        .map(({ job }: { job: any }) => job);
                 }
                 // If not completed or no answers, jobs remain in default time order (soft degradation per D-05)
             } catch (err) {

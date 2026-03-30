@@ -13,6 +13,8 @@ const JobsMap = dynamic(() => import('@/components/layout/JobsMap'), {
 });
 import { InterviewExperiencesView } from '@/components/layout/InterviewExperiencesView';
 import { InterviewExperienceDetailView } from '@/components/layout/InterviewExperienceDetailView';
+import { PracticeView } from '@/components/layout/PracticeView';
+import { CompanyQuestionsTable } from '@/components/layout/CompanyQuestionsTable';
 import { CoverLetterModal } from '@/components/modals/CoverLetterModal';
 import { CoverLetterSetupModal } from '@/components/modals/CoverLetterSetupModal';
 import { TailoredResumeEditor } from '@/components/resume-editor/TailoredResumeEditor';
@@ -324,7 +326,7 @@ function DroppableColumn({
 }
 
 interface DashboardProps {
-    defaultActiveView?: 'jobs' | 'tracker' | 'interview-experiences';
+    defaultActiveView?: 'jobs' | 'tracker' | 'interview-experiences' | 'practice';
     defaultJobMode?: 'list' | 'map';
     selectedCompany?: string; // New prop for detail view
 }
@@ -372,10 +374,11 @@ export function Dashboard({
     const isJobBoard = defaultActiveView === 'jobs';
     const isTracker = defaultActiveView === 'tracker';
     const isInterviewExperiences = defaultActiveView === 'interview-experiences';
+    const isPracticeView = defaultActiveView === 'practice';
     const isMapMode = defaultJobMode === 'map';
 
     // We keep these for internal logic, but they should sync with props
-    const [activeView, setActiveView] = useState<'jobs' | 'tracker' | 'interview-experiences'>(defaultActiveView);
+    const [activeView, setActiveView] = useState<'jobs' | 'tracker' | 'interview-experiences' | 'practice'>(defaultActiveView);
     const [applicationStatus, setApplicationStatus] = useState<Record<string, 'none' | 'applied' | 'loading'>>({});
     const [applications, setApplications] = useState<ApplicationWithJob[]>([]);
 
@@ -1213,6 +1216,21 @@ export function Dashboard({
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg>
                         Interview Experiences
                     </Link>
+                    <Link
+                        href="/practice"
+                        className={`view-tab ${isPracticeView ? 'active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                            src="/practice.gif" 
+                            alt="Practice" 
+                            width={16} 
+                            height={16} 
+                            className="practice-icon"
+                        />
+                        Practice
+                    </Link>
                 </div>
 
                 {/* Content based on active view */}
@@ -1428,6 +1446,14 @@ export function Dashboard({
                         <InterviewExperienceDetailView companyName={selectedCompany} />
                     ) : (
                         <InterviewExperiencesView />
+                    )
+                )}
+
+                {isPracticeView && (
+                    selectedCompany ? (
+                        <CompanyQuestionsTable companyName={selectedCompany} />
+                    ) : (
+                        <PracticeView />
                     )
                 )}
             </div>

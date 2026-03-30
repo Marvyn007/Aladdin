@@ -3,6 +3,7 @@ import type { WorkerDb } from './worker'
 import type { NormalizedJob } from './types'
 import type { DiscoveryDb } from './discovery'
 import type { DiscoveryCandidate } from './discovery-candidates'
+import { getCompanyLogo } from '../logo-dev'
 
 /**
  * Prisma-backed WorkerDb implementation.
@@ -75,31 +76,34 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
       if (job.company) {
         try {
           const companyExists = await prisma.company.findUnique({ where: { name: job.company } })
-          if (!companyExists || !companyExists.logoFetched) {
-            const logoRes = await fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(job.company)}`)
-            if (logoRes.ok) {
-              const suggestions = await logoRes.json()
-              const bestMatch = suggestions.length > 0 ? suggestions[0] : null
-              const finalLogoUrl = bestMatch?.logo || (bestMatch?.domain ? `https://logo.clearbit.com/${bestMatch.domain}` : null)
-              
+          if (!companyExists || !companyExists.logoFetched || !companyExists.logoUrl?.includes('logo.dev')) {
+            const { domain, logoUrl } = await getCompanyLogo(job.company)
+            
+            if (logoUrl) {
               await prisma.company.upsert({
                 where: { name: job.company },
                 create: {
                   name: job.company,
-                  domain: bestMatch?.domain || null,
-                  logoUrl: finalLogoUrl,
+                  domain: domain,
+                  logoUrl: logoUrl,
                   logoFetched: true,
                 },
                 update: {
-                  ...(bestMatch?.domain ? { domain: bestMatch.domain } : {}),
-                  ...(finalLogoUrl ? { logoUrl: finalLogoUrl } : {}),
+                  domain: domain || undefined,
+                  logoUrl: logoUrl,
                   logoFetched: true,
                 }
+              })
+
+              // Also update TrackedCompany if it exists and is missing a logo
+              await prisma.trackedCompany.updateMany({
+                where: { name: job.company, logoUrl: null },
+                data: { logoUrl: logoUrl }
               })
             }
           }
         } catch (e) {
-          console.error(`[worker-db] Failed to fetch logo for ${job.company}`, e)
+          console.error(`[worker-db] Failed to fetch Logo.dev for ${job.company}`, e)
         }
       }
 

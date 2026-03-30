@@ -291,7 +291,7 @@ export async function getJobs(
                    c.logo_url as company_logo_url
             FROM jobs j
             LEFT JOIN companies c ON j.company = c.name
-            JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1
+            JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1 AND uj.status = $2
             LEFT JOIN user_jobs poster_uj ON j.id = poster_uj.job_id AND j.posted_by_user_id = poster_uj.user_id
             LEFT JOIN users u ON j.posted_by_user_id = u.id
             ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}
@@ -387,6 +387,33 @@ export async function getTotalPublicJobsCount(): Promise<number> {
     } else {
         const db = getSQLiteDB();
         const result = db.prepare('SELECT COUNT(*) as count FROM jobs').get() as { count: number };
+        return result.count;
+    }
+}
+
+/**
+ * Get count of jobs for a specific user and status
+ */
+export async function getJobCount(userId: string, status: JobStatus): Promise<number> {
+    const dbType = getDbType();
+
+    if (dbType === 'postgres') {
+        const pool = getPostgresPool();
+        const res = await pool.query('SELECT COUNT(*) as count FROM user_jobs WHERE user_id = $1 AND status = $2', [userId, status]);
+        return parseInt(res.rows[0].count, 10);
+    } else if (dbType === 'supabase') {
+        const client = getSupabaseClient();
+        const { count, error } = await client
+            .from('user_jobs')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('status', status);
+
+        if (error) throw error;
+        return count || 0;
+    } else {
+        const db = getSQLiteDB();
+        const result = db.prepare('SELECT COUNT(*) as count FROM user_jobs WHERE user_id = ? AND status = ?').get(userId, status) as { count: number };
         return result.count;
     }
 }
