@@ -51,6 +51,27 @@ export function resolveAdapter(source: SourceName): SourceAdapter {
   return adapter
 }
 
+/**
+ * Create a FRESH (non-cached) adapter instance for a given source.
+ * Used by poll-batch so each parallel company poll has its own
+ * per-instance rate-limit state and doesn't serialize through a shared adapter.
+ */
+function createFreshAdapter(source: SourceName): SourceAdapter {
+  switch (source) {
+    case 'greenhouse': return new GreenhouseAdapter()
+    case 'lever':      return new LeverAdapter()
+    case 'workday':    return new WorkdayAdapter()
+    case 'themuse': {
+      const apiKey = process.env.THEMUSE_API_KEY
+      if (!apiKey) throw new Error('THEMUSE_API_KEY is not set')
+      return new TheMuseAdapter(apiKey)
+    }
+    case 'arbeitnow':  return new ArbeitnowAdapter()
+    case 'himalayas':  return new HimalayasAdapter()
+    default: throw new Error(`Unknown source: "${source}"`)
+  }
+}
+
 // ── Database abstraction for worker ──
 // Keeps worker logic testable without coupling to Prisma directly.
 
@@ -87,7 +108,7 @@ export interface TaskResult {
   error: string | null
 }
 
-// ── Core: process a single task ──
+// ── Core: process a single task (poll / poll-bulk) ──
 
 export async function processTask(
   task: QueueTask,
@@ -186,6 +207,129 @@ export async function processTask(
   }
 }
 
+// ── Core: process a poll-batch task (parallel multi-company) ──
+
+export async function processBatchTask(
+  task: QueueTask,
+  queue: QueueAdapter,
+  db: WorkerDb
+): Promise<TaskResult> {
+  const start = Date.now()
+
+  interface BatchCompany { slug: string; source: SourceName }
+  const companies = ((task.payload as Record<string, unknown>).companies ?? []) as BatchCompany[]
+
+  try {
+    // Fire all company polls in parallel — each with its own fresh adapter instance
+    // so rate-limit state is not shared and all requests go out simultaneously.
+    const settled = await Promise.allSettled(
+      companies.map(({ slug, source }) =>
+        createFreshAdapter(source).poll({ type: 'company', slug })
+      )
+    )
+
+    // Merge results from all parallel polls
+    const allJobs: NormalizedJob[] = []
+    const errors: string[] = []
+
+    for (let i = 0; i < settled.length; i++) {
+      const r = settled[i]
+      if (r.status === 'fulfilled') {
+        allJobs.push(...r.value)
+      } else {
+        errors.push(`${companies[i].slug}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`)
+      }
+    }
+
+    // Upsert all collected jobs
+    let newJobs = 0
+    let duplicates = 0
+    let stale = 0
+
+    for (const job of allJobs) {
+      const result = await db.upsertJob(job)
+      if (result.stale) stale++
+      else if (result.isNew) newJobs++
+      else duplicates++
+    }
+
+    // Update TrackedCompany metadata for each successfully polled company
+    const successfulSlugs = new Set(
+      settled
+        .map((r, i) => (r.status === 'fulfilled' ? companies[i].slug : null))
+        .filter(Boolean) as string[]
+    )
+    await Promise.allSettled(
+      companies
+        .filter((c) => successfulSlugs.has(c.slug))
+        .map((c) =>
+          db.updateTrackedCompany(c.slug, c.source, {
+            lastJobCount: settled
+              .filter((_, i) => companies[i].slug === c.slug && settled[i].status === 'fulfilled')
+              .reduce((acc, r) => acc + (r.status === 'fulfilled' ? r.value.length : 0), 0),
+            hasJobs: allJobs.some((j) => j.company?.toLowerCase() === c.slug.toLowerCase()),
+          })
+        )
+    )
+
+    const durationMs = Date.now() - start
+    const batchSlug = companies.map((c) => c.slug).join(',')
+
+    await db.logPoll({
+      source: task.source as string,
+      slug: `batch(${companies.length}):${companies[0]?.slug ?? '?'}`,
+      jobsFetched: allJobs.length,
+      newJobs,
+      duplicates,
+      stale,
+      durationMs,
+      error: errors.length > 0 ? errors.join(' | ') : null,
+    })
+
+    await queue.complete(task.id)
+
+    return {
+      taskId: task.id,
+      source: task.source as string,
+      slug: batchSlug,
+      jobsFetched: allJobs.length,
+      newJobs,
+      duplicates,
+      stale,
+      durationMs,
+      error: errors.length > 0 ? errors.join(' | ') : null,
+    }
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    const durationMs = Date.now() - start
+
+    await db.logPoll({
+      source: task.source as string,
+      slug: `batch(${companies.length})`,
+      jobsFetched: 0,
+      newJobs: 0,
+      duplicates: 0,
+      stale: 0,
+      durationMs,
+      error: errorMsg,
+    })
+
+    await queue.fail(task.id, errorMsg)
+
+    return {
+      taskId: task.id,
+      source: task.source as string,
+      slug: `batch(${companies.length})`,
+      jobsFetched: 0,
+      newJobs: 0,
+      duplicates: 0,
+      stale: 0,
+      durationMs,
+      error: errorMsg,
+    }
+  }
+}
+
 // ── Process multiple tasks with execution budget ──
 
 export async function processTaskBatch(
@@ -273,6 +417,21 @@ export async function processTaskBatch(
       if (totalElapsedAfterDiscover > CYCLE_HARD_LIMIT_MS) {
         console.warn(
           `[worker] Cycle hard limit exceeded (${totalElapsedAfterDiscover}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
+        )
+        break
+      }
+      continue
+    }
+
+    // poll-batch: parallel multi-company fetching
+    if (task.type === 'poll-batch') {
+      const result = await processBatchTask(task, queue, db)
+      results.push(result)
+
+      const totalElapsedAfterBatch = Date.now() - startTime
+      if (totalElapsedAfterBatch > CYCLE_HARD_LIMIT_MS) {
+        console.warn(
+          `[worker] Cycle hard limit exceeded (${totalElapsedAfterBatch}ms > ${CYCLE_HARD_LIMIT_MS}ms). Ending cycle.`
         )
         break
       }

@@ -2,7 +2,7 @@
 // Spec: Section 1 — Queue Abstraction Layer
 // Designed for Neon Postgres now, swappable to BullMQ/Redis via config.
 
-export type TaskType = 'poll' | 'poll-bulk' | 'discover'
+export type TaskType = 'poll' | 'poll-bulk' | 'poll-batch' | 'discover'
 
 export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'dead'
 
@@ -68,9 +68,12 @@ export const QUEUE_PENDING_SOFT_CAP = 1000
 // Max tasks enqueued per scheduler tick
 export const ENQUEUE_CAP_PER_TICK = 50
 
+// Number of companies grouped into each poll-batch task
+export const POLL_BATCH_SIZE = 5
+
 // Burst mode threshold and cap
-export const BURST_THRESHOLD = 20
-export const BURST_MAX_WORKERS = 3
+export const BURST_THRESHOLD = 10
+export const BURST_MAX_WORKERS = 6
 
 // Stale lock recovery: tasks processing longer than this get reset
 export const STALE_LOCK_MAX_AGE_MS = 60_000

@@ -9,7 +9,16 @@ import type { DiscoveryTier } from '@/lib/job-sources/types'
 
 export const dynamic = 'force-dynamic'
 
+// Vercel cron calls GET; GitHub Actions calls POST. Both are handled identically.
 export async function GET(request: Request) {
+  return handler(request)
+}
+
+export async function POST(request: Request) {
+  return handler(request)
+}
+
+async function handler(request: Request) {
   // ── Auth ──
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -78,8 +87,8 @@ export async function GET(request: Request) {
       await queue.enqueueBatch(plan)
     }
 
-    // ── Phase 2: Process tasks (up to 1, sequentially) ──
-    const tasks = await queue.dequeue(1)
+    // ── Phase 2: Process tasks inline (3 batches = up to 15 companies in parallel) ──
+    const tasks = await queue.dequeue(3)
     const results = await processTaskBatch(tasks, queue, db, startTime, () => createDiscoveryDb(prisma))
 
     // ── Phase 3: Burst mode ──

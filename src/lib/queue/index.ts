@@ -38,6 +38,7 @@ export type { QueueAdapter, QueueTask, QueueStats, EnqueueInput } from './types'
 export {
   QUEUE_PENDING_SOFT_CAP,
   ENQUEUE_CAP_PER_TICK,
+  POLL_BATCH_SIZE,
   BURST_THRESHOLD,
   BURST_MAX_WORKERS,
   STALE_LOCK_MAX_AGE_MS,

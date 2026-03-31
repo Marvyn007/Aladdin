@@ -8,9 +8,11 @@ export const dynamic = 'force-dynamic'
 
 /**
  * Stateless worker endpoint.
- * Dequeues up to 3 tasks and processes them sequentially within the 7s budget.
+ * Dequeues up to 5 tasks (each poll-batch = 5 companies in parallel)
+ * for a theoretical throughput of 25 companies per invocation.
  * Called by:
- *   - The scheduler (burst mode, fire-and-forget)
+ *   - GitHub Actions orchestrator (primary, every 10 min)
+ *   - The cron tick (burst mode fallback)
  *   - Manually via admin (for debugging)
  */
 export async function POST(request: Request) {
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
   const db = createWorkerDb(prisma)
 
   try {
-    const tasks = await queue.dequeue(3)
+    const tasks = await queue.dequeue(5)
 
     if (tasks.length === 0) {
       return NextResponse.json({
