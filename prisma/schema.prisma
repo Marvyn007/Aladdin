@@ -39,6 +39,8 @@ model User {
   jobVotes             JobVote[]
   userLeetCodeProgress UserLeetCodeProgress[]
 
+  lastActiveAt        DateTime?              @map("last_active_at") @db.Timestamptz(6)
+
   @@index([email], map: "idx_users_email")
   @@map("users")
 }
