@@ -11,6 +11,7 @@ import {
 } from '@/components/admin/admin-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -93,7 +94,9 @@ export default function JobsPage() {
                                 <TableHead>Job</TableHead>
                                 <TableHead>Source</TableHead>
                                 <TableHead>Quality</TableHead>
-                                <TableHead>Conversion</TableHead>
+                                <TableHead>Apps</TableHead>
+                                <TableHead>Resumes</TableHead>
+                                <TableHead>CLs</TableHead>
                                 <TableHead>Saves</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Owner</TableHead>
@@ -110,8 +113,21 @@ export default function JobsPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell>{job.source}</TableCell>
-                                    <TableCell className="font-medium text-foreground">{job.qualityScore}</TableCell>
-                                    <TableCell>{job.applications} apps | {job.resumeRuns} resumes | {job.coverLetters} CLs</TableCell>
+                                    <TableCell>
+                                        <span className={cn(
+                                            "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold",
+                                            job.qualityScore >= 80
+                                                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                                : job.qualityScore >= 60
+                                                ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                                                : "bg-red-50 text-red-700 ring-1 ring-red-200"
+                                        )}>
+                                            {job.qualityScore}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="tabular-nums">{job.applications}</TableCell>
+                                    <TableCell className="tabular-nums">{job.resumeRuns}</TableCell>
+                                    <TableCell className="tabular-nums">{job.coverLetters}</TableCell>
                                     <TableCell>{job.saves}</TableCell>
                                     <TableCell>
                                         <Badge
