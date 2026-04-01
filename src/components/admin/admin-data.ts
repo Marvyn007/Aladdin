@@ -298,3 +298,32 @@ export function getInitials(name: string) {
     .slice(0, 2)
     .toUpperCase();
 }
+
+// User plan distribution — shape matches future GET /api/admin/analytics/plans
+export const userPlanDistribution = [
+  { plan: 'Free', count: 847, fill: 'var(--color-free)' },
+  { plan: 'Pro', count: 312, fill: 'var(--color-pro)' },
+  { plan: 'Premium', count: 89, fill: 'var(--color-premium)' },
+];
+
+// Weekly signup series — shape matches future GET /api/admin/analytics/signups
+export const weeklySignups = [
+  { week: 'Feb 3', signups: 34 },
+  { week: 'Feb 10', signups: 41 },
+  { week: 'Feb 17', signups: 38 },
+  { week: 'Feb 24', signups: 55 },
+  { week: 'Mar 3', signups: 62 },
+  { week: 'Mar 10', signups: 58 },
+  { week: 'Mar 17', signups: 71 },
+  { week: 'Mar 24', signups: 84 },
+  { week: 'Mar 31', signups: 79 },
+];
+
+// Lead gen KPI snapshot — shape matches future GET /api/admin/analytics/kpis
+export const leadGenKpis = {
+  totalUsers: 1248,
+  activatedThisWeek: 84,
+  freeToProConversion: 4.2,
+  avgHealthScore: 68,
+  dormantCount: 143,
+};
