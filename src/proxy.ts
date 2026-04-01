@@ -20,6 +20,16 @@ export default clerkMiddleware(async (auth, req) => {
     console.log(`[Proxy] Request hitting: ${req.nextUrl.pathname}`);
     const { userId } = await auth();
 
+    // Fire-and-forget activity tracking for authenticated users
+    if (userId && !req.nextUrl.pathname.startsWith('/api/user/touch')) {
+        fetch(new URL('/api/user/touch', req.url), {
+            method: 'POST',
+            headers: { cookie: req.headers.get('cookie') ?? '' },
+        }).catch(() => {
+            // Intentionally fire-and-forget — never block the response
+        });
+    }
+
     // TEMP: Admin auth bypassed for development — restore before production
     if (isAdminRoute(req)) {
         return NextResponse.next();
