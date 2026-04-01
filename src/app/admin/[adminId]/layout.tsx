@@ -70,6 +70,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         return pathname.startsWith(href.replace('/admin', basePath));
     };
 
+    const allNav = [...primaryNav, ...secondaryNav];
+    const activeNav = allNav.find((item) => isActive(item.href));
+    const pageLabel = activeNav?.label ?? 'Dashboard';
+
     return (
         <div className={cn('admin-theme', adminSans.variable)} style={{ fontFamily: 'var(--font-admin-sans)' }}>
             <div className="admin-shell">
@@ -153,14 +157,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <div className="admin-sidebar-footer">
                         <div className="admin-avatar-chip">AO</div>
                         <div className="space-y-0.5">
-                            <p className="text-sm font-semibold text-foreground">Aladdin Operations</p>
-                            <p className="text-sm text-muted-foreground">{basePath.replace('/admin/', '')}</p>
+                            <p className="text-sm font-semibold text-foreground">Admin Workspace</p>
+                            <p className="text-sm text-muted-foreground">Aladdin Operations</p>
                         </div>
                     </div>
                 </aside>
 
                 <main className="admin-main">
-                    <div className="admin-main-inner admin-enter">{children}</div>
+                    <header className="admin-topbar">
+                        <span className="admin-topbar-sep" />
+                        <span className="text-sm font-medium text-foreground">{pageLabel}</span>
+                        <span className="ml-auto text-xs text-muted-foreground">Aladdin Admin · v1.0</span>
+                    </header>
+                    <div className="admin-main-inner @container/main admin-enter">{children}</div>
                 </main>
             </div>
         </div>
