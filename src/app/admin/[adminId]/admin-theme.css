@@ -1,37 +1,23 @@
+/* ============================================================
+   ADMIN THEME — scoped overrides on top of global TweakCN tokens
+   All --background, --card, --border, --primary etc. come from
+   globals.css (:root). Only admin-specific values are defined here.
+   ============================================================ */
+
 .admin-theme {
-  --background: #f1f5f9;
-  --foreground: #29323d;
-  --card: #f8fbff;
-  --card-foreground: #18212b;
-  --popover: #ffffff;
-  --popover-foreground: #29323d;
-  --primary: #4288c9;
-  --primary-foreground: #ffffff;
-  --secondary: #dce7f2;
-  --secondary-foreground: #46515b;
-  --muted: #e7eef6;
-  --muted-foreground: #748391;
-  --accent: #dce7f2;
-  --accent-foreground: #1f2a33;
-  --destructive: #131514;
-  --destructive-foreground: #ffffff;
-  --border: #d4dde7;
-  --input: #a6b7c8;
-  --ring: #4288c9;
-  --chart-1: #336bb0;
-  --chart-2: #87a7f5;
-  --chart-3: #c4ced8;
-  --chart-4: #d3def0;
-  --chart-5: #2d5bb4;
-  --radius: 0.7rem;
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 10px 26px rgba(15, 23, 42, 0.07);
+  /* Admin-specific shadow scale (not in global tokens) */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.07), 0 4px 16px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 24px rgba(15, 23, 42, 0.08);
+
+  /* Primary hover — slightly darker than --primary */
+  --primary-hover: oklch(from var(--primary) calc(l - 0.06) c h);
+
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.18)),
-    #eef3f8;
+  background: var(--background);
   color: var(--foreground);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 html.admin-scrollable,
@@ -42,6 +28,10 @@ body.admin-scrollable {
   overflow-y: auto;
 }
 
+/* ============================================================
+   SHELL
+   ============================================================ */
+
 .admin-shell {
   display: grid;
   min-height: 100vh;
@@ -49,168 +39,354 @@ body.admin-scrollable {
   align-items: start;
 }
 
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+
 .admin-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 1.75rem;
+  gap: 2rem;
   position: sticky;
   top: 0;
   min-height: 100vh;
   align-self: start;
-  border-right: 1px solid rgba(212, 221, 231, 0.92);
-  background: linear-gradient(180deg, rgba(244, 248, 252, 0.96), rgba(237, 244, 251, 0.88));
-  padding: 2.1rem 1.4rem 1.45rem;
+  border-right: 1px solid var(--border);
+  background: var(--popover);
+  padding: 2rem 1.25rem 1.75rem;
 }
 
 .admin-brand-mark {
   display: inline-flex;
-  height: 2.5rem;
-  width: 2.5rem;
+  height: 2.25rem;
+  width: 2.25rem;
   align-items: center;
   justify-content: center;
-  border-radius: 0.85rem;
+  border-radius: 0.625rem;
   background: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
 }
 
 .admin-quick-create {
-  height: 2.9rem;
+  height: 2.75rem;
   justify-content: flex-start;
-  border-radius: 0.95rem;
+  border-radius: 0.625rem;
   background: var(--primary);
   color: var(--primary-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  gap: 0.625rem;
+  box-shadow: var(--shadow-xs);
+  transition: filter 140ms ease, box-shadow 140ms ease;
+}
+
+.admin-quick-create:hover {
+  filter: brightness(0.92);
   box-shadow: var(--shadow-sm);
 }
 
 .admin-sidebar-label {
-  padding: 0 0.35rem;
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  padding: 0 0.375rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   color: var(--muted-foreground);
 }
 
 .admin-nav-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  border-radius: 0.95rem;
-  padding: 0.78rem 0.85rem;
-  font-size: 0.96rem;
-  font-weight: 500;
-  color: var(--foreground);
-  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  gap: 0.625rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 450;
+  color: var(--secondary-foreground);
+  transition: background-color 120ms ease, color 120ms ease;
+  cursor: pointer;
 }
 
 .admin-nav-link:hover {
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--muted);
+  color: var(--foreground);
 }
 
 .admin-nav-link.is-active {
   background: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: var(--shadow-sm);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
+}
+
+.admin-nav-link.is-active:hover {
+  filter: brightness(0.92);
 }
 
 .admin-nav-link.is-utility {
-  color: var(--secondary-foreground);
+  color: var(--muted-foreground);
 }
 
 .admin-sidebar-footer {
   margin-top: auto;
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(212, 221, 231, 0.92);
-  background: rgba(255, 255, 255, 0.72);
-  padding: 0.9rem;
+  gap: 0.75rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0.875rem 1rem;
 }
 
 .admin-avatar-chip {
   display: inline-flex;
-  height: 2.3rem;
-  width: 2.3rem;
+  height: 2rem;
+  width: 2rem;
   align-items: center;
   justify-content: center;
-  border-radius: 0.8rem;
+  border-radius: 0.5rem;
   background: var(--secondary);
   color: var(--secondary-foreground);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
+/* ============================================================
+   TOPBAR
+   ============================================================ */
+
+.admin-topbar {
+  display: flex;
+  height: 3rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--background);
+}
+
+.admin-topbar-sep {
+  width: 1px;
+  height: 1rem;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
+
 .admin-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 2.35rem 2.3rem 3rem;
 }
 
 .admin-main-inner {
-  width: 100%;
-  max-width: 1480px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
+
+/* ============================================================
+   PAGE INTRO
+   ============================================================ */
 
 .admin-page-intro {
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
-  padding-top: 0.1rem;
+  gap: 1.25rem;
+  padding-top: 0;
+  margin-bottom: 0.5rem;
 }
 
 .admin-kicker {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted-foreground);
 }
 
+/* ============================================================
+   DASHBOARD CARD (stat tiles)
+   ============================================================ */
+
+.dashboard-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.875rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  padding: 1.5rem 1.625rem;
+  min-height: 152px;
+  gap: 0;
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.dashboard-card:hover {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1), 0 1px 3px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.dashboard-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--primary);
+  opacity: 0.15;
+  transition: opacity 200ms ease;
+}
+
+.dashboard-card:hover::before {
+  opacity: 0.4;
+}
+
+.dashboard-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+}
+
+.dashboard-card-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.dashboard-card-badge {
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--secondary-foreground);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.dashboard-card-value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--foreground);
+  line-height: 1;
+  margin-bottom: 0.625rem;
+}
+
+.dashboard-card-description {
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+  margin-top: auto;
+}
+
+/* ============================================================
+   ADMIN PANEL (content cards)
+   ============================================================ */
+
 .admin-stat-card,
 .admin-panel {
-  border-radius: 1.22rem;
-  border: 1px solid rgba(212, 221, 231, 0.94);
-  background: rgba(248, 251, 255, 0.96);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
-  backdrop-filter: blur(10px);
-}
-
-.admin-stat-card {
-  min-height: 148px;
-}
-
-.admin-stat-card [data-slot='card-header'] {
-  padding: 1.2rem 1.4rem 0.35rem;
-}
-
-.admin-stat-card [data-slot='card-content'] {
-  margin-top: auto;
-  padding: 0 1.4rem 1.2rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .admin-panel [data-slot='card-header'] {
-  padding: 1.3rem 1.5rem 1rem;
+  padding: 1.5rem 1.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .admin-panel [data-slot='card-content'] {
-  padding: 1.15rem 1.5rem 1.5rem;
+  padding: 1.5rem 1.75rem 1.75rem;
 }
+
+/* ============================================================
+   INLINE STAT (inside panels)
+   ============================================================ */
+
+.panel-inline-stat {
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  padding: 1.125rem 1.25rem 1.25rem;
+}
+
+.panel-inline-stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin-bottom: 0.5rem;
+}
+
+.panel-inline-stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--foreground);
+  line-height: 1;
+  margin-bottom: 0.375rem;
+}
+
+.panel-inline-stat-sub {
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   LIST ROW
+   ============================================================ */
 
 .admin-list-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1.2rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(212, 221, 231, 0.88);
-  background: rgba(255, 255, 255, 0.72);
-  padding: 1.05rem 1.1rem;
+  gap: 1rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 1rem 1.125rem;
+  transition: background-color 120ms ease;
 }
+
+.admin-list-row:hover {
+  background: var(--muted);
+}
+
+/* ============================================================
+   TABLE
+   ============================================================ */
 
 .admin-table-wrap {
   overflow: hidden;
-  border-radius: 1.08rem;
-  border: 1px solid rgba(212, 221, 231, 0.94);
-  background: rgba(255, 255, 255, 0.88);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--card);
 }
 
 .admin-table-wrap table {
@@ -222,132 +398,241 @@ body.admin-scrollable {
 }
 
 .admin-table-wrap thead tr {
-  background: rgba(220, 231, 242, 0.7);
+  background: var(--muted);
+  border-bottom: 1px solid var(--border);
 }
 
 .admin-table-wrap th {
-  color: var(--secondary-foreground);
+  color: var(--muted-foreground);
 }
 
 .admin-table-wrap [data-slot='table-head'] {
   height: auto;
-  padding: 0.95rem 1rem;
-  font-size: 0.82rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .admin-table-wrap [data-slot='table-cell'] {
-  padding: 0.95rem 1rem;
-  line-height: 1.35;
+  padding: 0.875rem 1rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
 }
 
 .admin-table-wrap [data-slot='table-head']:first-child,
 .admin-table-wrap [data-slot='table-cell']:first-child {
-  padding-left: 1.3rem;
+  padding-left: 1.5rem;
 }
 
 .admin-table-wrap [data-slot='table-head']:last-child,
 .admin-table-wrap [data-slot='table-cell']:last-child {
-  padding-right: 1.3rem;
+  padding-right: 1.5rem;
 }
 
 .admin-table-wrap tbody tr {
   background: transparent;
+  transition: background-color 120ms ease;
 }
 
 .admin-table-wrap tbody tr:hover {
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--muted);
 }
+
+.admin-table-wrap tbody tr:last-child [data-slot='table-cell'] {
+  border-bottom: none;
+}
+
+/* ============================================================
+   SEGMENTED CONTROL
+   ============================================================ */
 
 .admin-segmented {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgba(212, 221, 231, 0.92);
-  background: rgba(233, 240, 247, 0.86);
-  padding: 0.18rem;
+  gap: 0.125rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--muted);
+  padding: 0.2rem;
 }
 
 .admin-segmented-button {
-  border-radius: 0.62rem;
-  padding: 0.55rem 0.9rem;
-  font-size: 0.92rem;
+  border-radius: 0.375rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  color: var(--secondary-foreground);
-  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.admin-segmented-button:hover:not(.is-active) {
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--card) 60%, transparent);
 }
 
 .admin-segmented-button.is-active {
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--card);
   color: var(--foreground);
+  border-color: var(--border);
   box-shadow: var(--shadow-xs);
+  font-weight: 600;
 }
+
+/* ============================================================
+   TAB BAR (workspace tabs)
+   ============================================================ */
 
 .admin-tabbar {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.2rem;
-  border-radius: 0.75rem;
-  background: rgba(223, 232, 241, 0.75);
+  gap: 0.125rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--muted);
   padding: 0.2rem;
 }
 
 .admin-tab {
-  border-radius: 0.62rem;
-  padding: 0.52rem 0.8rem;
-  font-size: 0.94rem;
+  border-radius: 0.375rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
   font-weight: 500;
   color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+  border: 1px solid transparent;
+}
+
+.admin-tab:hover:not(.is-active) {
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--card) 60%, transparent);
 }
 
 .admin-tab.is-active {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--card);
   color: var(--foreground);
+  border-color: var(--border);
   box-shadow: var(--shadow-xs);
+  font-weight: 600;
 }
+
+/* ============================================================
+   OPERATOR ACTION GROUPS
+   ============================================================ */
+
+.admin-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-action-group-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding: 0 0.25rem;
+  margin-bottom: 0.125rem;
+}
+
+.admin-action-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+
+.admin-action-result {
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  padding: 1rem 1.125rem;
+  margin-top: 0.75rem;
+}
+
+.admin-action-result-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin-bottom: 0.5rem;
+}
+
+.admin-action-result-text {
+  font-size: 0.83rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+/* ============================================================
+   CHART
+   ============================================================ */
 
 .admin-chart-wrap {
-  border-top: 1px solid rgba(212, 221, 231, 0.82);
-  padding-top: 1.15rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+  margin-top: 0.25rem;
 }
 
+/* ============================================================
+   FORM CONTROLS (shadcn overrides)
+   ============================================================ */
+
 .admin-theme .admin-main [data-slot='button'] {
-  border-radius: 0.92rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  transition: background-color 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
 }
 
 .admin-theme .admin-main [data-slot='input'],
 .admin-theme .admin-main [data-slot='select-trigger'] {
-  height: 2.65rem;
-  border-radius: 0.92rem;
-  background: rgba(255, 255, 255, 0.9);
-  padding-inline: 0.95rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  background: var(--card);
+  border-color: var(--border);
+  font-size: 0.875rem;
+  padding-inline: 0.875rem;
 }
 
 .admin-theme .admin-main [data-slot='select-trigger'] {
-  gap: 0.75rem;
+  gap: 0.625rem;
 }
 
 .admin-theme .admin-main [data-slot='badge'] {
-  min-height: 1.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
+/* ============================================================
+   ENTER ANIMATION
+   ============================================================ */
+
 .admin-enter {
-  animation: admin-enter 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: admin-enter 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes admin-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
 
 @media (max-width: 1180px) {
   .admin-shell {
@@ -358,21 +643,23 @@ body.admin-scrollable {
     position: relative;
     top: auto;
     min-height: auto;
-    border-right: 0;
-    border-bottom: 1px solid rgba(212, 221, 231, 0.92);
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 1.25rem;
   }
 }
 
 @media (max-width: 768px) {
   .admin-main {
-    padding: 1.35rem 1rem 1.9rem;
-  }
-
-  .admin-sidebar {
-    padding: 1.2rem 1rem;
+    padding: 2rem 1.25rem 2.5rem;
   }
 
   .admin-page-intro {
-    gap: 0.85rem;
+    gap: 1rem;
+  }
+
+  .admin-panel [data-slot='card-header'],
+  .admin-panel [data-slot='card-content'] {
+    padding-inline: 1.25rem;
   }
 }
