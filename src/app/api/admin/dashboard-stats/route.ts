@@ -60,13 +60,13 @@ export async function GET() {
     for (const user of allUsersForCharts) {
       if (!user.createdAt) continue
       const weekStart = getWeekStart(user.createdAt)
-      const key = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const key = formatWeekLabel(weekStart)
       weeklyMap[key] = (weeklyMap[key] ?? 0) + 1
     }
     const weeklySignups: { week: string; count: number }[] = []
     for (let i = 8; i >= 0; i--) {
       const weekStart = getWeekStart(new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000))
-      const key = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const key = formatWeekLabel(weekStart)
       weeklySignups.push({ week: key, count: weeklyMap[key] ?? 0 })
     }
 
@@ -95,4 +95,10 @@ function getWeekStart(date: Date): Date {
   d.setUTCDate(d.getUTCDate() + diff)
   d.setUTCHours(0, 0, 0, 0)
   return d
+}
+
+/** Formats a date as "Apr 1" using UTC month/day — reliable on all server environments */
+function formatWeekLabel(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`
 }
