@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
 import {
+    Activity,
+    AlertTriangle,
     Database,
     LoaderCircle,
     Plus,
@@ -10,10 +12,13 @@ import {
     ShieldAlert,
     Sparkles,
     TowerControl,
+    TrendingUp,
+    Users,
     Workflow,
+    Zap,
 } from 'lucide-react';
 
-import { adminSignals } from '@/components/admin/admin-data';
+import { adminSignals, leadGenKpis, userPlanDistribution, weeklySignups } from '@/components/admin/admin-data';
 import { AdminMiniList, AdminPageIntro, AdminPanel, DashboardCard } from '@/components/admin/admin-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -409,6 +414,76 @@ export default function AdminDashboardPage() {
                         </>
                     }
                 />
+            </div>
+
+            {/* Lead gen KPI strip */}
+            <div className="px-4 lg:px-6">
+              <div className="grid grid-cols-2 gap-3 @xl/main:grid-cols-3 @5xl/main:grid-cols-5">
+                {[
+                  {
+                    icon: Users,
+                    label: 'Total users',
+                    value: leadGenKpis.totalUsers.toLocaleString(),
+                    sub: 'All-time signups',
+                    color: 'text-blue-600',
+                    bg: 'bg-blue-50',
+                  },
+                  {
+                    icon: TrendingUp,
+                    label: 'Activated this week',
+                    value: leadGenKpis.activatedThisWeek.toLocaleString(),
+                    sub: 'New fully-onboarded users',
+                    color: 'text-emerald-600',
+                    bg: 'bg-emerald-50',
+                  },
+                  {
+                    icon: Zap,
+                    label: 'Free → Pro conversion',
+                    value: `${leadGenKpis.freeToProConversion}%`,
+                    sub: 'Upgrade rate, last 30 days',
+                    color: 'text-violet-600',
+                    bg: 'bg-violet-50',
+                  },
+                  {
+                    icon: Activity,
+                    label: 'Avg health score',
+                    value: String(leadGenKpis.avgHealthScore),
+                    sub: 'Across all active accounts',
+                    color: 'text-amber-600',
+                    bg: 'bg-amber-50',
+                  },
+                  {
+                    icon: AlertTriangle,
+                    label: 'Dormant users',
+                    value: leadGenKpis.dormantCount.toLocaleString(),
+                    sub: 'No activity in 14+ days',
+                    color: 'text-rose-600',
+                    bg: 'bg-rose-50',
+                  },
+                ].map((kpi) => {
+                  const Icon = kpi.icon;
+                  return (
+                    <div
+                      key={kpi.label}
+                      className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
+                    >
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${kpi.bg}`}>
+                        <Icon className={`size-4 ${kpi.color}`} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[0.7rem] font-semibold uppercase tracking-widest text-muted-foreground">{kpi.label}</p>
+                        <p className="mt-0.5 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{kpi.sub}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* System health */}
+            <div className="px-4 lg:px-6">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">System health</p>
             </div>
 
             {/* Stat cards — container-query responsive grid */}
