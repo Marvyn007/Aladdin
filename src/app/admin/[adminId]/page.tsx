@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, XAxis, PieChart, Pie, Cell } from 'recharts';
 import {
     Activity,
     AlertTriangle,
@@ -501,7 +501,7 @@ export default function AdminDashboardPage() {
 
             {/* Chart + operator controls */}
             <div className="px-4 lg:px-6">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_360px]">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px_360px]">
                 <AdminPanel
                     title="Total visitors"
                     description="Activity across ingestion and admin-managed user flows for the selected time range."
@@ -593,6 +593,63 @@ export default function AdminDashboardPage() {
                             </ChartContainer>
                         </div>
                     </div>
+                </AdminPanel>
+
+                <AdminPanel
+                  title="Users by plan"
+                  description="Current distribution of Free, Pro, and Premium accounts."
+                >
+                  <div className="flex flex-col items-center gap-4">
+                    <ChartContainer
+                      className="h-[200px] w-full"
+                      config={{
+                        free: { label: 'Free', color: 'hsl(217, 91%, 60%)' },
+                        pro: { label: 'Pro', color: 'hsl(262, 83%, 58%)' },
+                        premium: { label: 'Premium', color: 'hsl(142, 71%, 45%)' },
+                      }}
+                    >
+                      <PieChart>
+                        <Pie
+                          data={userPlanDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={56}
+                          outerRadius={84}
+                          paddingAngle={3}
+                          dataKey="count"
+                        >
+                          <Cell fill="hsl(217, 91%, 60%)" />
+                          <Cell fill="hsl(262, 83%, 58%)" />
+                          <Cell fill="hsl(142, 71%, 45%)" />
+                        </Pie>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                      </PieChart>
+                    </ChartContainer>
+
+                    <div className="w-full space-y-2">
+                      {userPlanDistribution.map((item, i) => {
+                        const total = userPlanDistribution.reduce((sum, d) => sum + d.count, 0);
+                        const colors = ['hsl(217, 91%, 60%)', 'hsl(262, 83%, 58%)', 'hsl(142, 71%, 45%)'];
+                        return (
+                          <div key={item.plan} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-block h-2.5 w-2.5 rounded-full"
+                                style={{ background: colors[i] }}
+                              />
+                              <span className="text-muted-foreground">{item.plan}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-foreground">{item.count.toLocaleString()}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {Math.round((item.count / total) * 100)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </AdminPanel>
 
                 <div className="space-y-5">
