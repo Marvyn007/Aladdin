@@ -49,36 +49,39 @@ export default function UsersPage() {
     const fullConsent = adminUsers.filter((user) => user.consent === 'Full').length;
 
     return (
-        <div className="space-y-6">
-            <AdminPageIntro
-                eyebrow="Admin users"
-                title="Make the user ledger feel like an operator workspace."
-                description="The user table now centers segmentation, activation health, consent visibility, and the signals admins actually need to act on."
-                actions={
-                    <>
-                        <Button variant="outline" className="rounded-full">
-                            <Filter className="size-4" />
-                            Build cohort
-                        </Button>
-                        <Button className="rounded-full">
-                            <Sparkles className="size-4" />
-                            Export insight digest
-                        </Button>
-                    </>
-                }
-            />
+        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+            <div className="px-4 lg:px-6">
+                <AdminPageIntro
+                    eyebrow="User management"
+                    title="Users"
+                    description="View and manage user accounts, activation state, plan tier, resume uploads, and engagement health."
+                    actions={
+                        <>
+                            <Button variant="outline" className="rounded-full">
+                                <Filter className="size-4" />
+                                Build cohort
+                            </Button>
+                            <Button className="rounded-full">
+                                <Sparkles className="size-4" />
+                                Export insight digest
+                            </Button>
+                        </>
+                    }
+                />
+            </div>
 
-            <div className="grid gap-4 xl:grid-cols-4">
+            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 <AdminStatCard label="Users in view" value={String(filteredUsers.length)} detail="Filtered by the current search and segment controls." trend="Live" />
                 <AdminStatCard label="Onboarding complete" value={String(completedOnboarding)} detail="Users with resume + preference setup finished." trend={`${Math.round((completedOnboarding / adminUsers.length) * 100)}%`} />
                 <AdminStatCard label="At risk" value={String(atRiskUsers)} detail="Dormant or declining engagement cohorts that need attention." trend="Recovery" />
                 <AdminStatCard label="Full consent" value={String(fullConsent)} detail="Accounts sharing the deepest behavioral and personalization signals." trend="Healthy" />
             </div>
 
+            <div className="px-4 lg:px-6">
             <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <AdminPanel
-                    title="User intelligence table"
-                    description="Every row combines plan, activation, consent, and job-seeking focus so admins can act on the full user story."
+                    title="User roster"
+                    description="Filter by segment or search by name, email, or job focus to find and act on specific accounts."
                     action={
                         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:justify-end">
                             <div className="relative">
@@ -151,7 +154,7 @@ export default function UsersPage() {
                     </div>
                 </AdminPanel>
 
-                <AdminPanel title="Operator notes" description="A companion rail that helps admins interpret the table instead of just scanning metrics.">
+                <AdminPanel title="Operator signals" description="Patterns and watch items across the current user cohort.">
                     <div className="space-y-3">
                         <div className="rounded-[1.25rem] border border-border/70 bg-background/80 p-4">
                             <div className="flex items-center gap-2">
@@ -176,6 +179,7 @@ export default function UsersPage() {
                         </div>
                     </div>
                 </AdminPanel>
+            </div>
             </div>
         </div>
     );

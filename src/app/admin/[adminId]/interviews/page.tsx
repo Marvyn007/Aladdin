@@ -25,36 +25,39 @@ export default function InterviewsPage() {
     const reviewQueueCount = interviews.length;
 
     return (
-        <div className="space-y-6">
-            <AdminPageIntro
-                eyebrow="Interview experiences"
-                title="Moderation-first design for community interview data."
-                description="This page now reads like a review queue with context, escalation state, and confidence signals instead of a thin CRUD list."
-                actions={
-                    <>
-                        <Button variant="outline" className="rounded-full">
-                            <Flag className="size-4" />
-                            Review flagged only
-                        </Button>
-                        <Button className="rounded-full">
-                            <Sparkles className="size-4" />
-                            Draft moderation summary
-                        </Button>
-                    </>
-                }
-            />
+        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+            <div className="px-4 lg:px-6">
+                <AdminPageIntro
+                    eyebrow="Interview reviews"
+                    title="Interview experiences"
+                    description="Review, escalate, and approve community-submitted interview reports. Flag harmful content and surface high-quality signals."
+                    actions={
+                        <>
+                            <Button variant="outline" className="rounded-full">
+                                <Flag className="size-4" />
+                                Review flagged only
+                            </Button>
+                            <Button className="rounded-full">
+                                <Sparkles className="size-4" />
+                                Draft moderation summary
+                            </Button>
+                        </>
+                    }
+                />
+            </div>
 
-            <div className="grid gap-4 xl:grid-cols-4">
+            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 <AdminStatCard label="Experiences in queue" value={String(reviewQueueCount)} detail="All interview reports currently visible to admins." trend="Live" />
                 <AdminStatCard label="Escalated" value={String(interviews.filter((item) => item.reviewState === 'Escalated').length)} detail="Reports that need a stronger moderation response." trend="Priority" />
                 <AdminStatCard label="Needs review" value={String(interviews.filter((item) => item.reviewState === 'Needs Review').length)} detail="Items with reports or ambiguous policy coverage." trend="Active" />
                 <AdminStatCard label="Approved" value={String(interviews.filter((item) => item.reviewState === 'Approved').length)} detail="Reports cleared for community visibility." trend="Stable" />
             </div>
 
+            <div className="px-4 lg:px-6">
             <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
                 <AdminPanel
-                    title="Moderation queue"
-                    description="Structured around review confidence, report volume, and who last touched the record."
+                    title="Review queue"
+                    description="All community interview submissions sorted by report volume and escalation state."
                 >
                     <div className="admin-table-wrap">
                         <Table>
@@ -129,8 +132,8 @@ export default function InterviewsPage() {
                 </AdminPanel>
 
                 <AdminPanel
-                    title="Moderator readout"
-                    description="Context blocks that help reviewers decide how to intervene."
+                    title="Moderator context"
+                    description="Summaries and signals to help reviewers make faster, better-informed decisions."
                 >
                     <div className="space-y-3">
                         {interviews.slice(0, 3).map((interview) => (
@@ -152,6 +155,7 @@ export default function InterviewsPage() {
                         ))}
                     </div>
                 </AdminPanel>
+            </div>
             </div>
         </div>
     );

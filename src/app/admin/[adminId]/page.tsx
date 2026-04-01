@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { adminSignals } from '@/components/admin/admin-data';
-import { AdminMiniList, AdminPageIntro, AdminPanel, AdminStatCard } from '@/components/admin/admin-ui';
+import { AdminMiniList, AdminPageIntro, AdminPanel, DashboardCard } from '@/components/admin/admin-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -296,130 +296,137 @@ export default function AdminDashboardPage() {
     const sourceSnapshot = sources.slice(0, 4);
 
     return (
-        <div className="space-y-6">
-            <AdminPageIntro
-                eyebrow="Admin dashboard"
-                title="Operations dashboard"
-                description="Monitor ingestion, source quality, and tracked company coverage from one soft-blue workspace modeled on the reference admin layouts."
-                actions={
-                    <>
-                        <Button
-                            variant="outline"
-                            className="rounded-xl border-border/80 bg-background/80 px-4"
-                            onClick={() => loadAdminData()}
-                        >
-                            <RefreshCcw className="size-4" />
-                            Refresh data
-                        </Button>
+        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
 
-                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                            <DialogTrigger render={<Button className="rounded-xl px-4" />}>
-                                <Plus className="size-4" />
-                                Track company
-                            </DialogTrigger>
-                            <DialogContent className="max-w-xl rounded-[1.25rem] border border-border/80 bg-popover">
-                                <DialogHeader>
-                                    <DialogTitle>Add a tracked company</DialogTitle>
-                                    <DialogDescription>
-                                        Create a new ATS watch target without leaving the admin workspace.
-                                    </DialogDescription>
-                                </DialogHeader>
+            {/* Page intro */}
+            <div className="px-4 lg:px-6">
+                <AdminPageIntro
+                    eyebrow="Admin dashboard"
+                    title="Operations dashboard"
+                    description="Monitor job ingestion, source health, user activation, and tracked company coverage across the platform."
+                    actions={
+                        <>
+                            <Button
+                                variant="outline"
+                                className="rounded-xl border-border/80 bg-background/80 px-4"
+                                onClick={() => loadAdminData()}
+                            >
+                                <RefreshCcw className="size-4" />
+                                Refresh data
+                            </Button>
 
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Company name</label>
-                                        <Input
-                                            value={form.name}
-                                            onChange={(event) =>
-                                                setForm((current) => ({ ...current, name: event.target.value }))
-                                            }
-                                        />
+                            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                                <DialogTrigger render={<Button className="rounded-xl px-4" />}>
+                                    <Plus className="size-4" />
+                                    Track company
+                                </DialogTrigger>
+                                <DialogContent className="max-w-xl rounded-[1.25rem] border border-border/80 bg-popover">
+                                    <DialogHeader>
+                                        <DialogTitle>Add a tracked company</DialogTitle>
+                                        <DialogDescription>
+                                            Create a new ATS watch target without leaving the admin workspace.
+                                        </DialogDescription>
+                                    </DialogHeader>
+
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Company name</label>
+                                            <Input
+                                                value={form.name}
+                                                onChange={(event) =>
+                                                    setForm((current) => ({ ...current, name: event.target.value }))
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Slug</label>
+                                            <Input
+                                                value={form.slug}
+                                                onChange={(event) =>
+                                                    setForm((current) => ({ ...current, slug: event.target.value }))
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">ATS</label>
+                                            <Select
+                                                value={form.ats}
+                                                onValueChange={(value) =>
+                                                    setForm((current) => ({ ...current, ats: value ?? current.ats }))
+                                                }
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="greenhouse">Greenhouse</SelectItem>
+                                                    <SelectItem value="lever">Lever</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Country</label>
+                                            <Input
+                                                value={form.country}
+                                                onChange={(event) =>
+                                                    setForm((current) => ({ ...current, country: event.target.value }))
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Industry</label>
+                                            <Input
+                                                value={form.industry}
+                                                onChange={(event) =>
+                                                    setForm((current) => ({ ...current, industry: event.target.value }))
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-foreground">Website</label>
+                                            <Input
+                                                value={form.websiteUrl}
+                                                onChange={(event) =>
+                                                    setForm((current) => ({ ...current, websiteUrl: event.target.value }))
+                                                }
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Slug</label>
-                                        <Input
-                                            value={form.slug}
-                                            onChange={(event) =>
-                                                setForm((current) => ({ ...current, slug: event.target.value }))
-                                            }
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">ATS</label>
-                                        <Select
-                                            value={form.ats}
-                                            onValueChange={(value) =>
-                                                setForm((current) => ({ ...current, ats: value ?? current.ats }))
-                                            }
+
+                                    <DialogFooter className="rounded-b-[1.25rem]">
+                                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            onClick={() => createCompany()}
+                                            disabled={!form.name || !form.slug || !form.ats || isActing}
                                         >
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="greenhouse">Greenhouse</SelectItem>
-                                                <SelectItem value="lever">Lever</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Country</label>
-                                        <Input
-                                            value={form.country}
-                                            onChange={(event) =>
-                                                setForm((current) => ({ ...current, country: event.target.value }))
-                                            }
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Industry</label>
-                                        <Input
-                                            value={form.industry}
-                                            onChange={(event) =>
-                                                setForm((current) => ({ ...current, industry: event.target.value }))
-                                            }
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Website</label>
-                                        <Input
-                                            value={form.websiteUrl}
-                                            onChange={(event) =>
-                                                setForm((current) => ({ ...current, websiteUrl: event.target.value }))
-                                            }
-                                        />
-                                    </div>
-                                </div>
+                                            Create tracked source
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </>
+                    }
+                />
+            </div>
 
-                                <DialogFooter className="rounded-b-[1.25rem]">
-                                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        onClick={() => createCompany()}
-                                        disabled={!form.name || !form.slug || !form.ats || isActing}
-                                    >
-                                        Create tracked source
-                                    </Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-                    </>
-                }
-            />
-
-            <div className="grid gap-4 xl:grid-cols-4">
+            {/* Stat cards — container-query responsive grid */}
+            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 {statCards.map((card) => (
-                    <AdminStatCard
+                    <DashboardCard
                         key={card.label}
-                        label={card.label}
+                        title={card.label}
                         value={card.value}
-                        detail={card.detail}
-                        trend={card.trend}
+                        description={card.detail}
+                        badge={card.trend}
                     />
                 ))}
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_360px]">
+            {/* Chart + operator controls */}
+            <div className="px-4 lg:px-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_360px]">
                 <AdminPanel
                     title="Total visitors"
                     description="Activity across ingestion and admin-managed user flows for the selected time range."
@@ -447,32 +454,22 @@ export default function AdminDashboardPage() {
                 >
                     <div className="space-y-5">
                         <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                    Total visitors
-                                </p>
-                                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground">
-                                    45,678
-                                </p>
-                                <p className="text-sm text-muted-foreground">Total for the active range</p>
+                            <div className="panel-inline-stat">
+                                <p className="panel-inline-stat-label">Total visitors</p>
+                                <p className="panel-inline-stat-value">45,678</p>
+                                <p className="panel-inline-stat-sub">Total for the active range</p>
                             </div>
-                            <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                    Qualified sessions
-                                </p>
-                                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground">
-                                    18,234
-                                </p>
-                                <p className="text-sm text-muted-foreground">Sessions with downstream conversion intent</p>
+                            <div className="panel-inline-stat">
+                                <p className="panel-inline-stat-label">Qualified sessions</p>
+                                <p className="panel-inline-stat-value">18,234</p>
+                                <p className="panel-inline-stat-sub">Sessions with downstream conversion intent</p>
                             </div>
-                            <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                    Avg processing
-                                </p>
-                                <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground">
+                            <div className="panel-inline-stat">
+                                <p className="panel-inline-stat-label">Avg processing</p>
+                                <p className="panel-inline-stat-value">
                                     {queueStats?.avgProcessingMs ? `${Math.round(queueStats.avgProcessingMs)} ms` : 'Idle'}
                                 </p>
-                                <p className="text-sm text-muted-foreground">Mean queue runtime for the latest window</p>
+                                <p className="panel-inline-stat-sub">Mean queue runtime for the latest window</p>
                             </div>
                         </div>
 
@@ -495,7 +492,7 @@ export default function AdminDashboardPage() {
                                             <stop offset="95%" stopColor="var(--color-chart-2)" stopOpacity={0.03} />
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid vertical={false} stroke="rgba(148, 163, 184, 0.35)" />
+                                    <CartesianGrid vertical={false} stroke="var(--border)" />
                                     <XAxis
                                         dataKey="label"
                                         axisLine={false}
@@ -528,53 +525,66 @@ export default function AdminDashboardPage() {
                         title="Operator controls"
                         description="Run the existing maintenance actions without leaving the dashboard."
                     >
-                        <div className="space-y-3">
-                            <Button
-                                className="h-11 w-full justify-start rounded-xl px-4"
-                                onClick={() => runAdminAction('/api/admin/backfill', 'Backfill completed')}
-                                disabled={isActing}
-                            >
-                                {isActing ? (
-                                    <LoaderCircle className="size-4 animate-spin" />
-                                ) : (
-                                    <Database className="size-4" />
-                                )}
-                                Backfill missing source data
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="h-11 w-full justify-start rounded-xl border-border/80 bg-background/80 px-4"
-                                onClick={() => runAdminAction('/api/admin/queue/retry-dead', 'Dead jobs re-queued')}
-                                disabled={isActing}
-                            >
-                                <Workflow className="size-4" />
-                                Retry dead queue items
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="h-11 w-full justify-start rounded-xl border-border/80 bg-background/80 px-4"
-                                onClick={() => runAdminAction('/api/admin/seed-companies', 'Seed companies synced')}
-                                disabled={isActing}
-                            >
-                                <Sparkles className="size-4" />
-                                Seed tracked company defaults
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                className="h-11 w-full justify-start rounded-xl px-4"
-                                onClick={() => runAdminAction('/api/admin/queue/drain', 'Pending queue drained')}
-                                disabled={isActing}
-                            >
-                                <ShieldAlert className="size-4" />
-                                Drain pending queue
-                            </Button>
+                        <div className="space-y-4">
+                            {/* Queue operations */}
+                            <div className="admin-action-group">
+                                <p className="admin-action-group-label">Queue</p>
+                                <Button
+                                    className="h-11 w-full justify-start rounded-xl px-4"
+                                    onClick={() => runAdminAction('/api/admin/backfill', 'Backfill completed')}
+                                    disabled={isActing}
+                                >
+                                    {isActing ? (
+                                        <LoaderCircle className="size-4 animate-spin" />
+                                    ) : (
+                                        <Database className="size-4" />
+                                    )}
+                                    Backfill missing source data
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="h-11 w-full justify-start rounded-xl border-border/80 bg-background/80 px-4"
+                                    onClick={() => runAdminAction('/api/admin/queue/retry-dead', 'Dead jobs re-queued')}
+                                    disabled={isActing}
+                                >
+                                    <Workflow className="size-4" />
+                                    Retry dead queue items
+                                </Button>
+                            </div>
+
+                            {/* Configuration */}
+                            <div className="admin-action-group">
+                                <p className="admin-action-group-label">Configuration</p>
+                                <Button
+                                    variant="outline"
+                                    className="h-11 w-full justify-start rounded-xl border-border/80 bg-background/80 px-4"
+                                    onClick={() => runAdminAction('/api/admin/seed-companies', 'Seed companies synced')}
+                                    disabled={isActing}
+                                >
+                                    <Sparkles className="size-4" />
+                                    Seed tracked company defaults
+                                </Button>
+                            </div>
+
+                            {/* Danger zone */}
+                            <div className="admin-action-divider" />
+                            <div className="admin-action-group">
+                                <p className="admin-action-group-label">Danger zone</p>
+                                <Button
+                                    variant="destructive"
+                                    className="h-11 w-full justify-start rounded-xl px-4"
+                                    onClick={() => runAdminAction('/api/admin/queue/drain', 'Pending queue drained')}
+                                    disabled={isActing}
+                                >
+                                    <ShieldAlert className="size-4" />
+                                    Drain pending queue
+                                </Button>
+                            </div>
                         </div>
 
-                        <div className="mt-4 rounded-xl border border-border/70 bg-background/70 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                Last operator result
-                            </p>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        <div className="admin-action-result">
+                            <p className="admin-action-result-label">Last operator result</p>
+                            <p className="admin-action-result-text">
                                 {actionMessage ?? 'No action has been triggered yet.'}
                             </p>
                         </div>
@@ -588,7 +598,10 @@ export default function AdminDashboardPage() {
                     </AdminPanel>
                 </div>
             </div>
+            </div>
 
+            {/* Workspace panel */}
+            <div className="px-4 lg:px-6">
             <AdminPanel
                 title="Workspace"
                 description="Switch between tracked companies, source telemetry, and collection guidance."
@@ -752,8 +765,11 @@ export default function AdminDashboardPage() {
                     ) : null}
                 </div>
             </AdminPanel>
+            </div>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            {/* Bottom panels */}
+            <div className="px-4 lg:px-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
                 <AdminPanel
                     title="Tracked company pulse"
                     description="Active ATS targets and their current ingestion posture."
@@ -834,6 +850,8 @@ export default function AdminDashboardPage() {
                     </div>
                 </AdminPanel>
             </div>
+            </div>
+
         </div>
     );
 }

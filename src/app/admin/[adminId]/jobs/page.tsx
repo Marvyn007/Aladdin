@@ -40,35 +40,38 @@ export default function JobsPage() {
     const filteredJobs = jobs.filter((job) => status === 'all' || job.status === status);
 
     return (
-        <div className="space-y-6">
-            <AdminPageIntro
-                eyebrow="Admin jobs"
-                title="Turn the jobs table into a sourcing and moderation surface."
-                description="The jobs view now prioritizes quality, source trust, performance, and operational ownership so admins can manage pipeline health instead of scanning raw counts."
-                actions={
-                    <>
-                        <Button variant="outline" className="rounded-full">
-                            <Filter className="size-4" />
-                            Quality filters
-                        </Button>
-                        <Button className="rounded-full">
-                            <Sparkles className="size-4" />
-                            Create source report
-                        </Button>
-                    </>
-                }
-            />
+        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+            <div className="px-4 lg:px-6">
+                <AdminPageIntro
+                    eyebrow="Job management"
+                    title="Jobs"
+                    description="Triage, promote, and clean up job listings by source quality, conversion performance, and freshness."
+                    actions={
+                        <>
+                            <Button variant="outline" className="rounded-full">
+                                <Filter className="size-4" />
+                                Quality filters
+                            </Button>
+                            <Button className="rounded-full">
+                                <Sparkles className="size-4" />
+                                Create source report
+                            </Button>
+                        </>
+                    }
+                />
+            </div>
 
-            <div className="grid gap-4 xl:grid-cols-4">
+            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 <AdminStatCard label="Jobs in view" value={String(filteredJobs.length)} detail="Listings currently surfaced in the operator table." trend="Filtered" />
                 <AdminStatCard label="Healthy listings" value={String(jobs.filter((job) => job.status === 'Healthy').length)} detail="High-confidence listings with strong conversion behavior." trend="Green" />
                 <AdminStatCard label="Review queue" value={String(jobs.filter((job) => job.status === 'Review').length)} detail="Listings with signal drift or questionable relevance." trend="Needs triage" />
                 <AdminStatCard label="Stale jobs" value={String(jobs.filter((job) => job.status === 'Stale').length)} detail="Listings whose freshness or engagement has dropped." trend="Clean up" />
             </div>
 
+            <div className="px-4 lg:px-6">
             <AdminPanel
-                title="Jobs command table"
-                description="A calmer table system for triage, promotion, and cleanup across ATS sources."
+                title="Job listings"
+                description="All ingested listings with quality score, conversion data, and triage status."
                 action={
                     <Select value={status} onValueChange={(value) => setStatus(value ?? 'all')}>
                         <SelectTrigger className="w-44 rounded-full">
@@ -143,6 +146,7 @@ export default function JobsPage() {
                     </Table>
                 </div>
             </AdminPanel>
+            </div>
         </div>
     );
 }
