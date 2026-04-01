@@ -13,6 +13,10 @@ export type AdminUserRecord = {
   consent: "Full" | "Limited";
   healthScore: number;
   focus: string;
+  resumeLinks: string[];
+  linkedinUrl: string | null;
+  notes: string;
+  joinedAt: string;
 };
 
 export type AdminJobRecord = {
@@ -58,6 +62,10 @@ export const adminUsers: AdminUserRecord[] = [
     consent: "Full",
     healthScore: 94,
     focus: "Full-stack roles",
+    resumeLinks: ["https://drive.google.com/file/d/mock-resume-marvin-v3", "https://drive.google.com/file/d/mock-resume-marvin-v2"],
+    linkedinUrl: "https://linkedin.com/in/marvinchaudhary",
+    notes: "Power user. Actively applying to FAANG-adjacent roles. Good candidate for Premium upsell case study.",
+    joinedAt: "Jan 12, 2025",
   },
   {
     id: "u_118",
@@ -74,6 +82,10 @@ export const adminUsers: AdminUserRecord[] = [
     consent: "Full",
     healthScore: 88,
     focus: "Platform engineering",
+    resumeLinks: ["https://drive.google.com/file/d/mock-resume-sarah-v2"],
+    linkedinUrl: "https://linkedin.com/in/sarahjohnson-eng",
+    notes: "Consistent applicant. High ATS match rates. Referred two friends — potential advocate.",
+    joinedAt: "Feb 3, 2025",
   },
   {
     id: "u_093",
@@ -90,6 +102,10 @@ export const adminUsers: AdminUserRecord[] = [
     consent: "Limited",
     healthScore: 42,
     focus: "Frontend roles",
+    resumeLinks: ["https://drive.google.com/file/d/mock-resume-mike-v1"],
+    linkedinUrl: null,
+    notes: "Skipped preference setup. May need onboarding nudge. Check if email bounce.",
+    joinedAt: "Mar 5, 2025",
   },
   {
     id: "u_122",
@@ -106,6 +122,10 @@ export const adminUsers: AdminUserRecord[] = [
     consent: "Full",
     healthScore: 57,
     focus: "Data-adjacent SWE",
+    resumeLinks: [],
+    linkedinUrl: "https://linkedin.com/in/emilydavis-swe",
+    notes: "No resume yet despite 1 day activity. High intent signal from browsing. Priority nudge candidate.",
+    joinedAt: "Mar 28, 2025",
   },
   {
     id: "u_135",
@@ -122,6 +142,10 @@ export const adminUsers: AdminUserRecord[] = [
     consent: "Full",
     healthScore: 51,
     focus: "Backend roles",
+    resumeLinks: ["https://drive.google.com/file/d/mock-resume-james-v3", "https://drive.google.com/file/d/mock-resume-james-v1"],
+    linkedinUrl: "https://linkedin.com/in/jameswilson-backend",
+    notes: "Premium but dormant. Had high activity burst in Jan. Worth a re-engagement email.",
+    joinedAt: "Nov 19, 2024",
   },
   {
     id: "u_141",
@@ -138,6 +162,10 @@ export const adminUsers: AdminUserRecord[] = [
     consent: "Limited",
     healthScore: 73,
     focus: "New-grad programs",
+    resumeLinks: ["https://drive.google.com/file/d/mock-resume-olivia-v1"],
+    linkedinUrl: null,
+    notes: "Free tier but surprisingly active. Good upgrade candidate — surface Pro trial.",
+    joinedAt: "Mar 30, 2025",
   },
 ];
 
@@ -299,31 +327,3 @@ export function getInitials(name: string) {
     .toUpperCase();
 }
 
-// User plan distribution — shape matches future GET /api/admin/analytics/plans
-export const userPlanDistribution = [
-  { plan: 'Free', count: 847, fill: 'var(--color-free)' },
-  { plan: 'Pro', count: 312, fill: 'var(--color-pro)' },
-  { plan: 'Premium', count: 89, fill: 'var(--color-premium)' },
-];
-
-// Weekly signup series — shape matches future GET /api/admin/analytics/signups
-export const weeklySignups = [
-  { week: 'Feb 3', signups: 34 },
-  { week: 'Feb 10', signups: 41 },
-  { week: 'Feb 17', signups: 38 },
-  { week: 'Feb 24', signups: 55 },
-  { week: 'Mar 3', signups: 62 },
-  { week: 'Mar 10', signups: 58 },
-  { week: 'Mar 17', signups: 71 },
-  { week: 'Mar 24', signups: 84 },
-  { week: 'Mar 31', signups: 79 },
-];
-
-// Lead gen KPI snapshot — shape matches future GET /api/admin/analytics/kpis
-export const leadGenKpis = {
-  totalUsers: 1248,
-  activatedThisWeek: 84,
-  freeToProConversion: 4.2,
-  avgHealthScore: 68,
-  dormantCount: 143,
-};
