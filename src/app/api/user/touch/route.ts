@@ -12,7 +12,7 @@ export async function POST() {
 
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
 
-  await prisma.user.updateMany({
+  const result = await prisma.user.updateMany({
     where: {
       id: userId,
       OR: [
@@ -23,5 +23,11 @@ export async function POST() {
     data: { lastActiveAt: new Date() },
   })
 
-  return NextResponse.json({ ok: true })
+  if (result.count === 0) {
+    // Either user doesn't exist yet (signup race) or was updated within the last 5 minutes (debounced)
+    return NextResponse.json({ ok: true, updated: false })
+  }
+
+  console.log(`[touch] Updated lastActiveAt for user ${userId}`)
+  return NextResponse.json({ ok: true, updated: true })
 }
