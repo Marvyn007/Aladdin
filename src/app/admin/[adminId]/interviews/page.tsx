@@ -52,8 +52,8 @@ export default function InterviewsPage() {
     const reviewQueueCount = interviews.length;
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="px-4 lg:px-6">
+        <div className="flex flex-col gap-6 py-8 md:gap-8 md:py-10">
+            <div className="px-6 lg:px-8">
                 <AdminPageIntro
                     eyebrow="Interview reviews"
                     title="Interview experiences"
@@ -73,16 +73,17 @@ export default function InterviewsPage() {
                 />
             </div>
 
-            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+            <div className="grid gap-4 px-6 lg:px-8 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 <AdminStatCard label="Experiences in queue" value={String(reviewQueueCount)} detail="All interview reports currently visible to admins." trend="Live" />
                 <AdminStatCard label="Escalated" value={String(interviews.filter((item) => item.reviewState === 'Escalated').length)} detail="Reports that need a stronger moderation response." trend="Priority" />
                 <AdminStatCard label="Needs review" value={String(interviews.filter((item) => item.reviewState === 'Needs Review').length)} detail="Items with reports or ambiguous policy coverage." trend="Active" />
                 <AdminStatCard label="Approved" value={String(interviews.filter((item) => item.reviewState === 'Approved').length)} detail="Reports cleared for community visibility." trend="Stable" />
             </div>
 
-            <div className="px-4 lg:px-6">
-            <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="px-6 lg:px-8">
+            <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                 <AdminPanel
+                    flush
                     title="Review queue"
                     description="All community interview submissions sorted by report volume and escalation state."
                 >

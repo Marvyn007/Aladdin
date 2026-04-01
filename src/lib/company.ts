@@ -452,6 +452,84 @@ function guessDomain(companyName: string | null): string | null {
     return clean + '.com';
 }
 
+/**
+ * Scrapes the company logo directly from a job provider's job listing page.
+ * This is the highest-quality source — the provider embeds the company's
+ * own logo asset in the job posting HTML.
+ *
+ * Supported providers:
+ *  - greenhouse: looks for <a class="logo"><img src="..."> in job board HTML
+ *  - lever:      looks for <img class="main-header-logo"> or <img alt="*Logo">
+ *  - himalayas:  looks for og:image (company-specific on job detail pages)
+ *
+ * Returns null if the URL is not a recognized provider format or scraping fails.
+ */
+export async function scrapeLogoFromProviderPage(
+    sourceUrl: string,
+    source: string,
+): Promise<LogoCandidate | null> {
+    if (!sourceUrl) return null;
+
+    try {
+        const response = await fetchWithTimeout(
+            sourceUrl,
+            { headers: { 'User-Agent': 'Mozilla/5.0' } },
+            5000,
+        );
+        if (!response.ok) return null;
+        const html = await response.text();
+
+        if (source === 'greenhouse') {
+            // Greenhouse board pages embed the company logo as an <img> whose src points to
+            // recruiting.cdn.greenhouse.io/external_greenhouse_job_boards/logos/...
+            // There is NO class="logo" on the anchor — the img just sits inside a plain <a> / <div>.
+            // Example:
+            //   <img src="https://recruiting.cdn.greenhouse.io/external_greenhouse_job_boards/logos/000/180/original/Everpure_Hex_Pure_Orange.png?..." alt="Everpure Logo" ...>
+            const ghCdnMatch = html.match(/src\s*=\s*["'](https?:\/\/recruiting\.cdn\.greenhouse\.io\/external_greenhouse_job_boards\/logos\/[^"'?]+(?:\?[^"']*)?)/i);
+            if (ghCdnMatch?.[1]) {
+                return { domain: null, logoUrl: ghCdnMatch[1], source: 'og-image', confidence: 'metadata' };
+            }
+            // Secondary: any img whose alt ends with "Logo" (provider puts alt="<Company> Logo")
+            const altLogoMatch = html.match(/<img\b[^>]+\bsrc\s*=\s*["']([^"']+)["'][^>]+\balt\s*=\s*["'][^"']+\s+Logo["']/i)
+                ?? html.match(/<img\b[^>]+\balt\s*=\s*["'][^"']+\s+Logo["'][^>]+\bsrc\s*=\s*["']([^"']+)["']/i);
+            if (altLogoMatch?.[1] && !altLogoMatch[1].includes('greenhouse.io/images')) {
+                return { domain: null, logoUrl: resolveUrl(sourceUrl, altLogoMatch[1]), source: 'og-image', confidence: 'metadata' };
+            }
+        }
+
+        if (source === 'lever') {
+            // Lever job pages embed the logo as <img class="main-header-logo" src="...">
+            const leverLogoMatch = html.match(/<img\b[^>]+\bclass\s*=\s*["'][^"']*\bmain-header-logo\b[^"']*["'][^>]+\bsrc\s*=\s*["']([^"']+)["']/i)
+                ?? html.match(/<img\b[^>]+\bsrc\s*=\s*["']([^"']+)["'][^>]+\bclass\s*=\s*["'][^"']*\bmain-header-logo\b[^"']*["']/i);
+            if (leverLogoMatch?.[1]) {
+                return { domain: null, logoUrl: resolveUrl(sourceUrl, leverLogoMatch[1]), source: 'og-image', confidence: 'metadata' };
+            }
+        }
+
+        // Generic fallback for all providers: og:image on the job detail page.
+        // Himalayas, The Muse, Arbeitnow etc. all set company-specific og:images on job pages.
+        const ogImage = findMetaContent(html, 'og:image');
+        if (ogImage) {
+            const resolved = resolveUrl(sourceUrl, ogImage);
+            // Filter out og:images that belong to the provider's own branding, not the company.
+            const isProviderOwnImage = (
+                /himalayas\.app\/(logo|og|static)/i.test(resolved) ||
+                /themuse\.com\/(logo|og|static)/i.test(resolved) ||
+                /arbeitnow\.com\/(logo|og|static)/i.test(resolved) ||
+                /greenhouse\.io\/images/i.test(resolved) ||
+                /lever\.co\/(logo|og|static)/i.test(resolved)
+            );
+            if (!isProviderOwnImage) {
+                return { domain: null, logoUrl: resolved, source: 'og-image', confidence: 'metadata' };
+            }
+        }
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 export async function scrapeLogoFromWebsite(domain: string): Promise<LogoCandidate | null> {
     const normalizedDomain = domain.startsWith('http') ? domain : `https://${domain}`;
     try {

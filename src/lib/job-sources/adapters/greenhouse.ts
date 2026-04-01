@@ -117,7 +117,7 @@ export class GreenhouseAdapter implements SourceAdapter {
       sourceUrl,
       rawDescriptionHtml: job.content || null,
       jobDescriptionPlain: job.content ? stripHtmlToPlain(job.content) : null,
-      postedAt: job.first_published ? new Date(job.first_published) : null,
+      postedAt: job.first_published ? new Date(job.first_published) : (job.updated_at ? new Date(job.updated_at) : null),
       contentHash: generateContentHash(job.title, company, location, sourceUrl),
       source: 'greenhouse',
       externalId: String(job.id),

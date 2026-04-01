@@ -2,16 +2,18 @@
 
 import { useState } from 'react';
 import { Filter, Search, Sparkles } from 'lucide-react';
+import { useParams } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 
-import { adminUsers } from '@/components/admin/admin-data';
+import { adminUsers, AdminUserRecord } from '@/components/admin/admin-data';
 import {
     AdminIdentity,
     AdminPageIntro,
     AdminPanel,
     AdminStatCard,
 } from '@/components/admin/admin-ui';
+import { UserDrawer } from '@/components/admin/UserDrawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,10 +34,16 @@ import {
 } from '@/components/ui/table';
 
 export default function UsersPage() {
+    const params = useParams<{ adminId: string }>();
+    const adminId = params.adminId;
+
     const [query, setQuery] = useState('');
     const [segment, setSegment] = useState('all');
+    const [users, setUsers] = useState(adminUsers);
+    const [selectedUser, setSelectedUser] = useState<AdminUserRecord | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
 
-    const filteredUsers = adminUsers.filter((user) => {
+    const filteredUsers = users.filter((user) => {
         const matchesQuery =
             !query ||
             user.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -46,13 +54,24 @@ export default function UsersPage() {
         return matchesQuery && matchesSegment;
     });
 
-    const completedOnboarding = adminUsers.filter((user) => user.onboarding === 'Complete').length;
-    const atRiskUsers = adminUsers.filter((user) => user.segment === 'At Risk' || user.segment === 'Dormant').length;
-    const fullConsent = adminUsers.filter((user) => user.consent === 'Full').length;
+    const completedOnboarding = users.filter((user) => user.onboarding === 'Complete').length;
+    const atRiskUsers = users.filter((user) => user.segment === 'At Risk' || user.segment === 'Dormant').length;
+    const fullConsent = users.filter((user) => user.consent === 'Full').length;
+
+    function handleRowClick(user: AdminUserRecord) {
+        setSelectedUser(user);
+        setDrawerOpen(true);
+    }
+
+    function handleSave(id: string, updates: Partial<AdminUserRecord>) {
+        setUsers((current) =>
+            current.map((u) => (u.id === id ? { ...u, ...updates } : u))
+        );
+    }
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="px-4 lg:px-6">
+        <div className="flex flex-col gap-6 py-8 md:gap-8 md:py-10">
+            <div className="px-6 lg:px-8">
                 <AdminPageIntro
                     eyebrow="User management"
                     title="Users"
@@ -72,18 +91,19 @@ export default function UsersPage() {
                 />
             </div>
 
-            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+            <div className="grid gap-4 px-6 lg:px-8 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 <AdminStatCard label="Users in view" value={String(filteredUsers.length)} detail="Filtered by the current search and segment controls." trend="Live" />
-                <AdminStatCard label="Onboarding complete" value={String(completedOnboarding)} detail="Users with resume + preference setup finished." trend={`${Math.round((completedOnboarding / adminUsers.length) * 100)}%`} />
+                <AdminStatCard label="Onboarding complete" value={String(completedOnboarding)} detail="Users with resume + preference setup finished." trend={`${Math.round((completedOnboarding / users.length) * 100)}%`} />
                 <AdminStatCard label="At risk" value={String(atRiskUsers)} detail="Dormant or declining engagement cohorts that need attention." trend="Recovery" />
                 <AdminStatCard label="Full consent" value={String(fullConsent)} detail="Accounts sharing the deepest behavioral and personalization signals." trend="Healthy" />
             </div>
 
-            <div className="px-4 lg:px-6">
-            <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="px-6 lg:px-8">
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                 <AdminPanel
+                    flush
                     title="User roster"
-                    description="Filter by segment or search by name, email, or job focus to find and act on specific accounts."
+                    description="Click any row to open a user's profile drawer and make edits."
                     action={
                         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:justify-end">
                             <div className="relative">
@@ -127,7 +147,11 @@ export default function UsersPage() {
                             </TableHeader>
                             <TableBody>
                                 {filteredUsers.map((user) => (
-                                    <TableRow key={user.id}>
+                                    <TableRow
+                                        key={user.id}
+                                        className="cursor-pointer"
+                                        onClick={() => handleRowClick(user)}
+                                    >
                                         <TableCell className="min-w-[250px]">
                                             <AdminIdentity
                                                 name={user.name}
@@ -170,29 +194,29 @@ export default function UsersPage() {
                 </AdminPanel>
 
                 <AdminPanel title="Operator signals" description="Patterns and watch items across the current user cohort.">
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                         {[
                             {
                                 label: 'Missing resume',
-                                count: adminUsers.filter((u) => u.onboarding === 'Missing Resume').length,
+                                count: users.filter((u) => u.onboarding === 'Missing Resume').length,
                                 detail: "Users who haven't uploaded a resume yet.",
                                 action: 'Prompt upload',
                             },
                             {
                                 label: 'Needs preferences',
-                                count: adminUsers.filter((u) => u.onboarding === 'Needs Preferences').length,
+                                count: users.filter((u) => u.onboarding === 'Needs Preferences').length,
                                 detail: 'Users missing job preference setup.',
                                 action: 'Send nudge',
                             },
                             {
                                 label: 'At risk / Dormant',
-                                count: adminUsers.filter((u) => u.segment === 'At Risk' || u.segment === 'Dormant').length,
+                                count: users.filter((u) => u.segment === 'At Risk' || u.segment === 'Dormant').length,
                                 detail: 'Users with declining or no engagement.',
                                 action: 'Review cohort',
                             },
                             {
                                 label: 'Limited consent',
-                                count: adminUsers.filter((u) => u.consent === 'Limited').length,
+                                count: users.filter((u) => u.consent === 'Limited').length,
                                 detail: 'Users with restricted personalization signals.',
                                 action: 'Soft prompt',
                             },
@@ -212,6 +236,14 @@ export default function UsersPage() {
                 </AdminPanel>
             </div>
             </div>
+
+            <UserDrawer
+                user={selectedUser}
+                adminId={adminId}
+                open={drawerOpen}
+                onOpenChange={setDrawerOpen}
+                onSave={handleSave}
+            />
         </div>
     );
 }

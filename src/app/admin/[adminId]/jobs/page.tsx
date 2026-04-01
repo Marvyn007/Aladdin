@@ -41,8 +41,8 @@ export default function JobsPage() {
     const filteredJobs = jobs.filter((job) => status === 'all' || job.status === status);
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="px-4 lg:px-6">
+        <div className="flex flex-col gap-6 py-8 md:gap-8 md:py-10">
+            <div className="px-6 lg:px-8">
                 <AdminPageIntro
                     eyebrow="Job management"
                     title="Jobs"
@@ -62,15 +62,16 @@ export default function JobsPage() {
                 />
             </div>
 
-            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+            <div className="grid gap-4 px-6 lg:px-8 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 <AdminStatCard label="Jobs in view" value={String(filteredJobs.length)} detail="Listings currently surfaced in the operator table." trend="Filtered" />
                 <AdminStatCard label="Healthy listings" value={String(jobs.filter((job) => job.status === 'Healthy').length)} detail="High-confidence listings with strong conversion behavior." trend="Green" />
                 <AdminStatCard label="Review queue" value={String(jobs.filter((job) => job.status === 'Review').length)} detail="Listings with signal drift or questionable relevance." trend="Needs triage" />
                 <AdminStatCard label="Stale jobs" value={String(jobs.filter((job) => job.status === 'Stale').length)} detail="Listings whose freshness or engagement has dropped." trend="Clean up" />
             </div>
 
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
             <AdminPanel
+                flush
                 title="Job listings"
                 description="All ingested listings with quality score, conversion data, and triage status."
                 action={

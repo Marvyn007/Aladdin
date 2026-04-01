@@ -1,10 +1,27 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { InterviewExperienceModal } from '@/components/modals/InterviewExperienceModal';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
+
+const LOGO_DEV_TOKEN = 'pk_By0CIs75Tsy8K9CqV4sT7w';
+
+function getLogoUrl(company: { name: string; logoUrl?: string | null; domain?: string | null }): string {
+    if (company.logoUrl) return company.logoUrl;
+    const domain = company.domain || `${company.name.toLowerCase().replace(/-/g, '')}.com`;
+    return `https://img.logo.dev/${domain}?token=${LOGO_DEV_TOKEN}&size=128`;
+}
+
+const formatCompanyName = (name: string) => {
+    if (!name) return "";
+    return name
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+};
 
 interface CompanyStats {
     name: string;
@@ -71,6 +88,7 @@ export function InterviewExperiencesView() {
 
     return (
         <div className="content-area" style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--background)', overflowY: 'auto' }}>
+
             {/* Header Area */}
             <div style={{ padding: '24px 8vw 32px 8vw', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
                 <div>
@@ -90,7 +108,7 @@ export function InterviewExperiencesView() {
                         gap: '8px',
                         padding: '10px 20px',
                         background: 'var(--accent)',
-                        color: 'white',
+                        color: 'var(--accent-foreground)',
                         border: 'none',
                         borderRadius: '10px',
                         fontSize: '14px',
@@ -182,208 +200,245 @@ export function InterviewExperiencesView() {
             </div>
 
             {/* Content Area - Grid */}
-            <div style={{ flex: 1, padding: '32px 8vw' }}>
+            <div style={{ flex: 1, padding: '16px 8vw 64px 8vw', display: 'flex', flexDirection: 'column' }}>
                 {isLoading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}>
-                        <div className="w-8 h-8 border-4 border-slate-200 border-t-sky-500 rounded-full animate-spin" />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '100px', gap: '16px' }}>
+                        <div className="w-10 h-10 border-4 border-border border-t-primary rounded-full animate-spin" />
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', fontWeight: 500 }}>Loading Companies...</p>
                     </div>
                 ) : companies.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '80px' }}>
+                    <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '80px', flex: 1 }}>
                         <p style={{ fontSize: '16px', marginBottom: '8px' }}>No companies found.</p>
                         <p style={{ fontSize: '14px' }}>Try searching for something else or add a new experience.</p>
                     </div>
                 ) : (
                     <>
-                        <div
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(4, 1fr)',
-                                gap: '24px',
-                                maxWidth: '1400px',
-                                margin: '0 auto'
-                            }}
-                        >
-                            {companies.map((company) => {
-                                return (
-                                    <div
-                                        key={company.name}
-                                        onClick={() => router.push(`/interview-experiences/${encodeURIComponent(company.name)}`)}
-                                        style={{
-                                            background: 'var(--background-secondary)',
-                                            border: '1px solid var(--border)',
-                                            borderRadius: '16px',
-                                            padding: '24px 16px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '12px',
-                                            position: 'relative',
-                                            overflow: 'hidden'
-                                        }}
-                                        className="company-card group"
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.borderColor = 'var(--accent)';
-                                            e.currentTarget.style.boxShadow = '0 8px 24px -12px rgba(var(--accent-rgb), 0.3)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.borderColor = 'var(--border)';
-                                            e.currentTarget.style.boxShadow = 'none';
-                                        }}
-                                    >
-                                        {/* Logo Container - Large white square as in design */}
-                                        <div style={{
-                                            width: '80px',
-                                            height: '80px',
-                                            background: '#FFFFFF',
-                                            borderRadius: '8px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            padding: '12px',
-                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-                                            flexShrink: 0
-                                        }}>
-                                            <CompanyLogo 
-                                                companyName={company.name} 
-                                                logoUrl={company.logoUrl} 
-                                                size={56} 
-                                            />
-                                        </div>
-
-                                        {/* Company Name */}
-                                        <h3 style={{ 
-                                            fontSize: '14px', 
-                                            fontWeight: 700, 
-                                            color: 'var(--text-primary)', 
-                                            textAlign: 'center',
-                                            margin: 0,
-                                            lineHeight: 1.2
-                                        }}>
-                                            {company.name}
-                                        </h3>
-
-                                        {/* Stats Row - Horizontal */}
-                                        <div style={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
-                                            justifyContent: 'center', 
-                                            gap: '8px', 
-                                            width: '100%', 
-                                            flexWrap: 'wrap',
-                                            marginTop: '4px'
-                                        }}>
-                                            {/* Salary Pill */}
-                                            <div style={{
-                                                padding: '6px 14px',
-                                                border: '1.5px solid var(--border)',
-                                                borderRadius: '20px',
-                                                fontSize: '12px',
-                                                fontWeight: 700,
-                                                color: 'var(--text-primary)',
-                                                whiteSpace: 'nowrap',
-                                                background: 'var(--surface)',
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                                letterSpacing: '0.3px'
-                                            }}>
-                                                {company.avgSalaryHourly ? `$ ${Math.round(company.avgSalaryHourly)} / hr` : 'N/A USD'}
-                                            </div>
-
-                                            {/* Reviews Pill */}
-                                            <div style={{
-                                                padding: '6px 14px',
-                                                border: '1.5px solid var(--border)',
-                                                borderRadius: '20px',
-                                                fontSize: '11px',
-                                                fontWeight: 700,
-                                                color: 'var(--text-secondary)',
-                                                background: 'var(--surface)',
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.5px'
-                                            }}>
-                                                {company.reviewCount} reviews
-                                            </div>
-                                        </div>
+                        <div style={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
+                            gap: '48px 40px',
+                            padding: '24px 0 64px 0',
+                        }}>
+                            {companies.map((company) => (
+                                <Link
+                                    key={company.name}
+                                    href={`/interview-experiences/${encodeURIComponent(company.name)}`}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        textDecoration: 'none',
+                                        cursor: 'pointer',
+                                        position: 'relative',
+                                        transition: 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        const title = e.currentTarget.querySelector('.company-name') as HTMLElement;
+                                        if (title) title.style.color = 'var(--text-primary)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        const title = e.currentTarget.querySelector('.company-name') as HTMLElement;
+                                        if (title) title.style.color = 'var(--text-secondary)';
+                                    }}
+                                >
+                                    {/* Avg Salary Box (Top Left) */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-6px',
+                                        left: '20px',
+                                        background: 'var(--primary)',
+                                        color: 'var(--primary-foreground)',
+                                        fontSize: '11px',
+                                        fontWeight: 800,
+                                        padding: '4px 8px',
+                                        borderRadius: '12px',
+                                        boxShadow: '0 4px 12px rgba(var(--accent-rgb), 0.3)',
+                                        zIndex: 10,
+                                        border: '2px solid var(--background)',
+                                        pointerEvents: 'none',
+                                        letterSpacing: '0.02em'
+                                    }}>
+                                        {company.avgSalaryHourly ? `$${Math.round(company.avgSalaryHourly)}/hr` : '$N/A'}
                                     </div>
-                                );
-                            })}
+
+                                    {/* Review Count Box (Top Right) */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-6px',
+                                        right: '20px',
+                                        background: 'var(--success)',
+                                        color: 'var(--primary-foreground)',
+                                        fontSize: '11px',
+                                        fontWeight: 800,
+                                        padding: '4px 8px',
+                                        borderRadius: '12px',
+                                        boxShadow: '0 4px 12px var(--success-muted)',
+                                        zIndex: 10,
+                                        border: '2px solid var(--background)',
+                                        pointerEvents: 'none',
+                                        letterSpacing: '0.02em'
+                                    }}>
+                                        {company.reviewCount}
+                                    </div>
+
+                                    <div style={{ 
+                                        width: '140px', 
+                                        height: '140px', 
+                                        background: 'var(--popover)',
+                                        borderRadius: '36px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        overflow: 'hidden',
+                                        boxShadow: '0 10px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.03)',
+                                        marginBottom: '16px',
+                                        position: 'relative',
+                                        zIndex: 5,
+                                        border: '1px solid rgba(0,0,0,0.03)'
+                                    }}>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img 
+                                            src={getLogoUrl(company)} 
+                                            alt={company.name}
+                                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                e.currentTarget.parentElement!.innerHTML = `<span style="font-weight: 700; color: var(--accent); font-size: 42px; letter-spacing: -0.05em;">${company.name[0].toUpperCase()}</span>`;
+                                            }}
+                                        />
+                                    </div>
+                                    
+                                    <h3 className="company-name" style={{ 
+                                        fontSize: '15px', 
+                                        fontWeight: 600, 
+                                        color: 'var(--text-secondary)', 
+                                        textAlign: 'center',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        letterSpacing: '-0.01em',
+                                        width: '100%',
+                                        transition: 'color 0.2s ease',
+                                        marginTop: '4px'
+                                    }}>
+                                        {formatCompanyName(company.name)}
+                                    </h3>
+                                </Link>
+                            ))}
                         </div>
 
-                        {/* Pagination */}
+                        {/* Advanced Pagination Controls */}
                         {pagination.totalPages > 1 && (
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                gap: '8px',
-                                marginTop: '48px',
-                                paddingBottom: '60px'
+                            <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'center', 
+                                alignItems: 'center', 
+                                gap: '10px', 
+                                marginTop: 'auto', 
+                                padding: '40px 0',
+                                borderTop: '1px solid var(--border)'
                             }}>
-                                <button
+                                <button 
                                     onClick={() => handlePageChange(pagination.page - 1)}
                                     disabled={pagination.page === 1}
                                     style={{
-                                        display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px',
-                                        background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px',
-                                        color: pagination.page === 1 ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                                        cursor: pagination.page === 1 ? 'not-allowed' : 'pointer', fontSize: '14px',
-                                        marginRight: '8px'
+                                        padding: '10px 18px',
+                                        borderRadius: '12px',
+                                        background: pagination.page === 1 ? 'transparent' : 'var(--surface)',
+                                        border: '1px solid var(--border)',
+                                        color: pagination.page === 1 ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                                        cursor: pagination.page === 1 ? 'not-allowed' : 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 600,
+                                        transition: 'all 0.2s',
+                                        opacity: pagination.page === 1 ? 0.5 : 1
                                     }}
                                 >
-                                    <ChevronLeft size={16} /> Prev
+                                    Previous
                                 </button>
 
-                                {(() => {
-                                    const { page, totalPages } = pagination;
-                                    const pages = [];
-                                    if (totalPages <= 5) {
-                                        for (let i = 1; i <= totalPages; i++) pages.push(i);
-                                    } else {
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {(() => {
+                                        const { page, totalPages } = pagination;
+                                        const pages: (number | string)[] = [];
+                                        
+                                        // Always include first page
                                         pages.push(1);
-                                        if (page > 3) pages.push('...');
-                                        const start = Math.max(2, page - 1);
-                                        const end = Math.min(totalPages - 1, page + 1);
-                                        for (let i = start; i <= end; i++) pages.push(i);
-                                        if (page < totalPages - 2) pages.push('...');
-                                        pages.push(totalPages);
-                                    }
+                                        
+                                        // Calculate range around current page (±3)
+                                        const startRange = Math.max(2, page - 3);
+                                        const endRange = Math.min(totalPages - 1, page + 3);
+                                        
+                                        // Add ellipsis before range if needed
+                                        if (startRange > 2) {
+                                            pages.push('...');
+                                        }
+                                        
+                                        // Add range
+                                        for (let i = startRange; i <= endRange; i++) {
+                                            pages.push(i);
+                                        }
+                                        
+                                        // Add ellipsis after range if needed
+                                        if (endRange < totalPages - 1) {
+                                            pages.push('...');
+                                        }
+                                        
+                                        // Always include last page
+                                        if (totalPages > 1) {
+                                            pages.push(totalPages);
+                                        }
+                                        
+                                        return pages.map((p, idx) => (
+                                            typeof p === 'number' ? (
+                                                <button
+                                                    key={`page-${p}-${idx}`}
+                                                    onClick={() => handlePageChange(p)}
+                                                    style={{
+                                                        minWidth: '42px',
+                                                        height: '42px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        background: page === p ? 'var(--accent)' : 'var(--surface)',
+                                                        color: page === p ? 'var(--primary-foreground)' : 'var(--text-primary)',
+                                                        border: page === p ? 'none' : '1px solid var(--border)',
+                                                        borderRadius: '12px',
+                                                        fontWeight: page === p ? 'bold' : '600',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        fontSize: '14px',
+                                                        boxShadow: page === p ? '0 4px 12px rgba(var(--accent-rgb), 0.3)' : 'none'
+                                                    }}
+                                                >
+                                                    {p}
+                                                </button>
+                                            ) : (
+                                                <span key={`ellipsis-${idx}`} style={{ color: 'var(--text-tertiary)', padding: '0 4px', fontSize: '18px', fontWeight: 'bold' }}>
+                                                    {p}
+                                                </span>
+                                            )
+                                        ));
+                                    })()}
+                                </div>
 
-                                    return pages.map((p, idx) => (
-                                        typeof p === 'number' ? (
-                                            <button
-                                                key={`page-${p}-${idx}`}
-                                                onClick={() => handlePageChange(p)}
-                                                style={{
-                                                    minWidth: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    background: page === p ? 'var(--accent)' : 'var(--surface)',
-                                                    color: page === p ? 'white' : 'var(--text-primary)',
-                                                    border: page === p ? 'none' : '1px solid var(--border)',
-                                                    borderRadius: '8px', fontWeight: page === p ? 'bold' : 'normal',
-                                                    cursor: 'pointer', transition: 'all 0.2s', fontSize: '14px'
-                                                }}
-                                            >
-                                                {p}
-                                            </button>
-                                        ) : (
-                                            <span key={`ellipsis-${idx}`} style={{ color: 'var(--text-tertiary)', padding: '0 8px' }}>{p}</span>
-                                        )
-                                    ));
-                                })()}
-
-                                <button
+                                <button 
                                     onClick={() => handlePageChange(pagination.page + 1)}
                                     disabled={pagination.page === pagination.totalPages}
                                     style={{
-                                        display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px',
-                                        background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px',
-                                        color: pagination.page === pagination.totalPages ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-                                        cursor: pagination.page === pagination.totalPages ? 'not-allowed' : 'pointer', fontSize: '14px',
-                                        marginLeft: '8px'
+                                        padding: '10px 18px',
+                                        borderRadius: '12px',
+                                        background: pagination.page === pagination.totalPages ? 'transparent' : 'var(--surface)',
+                                        border: '1px solid var(--border)',
+                                        color: pagination.page === pagination.totalPages ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                                        cursor: pagination.page === pagination.totalPages ? 'not-allowed' : 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 600,
+                                        transition: 'all 0.2s',
+                                        opacity: pagination.page === pagination.totalPages ? 0.5 : 1
                                     }}
                                 >
-                                    Next <ChevronRight size={16} />
+                                    Next
                                 </button>
                             </div>
                         )}

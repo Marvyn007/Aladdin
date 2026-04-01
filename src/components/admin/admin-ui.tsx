@@ -22,12 +22,12 @@ export function AdminPageIntro({
 }) {
   return (
     <section className="admin-page-intro admin-enter">
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <p className="admin-kicker">{eyebrow}</p>
-        <h1 className="text-[1.75rem] font-semibold tracking-[-0.035em] text-foreground sm:text-[2rem]">
+        <h1 className="text-[1.625rem] font-semibold tracking-[-0.03em] text-foreground sm:text-[1.875rem]">
           {title}
         </h1>
-        <p className="max-w-3xl text-[0.98rem] leading-8 text-muted-foreground">
+        <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
           {description}
         </p>
       </div>
@@ -35,6 +35,36 @@ export function AdminPageIntro({
         <div className="flex flex-wrap items-center gap-3">{actions}</div>
       ) : null}
     </section>
+  );
+}
+
+export function DashboardCard({
+  title,
+  value,
+  description,
+  badge,
+}: {
+  title: string;
+  value: string;
+  description: string;
+  badge?: string;
+}) {
+  return (
+    <div className="dashboard-card">
+      <div className="dashboard-card-header">
+        <p className="dashboard-card-title">{title}</p>
+        {badge ? (
+          <Badge
+            variant="outline"
+            className="dashboard-card-badge"
+          >
+            {badge}
+          </Badge>
+        ) : null}
+      </div>
+      <p className="dashboard-card-value">{value}</p>
+      <p className="dashboard-card-description">{description}</p>
+    </div>
   );
 }
 
@@ -50,31 +80,12 @@ export function AdminStatCard({
   trend?: string;
 }) {
   return (
-    <Card className="admin-stat-card">
-      <CardHeader className="gap-3 pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1.5">
-            <CardDescription className="text-[0.84rem] font-medium tracking-[-0.01em] text-muted-foreground">
-              {label}
-            </CardDescription>
-            <CardTitle className="text-[2.1rem] font-semibold tracking-[-0.04em] text-foreground">
-              {value}
-            </CardTitle>
-          </div>
-          {trend ? (
-            <Badge
-              variant="outline"
-              className="rounded-md border-border/80 bg-background/80 px-2.5 py-1 text-[0.72rem] font-semibold text-foreground"
-            >
-              {trend}
-            </Badge>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-[0.98rem] leading-7 text-muted-foreground">{detail}</p>
-      </CardContent>
-    </Card>
+    <DashboardCard
+      title={label}
+      value={value}
+      description={detail}
+      badge={trend}
+    />
   );
 }
 
@@ -84,29 +95,31 @@ export function AdminPanel({
   action,
   children,
   className,
+  flush = false,
 }: {
   title: string;
   description: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  flush?: boolean;
 }) {
   return (
     <Card className={cn("admin-panel", className)}>
-      <CardHeader className="gap-3 border-b border-border/70 pb-4">
+      <CardHeader className="gap-2 border-b border-border/70 px-6 pb-4 pt-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <CardTitle className="text-[1.12rem] font-semibold tracking-[-0.02em] text-foreground">
+          <div className="min-w-0 flex-1 space-y-1">
+            <CardTitle className="text-[1.05rem] font-semibold tracking-[-0.02em] text-foreground">
               {title}
             </CardTitle>
-            <CardDescription className="max-w-2xl text-[0.98rem] leading-7 text-muted-foreground">
+            <CardDescription className="max-w-2xl text-sm leading-6 text-muted-foreground">
               {description}
             </CardDescription>
           </div>
           {action ? <div className="w-full xl:w-auto xl:max-w-[48%] xl:shrink-0">{action}</div> : null}
         </div>
       </CardHeader>
-      <CardContent className="pt-5">{children}</CardContent>
+      <CardContent className={flush ? "p-0" : "p-5"}>{children}</CardContent>
     </Card>
   );
 }

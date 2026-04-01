@@ -4,6 +4,7 @@ import type { NormalizedJob } from './types'
 import type { DiscoveryDb } from './discovery'
 import type { DiscoveryCandidate } from './discovery-candidates'
 import { getCompanyLogo } from '../logo-dev'
+import { scrapeLogoFromProviderPage } from '../company'
 
 /**
  * Prisma-backed WorkerDb implementation.
@@ -16,14 +17,6 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
       const { isFresh } = await import('./freshness')
       if (!isFresh(job)) {
         return { isNew: false, stale: true }
-      }
-
-      const { validateJobDescription } = await import('../job-validation')
-      const validation = validateJobDescription(job.jobDescriptionPlain || '')
-      if (!validation.valid) {
-        // Silently drop invalid scraped jobs to avoid polluting logs with exceptions,
-        // while preventing them from entering the database.
-        return { isNew: false, stale: false }
       }
 
       // Primary dedupe: source + externalId
@@ -73,12 +66,33 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         job.expiresAt
       )
 
-      if (job.company) {
+      const isNew = result.length > 0
+
+      // Only resolve logos for brand-new jobs — avoids expensive external HTTP calls on duplicates
+      if (isNew && job.company) {
         try {
           const companyExists = await prisma.company.findUnique({ where: { name: job.company } })
-          if (!companyExists || !companyExists.logoFetched || !companyExists.logoUrl?.includes('logo.dev')) {
-            const { domain, logoUrl } = await getCompanyLogo(job.company)
-            
+          // Skip if we already have a high-quality (non-provider) logo
+          const hasHighQualityLogo = companyExists?.logoFetched && companyExists.logoUrl &&
+            !companyExists.logoUrl.includes('logo.dev') &&
+            !companyExists.logoUrl.includes('logo.clearbit.com') &&
+            !companyExists.logoUrl.includes('googleusercontent.com')
+
+          if (!hasHighQualityLogo) {
+            // 1. Try scraping logo directly from the provider job page (highest quality)
+            let logoUrl: string | null = null
+            let domain: string | null = companyExists?.domain ?? null
+
+            const providerLogo = await scrapeLogoFromProviderPage(job.sourceUrl, job.source)
+            if (providerLogo?.logoUrl) {
+              logoUrl = providerLogo.logoUrl
+            } else {
+              // 2. Fall back to logo.dev
+              const result = await getCompanyLogo(job.company)
+              logoUrl = result.logoUrl
+              domain = result.domain ?? domain
+            }
+
             if (logoUrl) {
               await prisma.company.upsert({
                 where: { name: job.company },
@@ -103,11 +117,11 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
             }
           }
         } catch (e) {
-          console.error(`[worker-db] Failed to fetch Logo.dev for ${job.company}`, e)
+          console.error(`[worker-db] Failed to resolve logo for ${job.company}`, e)
         }
       }
 
-      return { isNew: result.length > 0, stale: false }
+      return { isNew, stale: false }
     },
 
     async updateTrackedCompany(
