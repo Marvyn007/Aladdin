@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-import { Area, AreaChart, CartesianGrid, XAxis, PieChart, Pie, Cell } from 'recharts';
+import { Area, AreaChart, CartesianGrid, XAxis, PieChart, Pie, Cell, LineChart, Line, YAxis } from 'recharts';
 import {
     Activity,
     AlertTriangle,
@@ -897,6 +897,42 @@ export default function AdminDashboardPage() {
                     ) : null}
                 </div>
             </AdminPanel>
+            </div>
+
+            {/* Signups trend */}
+            <div className="px-4 lg:px-6">
+              <AdminPanel
+                title="User signups"
+                description="Weekly new user registrations over the last 9 weeks."
+              >
+                <ChartContainer
+                  className="h-[180px] w-full"
+                  config={{
+                    signups: { label: 'Signups', color: 'var(--color-chart-3)' },
+                  }}
+                >
+                  <LineChart data={weeklySignups} margin={{ left: 2, right: 8, top: 8, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis
+                      dataKey="week"
+                      axisLine={false}
+                      tickLine={false}
+                      tickMargin={12}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis axisLine={false} tickLine={false} tickMargin={8} tick={{ fontSize: 12 }} />
+                    <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+                    <Line
+                      type="monotone"
+                      dataKey="signups"
+                      stroke="var(--color-chart-3)"
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: 'var(--color-chart-3)', strokeWidth: 0 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ChartContainer>
+              </AdminPanel>
             </div>
 
             {/* Bottom panels */}
