@@ -18,7 +18,7 @@ import {
     Zap,
 } from 'lucide-react';
 
-import { adminSignals, leadGenKpis, userPlanDistribution, weeklySignups } from '@/components/admin/admin-data';
+import { adminSignals } from '@/components/admin/admin-data';
 import { AdminMiniList, AdminPageIntro, AdminPanel, DashboardCard } from '@/components/admin/admin-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,15 @@ type TrackedCompany = {
 type RangeKey = '90d' | '30d' | '7d';
 type WorkspaceKey = 'companies' | 'sources' | 'notes';
 
+type DashboardStats = {
+    totalUsers: number;
+    newThisWeek: number;
+    dormantCount: number;
+    avgHealthScore: number | null;
+    weeklySignups: { week: string; count: number }[];
+    dailySignups: { date: string; count: number }[];
+};
+
 const companySeed = {
     slug: '',
     name: '',
@@ -92,39 +101,6 @@ const companySeed = {
     logoUrl: '',
 };
 
-const activitySeries: Record<RangeKey, Array<{ label: string; visitors: number; qualified: number }>> = {
-    '90d': [
-        { label: 'Mar 1', visitors: 180, qualified: 124 },
-        { label: 'Mar 4', visitors: 238, qualified: 153 },
-        { label: 'Mar 7', visitors: 196, qualified: 142 },
-        { label: 'Mar 10', visitors: 254, qualified: 168 },
-        { label: 'Mar 13', visitors: 212, qualified: 149 },
-        { label: 'Mar 16', visitors: 274, qualified: 181 },
-        { label: 'Mar 19', visitors: 221, qualified: 158 },
-        { label: 'Mar 22', visitors: 286, qualified: 188 },
-        { label: 'Mar 25', visitors: 233, qualified: 165 },
-        { label: 'Mar 29', visitors: 271, qualified: 182 },
-    ],
-    '30d': [
-        { label: 'Mar 1', visitors: 208, qualified: 138 },
-        { label: 'Mar 5', visitors: 262, qualified: 166 },
-        { label: 'Mar 9', visitors: 214, qualified: 149 },
-        { label: 'Mar 13', visitors: 287, qualified: 178 },
-        { label: 'Mar 17', visitors: 229, qualified: 161 },
-        { label: 'Mar 21', visitors: 299, qualified: 191 },
-        { label: 'Mar 25', visitors: 241, qualified: 170 },
-        { label: 'Mar 29', visitors: 284, qualified: 186 },
-    ],
-    '7d': [
-        { label: 'Mon', visitors: 224, qualified: 154 },
-        { label: 'Tue', visitors: 208, qualified: 147 },
-        { label: 'Wed', visitors: 292, qualified: 196 },
-        { label: 'Thu', visitors: 221, qualified: 162 },
-        { label: 'Fri', visitors: 236, qualified: 170 },
-        { label: 'Sat', visitors: 219, qualified: 158 },
-        { label: 'Sun', visitors: 229, qualified: 166 },
-    ],
-};
 
 const workspaceTabs: Array<{ key: WorkspaceKey; label: string }> = [
     { key: 'companies', label: 'Tracked companies' },
@@ -143,23 +119,27 @@ export default function AdminDashboardPage() {
     const [workspaceView, setWorkspaceView] = useState<WorkspaceKey>('companies');
     const [form, setForm] = useState(companySeed);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
 
     async function loadAdminData() {
         setIsLoading(true);
         try {
-            const [queueRes, sourceRes, companyRes] = await Promise.all([
+            const [queueRes, sourceRes, companyRes, statsRes] = await Promise.all([
                 fetch('/api/admin/queue-stats', { cache: 'no-store' }),
                 fetch('/api/admin/source-health', { cache: 'no-store' }),
                 fetch('/api/admin/companies', { cache: 'no-store' }),
+                fetch('/api/admin/dashboard-stats', { cache: 'no-store' }),
             ]);
 
             const queueJson = await queueRes.json();
             const sourceJson = await sourceRes.json();
             const companyJson = await companyRes.json();
+            const statsJson = await statsRes.json();
 
             setQueueStats(queueRes.ok ? queueJson : null);
             setSources(sourceRes.ok ? sourceJson.sources ?? [] : []);
             setCompanies(companyRes.ok ? companyJson.companies ?? [] : []);
+            setDashboardStats(statsRes.ok ? statsJson : null);
         } finally {
             setIsLoading(false);
         }
@@ -252,9 +232,18 @@ export default function AdminDashboardPage() {
         }
     }
 
+    const chartData: { label: string; count: number }[] = (() => {
+        if (!dashboardStats) return [];
+        const days = selectedRange === '90d' ? 90 : selectedRange === '30d' ? 30 : 7;
+        return dashboardStats.dailySignups
+            .slice(-days)
+            .map((d) => ({ label: d.date.slice(5), count: d.count }));
+    })();
+
+    const planData = [{ plan: 'Free', count: dashboardStats?.totalUsers ?? 0 }];
+
     const activeCompanies = companies.filter((company) => company.isActive).length;
     const healthySources = sources.filter((source) => source.errorRate === 0).length;
-    const chartData = activitySeries[selectedRange];
 
     const statCards = [
         {
@@ -301,10 +290,10 @@ export default function AdminDashboardPage() {
     const sourceSnapshot = sources.slice(0, 4);
 
     return (
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+        <div className="flex flex-col gap-6 py-8 md:gap-8 md:py-10">
 
             {/* Page intro */}
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
                 <AdminPageIntro
                     eyebrow="Admin dashboard"
                     title="Operations dashboard"
@@ -417,13 +406,13 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Lead gen KPI strip */}
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
               <div className="grid grid-cols-2 gap-3 @xl/main:grid-cols-3 @5xl/main:grid-cols-5">
                 {[
                   {
                     icon: Users,
                     label: 'Total users',
-                    value: leadGenKpis.totalUsers.toLocaleString(),
+                    value: dashboardStats ? dashboardStats.totalUsers.toLocaleString() : '—',
                     sub: 'All-time signups',
                     color: 'text-blue-600',
                     bg: 'bg-blue-50',
@@ -431,31 +420,31 @@ export default function AdminDashboardPage() {
                   {
                     icon: TrendingUp,
                     label: 'Activated this week',
-                    value: leadGenKpis.activatedThisWeek.toLocaleString(),
-                    sub: 'New fully-onboarded users',
+                    value: dashboardStats ? dashboardStats.newThisWeek.toLocaleString() : '—',
+                    sub: 'New users in last 7 days',
                     color: 'text-emerald-600',
                     bg: 'bg-emerald-50',
                   },
                   {
                     icon: Zap,
                     label: 'Free → Pro conversion',
-                    value: `${leadGenKpis.freeToProConversion}%`,
-                    sub: 'Upgrade rate, last 30 days',
+                    value: '—',
+                    sub: 'Billing not yet live',
                     color: 'text-violet-600',
                     bg: 'bg-violet-50',
                   },
                   {
                     icon: Activity,
                     label: 'Avg health score',
-                    value: String(leadGenKpis.avgHealthScore),
-                    sub: 'Across all active accounts',
+                    value: '—',
+                    sub: 'Coming soon',
                     color: 'text-amber-600',
                     bg: 'bg-amber-50',
                   },
                   {
                     icon: AlertTriangle,
                     label: 'Dormant users',
-                    value: leadGenKpis.dormantCount.toLocaleString(),
+                    value: dashboardStats ? dashboardStats.dormantCount.toLocaleString() : '—',
                     sub: 'No activity in 14+ days',
                     color: 'text-rose-600',
                     bg: 'bg-rose-50',
@@ -482,12 +471,12 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* System health */}
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">System health</p>
             </div>
 
             {/* Stat cards — container-query responsive grid */}
-            <div className="grid gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+            <div className="grid gap-4 px-6 lg:px-8 md:gap-5 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
                 {statCards.map((card) => (
                     <DashboardCard
                         key={card.label}
@@ -500,11 +489,12 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Chart + operator controls */}
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px_360px]">
                 <AdminPanel
-                    title="Total visitors"
-                    description="Activity across ingestion and admin-managed user flows for the selected time range."
+                    title="New signups over time"
+                    description="Daily new user registrations for the selected time range."
+                    className="[&_[data-slot='card-content']]:p-5"
                     action={
                         <div className="admin-segmented">
                             {[
@@ -550,44 +540,33 @@ export default function AdminDashboardPage() {
 
                         <div className="admin-chart-wrap">
                             <ChartContainer
-                                className="h-[320px] w-full"
+                                className="h-48 w-full"
                                 config={{
-                                    visitors: { label: 'Visitors', color: 'var(--color-chart-1)' },
-                                    qualified: { label: 'Qualified', color: 'var(--color-chart-2)' },
+                                    count: { label: 'New signups', color: 'var(--color-chart-1)' },
                                 }}
                             >
                                 <AreaChart data={chartData} margin={{ left: 2, right: 8, top: 12, bottom: 0 }}>
                                     <defs>
-                                        <linearGradient id="visitorsFill" x1="0" y1="0" x2="0" y2="1">
+                                        <linearGradient id="signupsFill" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.38} />
                                             <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0.04} />
-                                        </linearGradient>
-                                        <linearGradient id="qualifiedFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="var(--color-chart-2)" stopOpacity={0.28} />
-                                            <stop offset="95%" stopColor="var(--color-chart-2)" stopOpacity={0.03} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid vertical={false} stroke="var(--border)" />
                                     <XAxis
                                         dataKey="label"
-                                        axisLine={false}
+                                        tick={{ fontSize: 11 }}
                                         tickLine={false}
-                                        tickMargin={14}
+                                        axisLine={false}
+                                        interval="preserveStartEnd"
                                     />
-                                    <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+                                    <ChartTooltip content={<ChartTooltipContent />} />
                                     <Area
+                                        dataKey="count"
                                         type="monotone"
-                                        dataKey="visitors"
                                         stroke="var(--color-chart-1)"
-                                        strokeWidth={2.2}
-                                        fill="url(#visitorsFill)"
-                                    />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="qualified"
-                                        stroke="var(--color-chart-2)"
                                         strokeWidth={1.8}
-                                        fill="url(#qualifiedFill)"
+                                        fill="url(#signupsFill)"
                                     />
                                 </AreaChart>
                             </ChartContainer>
@@ -610,7 +589,7 @@ export default function AdminDashboardPage() {
                     >
                       <PieChart>
                         <Pie
-                          data={userPlanDistribution}
+                          data={planData}
                           cx="50%"
                           cy="50%"
                           innerRadius={56}
@@ -619,35 +598,21 @@ export default function AdminDashboardPage() {
                           dataKey="count"
                         >
                           <Cell fill="hsl(217, 91%, 60%)" />
-                          <Cell fill="hsl(262, 83%, 58%)" />
-                          <Cell fill="hsl(142, 71%, 45%)" />
                         </Pie>
                         <ChartTooltip content={<ChartTooltipContent />} />
                       </PieChart>
                     </ChartContainer>
 
                     <div className="w-full space-y-2">
-                      {userPlanDistribution.map((item, i) => {
-                        const total = userPlanDistribution.reduce((sum, d) => sum + d.count, 0);
-                        const colors = ['hsl(217, 91%, 60%)', 'hsl(262, 83%, 58%)', 'hsl(142, 71%, 45%)'];
-                        return (
-                          <div key={item.plan} className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="inline-block h-2.5 w-2.5 rounded-full"
-                                style={{ background: colors[i] }}
-                              />
-                              <span className="text-muted-foreground">{item.plan}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-foreground">{item.count.toLocaleString()}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {Math.round((item.count / total) * 100)}%
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2">
+                                <span className="inline-block size-2.5 rounded-full" style={{ background: 'hsl(217, 91%, 60%)' }} />
+                                Free
+                            </span>
+                            <span className="font-medium tabular-nums">{(dashboardStats?.totalUsers ?? 0).toLocaleString()}</span>
+                            <span className="text-muted-foreground">100%</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">Billing not yet live — all users are on the free tier.</p>
                     </div>
                   </div>
                 </AdminPanel>
@@ -733,12 +698,13 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Workspace panel */}
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
             <AdminPanel
+                flush
                 title="Workspace"
                 description="Switch between tracked companies, source telemetry, and collection guidance."
             >
-                <div className="space-y-4">
+                <div className="space-y-4 p-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div className="admin-tabbar">
                             {workspaceTabs.map((tab) => (
@@ -900,18 +866,19 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Signups trend */}
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
               <AdminPanel
                 title="User signups"
                 description="Weekly new user registrations over the last 9 weeks."
               >
+                <div className="px-2 pb-2 pt-1">
                 <ChartContainer
                   className="h-[180px] w-full"
                   config={{
                     signups: { label: 'Signups', color: 'var(--color-chart-3)' },
                   }}
                 >
-                  <LineChart data={weeklySignups} margin={{ left: 2, right: 8, top: 8, bottom: 0 }}>
+                  <LineChart data={dashboardStats?.weeklySignups ?? []} margin={{ left: 2, right: 8, top: 8, bottom: 0 }}>
                     <CartesianGrid vertical={false} stroke="var(--border)" />
                     <XAxis
                       dataKey="week"
@@ -924,7 +891,7 @@ export default function AdminDashboardPage() {
                     <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
                     <Line
                       type="monotone"
-                      dataKey="signups"
+                      dataKey="count"
                       stroke="var(--color-chart-3)"
                       strokeWidth={2.5}
                       dot={{ r: 3, fill: 'var(--color-chart-3)', strokeWidth: 0 }}
@@ -932,11 +899,12 @@ export default function AdminDashboardPage() {
                     />
                   </LineChart>
                 </ChartContainer>
+                </div>
               </AdminPanel>
             </div>
 
             {/* Bottom panels */}
-            <div className="px-4 lg:px-6">
+            <div className="px-6 lg:px-8">
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
                 <AdminPanel
                     title="Tracked company pulse"
