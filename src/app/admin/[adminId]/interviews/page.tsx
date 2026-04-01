@@ -19,9 +19,36 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+
+type InterviewRecord = typeof adminInterviews[number];
+
+const nextState = (current: InterviewRecord['reviewState']): InterviewRecord['reviewState'] => {
+    if (current === 'Approved') return 'Needs Review';
+    if (current === 'Needs Review') return 'Escalated';
+    return 'Approved';
+};
 
 export default function InterviewsPage() {
     const [interviews, setInterviews] = useState(adminInterviews);
+    const [pendingChange, setPendingChange] = useState<{ id: string; next: InterviewRecord['reviewState'] } | null>(null);
+
+    function confirmChange() {
+        if (!pendingChange) return;
+        setInterviews((current) =>
+            current.map((item) =>
+                item.id === pendingChange.id ? { ...item, reviewState: pendingChange.next } : item
+            )
+        );
+        setPendingChange(null);
+    }
     const reviewQueueCount = interviews.length;
 
     return (
@@ -104,24 +131,10 @@ export default function InterviewsPage() {
                                                 variant="outline"
                                                 className="rounded-full"
                                                 onClick={() =>
-                                                    setInterviews((current) =>
-                                                        current.map((item) =>
-                                                            item.id === interview.id
-                                                                ? {
-                                                                    ...item,
-                                                                    reviewState:
-                                                                        item.reviewState === 'Approved'
-                                                                            ? 'Needs Review'
-                                                                            : item.reviewState === 'Needs Review'
-                                                                                ? 'Escalated'
-                                                                                : 'Approved',
-                                                                }
-                                                                : item
-                                                        )
-                                                    )
+                                                    setPendingChange({ id: interview.id, next: nextState(interview.reviewState) })
                                                 }
                                             >
-                                                Cycle state
+                                                {nextState(interview.reviewState)}
                                             </Button>
                                         </TableCell>
                                     </TableRow>
@@ -157,6 +170,22 @@ export default function InterviewsPage() {
                 </AdminPanel>
             </div>
             </div>
+        <Dialog open={!!pendingChange} onOpenChange={(open) => { if (!open) setPendingChange(null); }}>
+            <DialogContent className="max-w-sm rounded-[1.25rem]">
+                <DialogHeader>
+                    <DialogTitle>Confirm state change</DialogTitle>
+                    <DialogDescription>
+                        Move this submission to{' '}
+                        <span className="font-semibold text-foreground">{pendingChange?.next}</span>?
+                        This action is reversible.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setPendingChange(null)}>Cancel</Button>
+                    <Button onClick={confirmChange}>Confirm</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
         </div>
     );
 }
