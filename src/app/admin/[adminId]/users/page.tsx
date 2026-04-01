@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Filter, Search, ShieldCheck, Sparkles } from 'lucide-react';
+import { Filter, Search, Sparkles } from 'lucide-react';
+
+import { cn } from '@/lib/utils';
 
 import { adminUsers } from '@/components/admin/admin-data';
 import {
@@ -116,7 +118,8 @@ export default function UsersPage() {
                                     <TableHead>Plan</TableHead>
                                     <TableHead>Segment</TableHead>
                                     <TableHead>Activation</TableHead>
-                                    <TableHead>Output</TableHead>
+                                    <TableHead>Resumes</TableHead>
+                                    <TableHead>Apps</TableHead>
                                     <TableHead>Consent</TableHead>
                                     <TableHead>Health</TableHead>
                                     <TableHead>Last active</TableHead>
@@ -139,13 +142,25 @@ export default function UsersPage() {
                                         </TableCell>
                                         <TableCell>{user.segment}</TableCell>
                                         <TableCell>{user.onboarding}</TableCell>
-                                        <TableCell>{user.resumes} resumes | {user.applications} apps</TableCell>
+                                        <TableCell className="tabular-nums">{user.resumes}</TableCell>
+                                        <TableCell className="tabular-nums">{user.applications}</TableCell>
                                         <TableCell>
                                             <Badge variant={user.consent === 'Full' ? 'secondary' : 'outline'} className="rounded-full px-2.5 py-0.5">
                                                 {user.consent}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="font-medium text-foreground">{user.healthScore}</TableCell>
+                                        <TableCell>
+                                            <span className={cn(
+                                                "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold",
+                                                user.healthScore >= 80
+                                                    ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                                    : user.healthScore >= 50
+                                                    ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                                                    : "bg-red-50 text-red-700 ring-1 ring-red-200"
+                                            )}>
+                                                {user.healthScore}
+                                            </span>
+                                        </TableCell>
                                         <TableCell>{user.lastActive}</TableCell>
                                     </TableRow>
                                 ))}
@@ -156,27 +171,43 @@ export default function UsersPage() {
 
                 <AdminPanel title="Operator signals" description="Patterns and watch items across the current user cohort.">
                     <div className="space-y-3">
-                        <div className="rounded-[1.25rem] border border-border/70 bg-background/80 p-4">
-                            <div className="flex items-center gap-2">
-                                <ShieldCheck className="size-4 text-primary" />
-                                <p className="font-medium text-foreground">Consent-aware segmentation</p>
+                        {[
+                            {
+                                label: 'Missing resume',
+                                count: adminUsers.filter((u) => u.onboarding === 'Missing Resume').length,
+                                detail: "Users who haven't uploaded a resume yet.",
+                                action: 'Prompt upload',
+                            },
+                            {
+                                label: 'Needs preferences',
+                                count: adminUsers.filter((u) => u.onboarding === 'Needs Preferences').length,
+                                detail: 'Users missing job preference setup.',
+                                action: 'Send nudge',
+                            },
+                            {
+                                label: 'At risk / Dormant',
+                                count: adminUsers.filter((u) => u.segment === 'At Risk' || u.segment === 'Dormant').length,
+                                detail: 'Users with declining or no engagement.',
+                                action: 'Review cohort',
+                            },
+                            {
+                                label: 'Limited consent',
+                                count: adminUsers.filter((u) => u.consent === 'Limited').length,
+                                detail: 'Users with restricted personalization signals.',
+                                action: 'Soft prompt',
+                            },
+                        ].map((item) => (
+                            <div key={item.label} className="flex items-start justify-between gap-3 rounded-xl border border-border/70 bg-background/80 px-4 py-3">
+                                <div className="space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-semibold text-foreground">{item.label}</span>
+                                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-bold text-primary">{item.count}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{item.detail}</p>
+                                </div>
+                                <span className="text-xs font-medium text-primary whitespace-nowrap">{item.action}</span>
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                Full-consent users can support deeper analytics, while limited-consent users should see softer collection prompts.
-                            </p>
-                        </div>
-                        <div className="rounded-[1.25rem] border border-border/70 bg-background/80 p-4">
-                            <p className="font-medium text-foreground">Activation watchlist</p>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                Focus on &quot;Missing Resume&quot; and &quot;Needs Preferences&quot; states first. Those are the fastest admin interventions with the highest output lift.
-                            </p>
-                        </div>
-                        <div className="rounded-[1.25rem] border border-border/70 bg-background/80 p-4">
-                            <p className="font-medium text-foreground">Power user behavior</p>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                Premium and Pro users are clustered around platform and full-stack searches, which suggests stronger appetite for advanced sourcing controls.
-                            </p>
-                        </div>
+                        ))}
                     </div>
                 </AdminPanel>
             </div>
