@@ -1,0 +1,617 @@
+<section class="module" id="module-5" style="background: var(--color-bg)">
+
+  <!-- ============================================================
+       SCREEN 1 — The 10,000-Line File
+  ============================================================ -->
+  <div class="module-screen" id="m5s1">
+    <div class="module-content">
+
+      <div class="module-eyebrow animate-in">Module 5 · The Hidden Machinery</div>
+      <h1 class="module-title animate-in">The 10,000-Line File</h1>
+      <p class="module-subtitle animate-in">
+        Most apps spread database logic across dozens of files. Aladdin puts it all in one:
+        <code>src/lib/db.ts</code> at over 10,000 lines. It&rsquo;s not messy &mdash; it&rsquo;s deliberate.
+        One place to find any database operation.
+      </p>
+
+      <div class="file-tree animate-in" style="margin: var(--space-8) 0;">
+        <div class="ft-folder ft-folder--open">
+          <span class="ft-name" style="font-size: var(--text-lg); font-weight: 700;">
+            src/lib/db.ts
+            <span style="font-size: var(--text-sm); font-weight: 400; opacity: .6; margin-left: var(--space-3);">10,000+ lines</span>
+          </span>
+          <div class="ft-children">
+
+            <div class="ft-folder">
+              <span class="ft-name">Job operations</span>
+              <div class="ft-children">
+                <div class="ft-file"><span class="ft-name">getJobs</span><span class="ft-desc">fetch all jobs for a user&rsquo;s feed</span></div>
+                <div class="ft-file"><span class="ft-name">upsertJob</span><span class="ft-desc">insert or update a job record</span></div>
+                <div class="ft-file"><span class="ft-name">deleteJob</span><span class="ft-desc">remove a job from the database</span></div>
+                <div class="ft-file"><span class="ft-name">getJobById</span><span class="ft-desc">fetch a single job by its ID</span></div>
+              </div>
+            </div>
+
+            <div class="ft-folder">
+              <span class="ft-name">Resume operations</span>
+              <div class="ft-children">
+                <div class="ft-file"><span class="ft-name">getResumes</span><span class="ft-desc">list all resumes for a user</span></div>
+                <div class="ft-file"><span class="ft-name">insertResume</span><span class="ft-desc">save a new resume version</span></div>
+                <div class="ft-file"><span class="ft-name">getDefaultResume</span><span class="ft-desc">retrieve the user&rsquo;s primary resume</span></div>
+              </div>
+            </div>
+
+            <div class="ft-folder">
+              <span class="ft-name">Application operations</span>
+              <div class="ft-children">
+                <div class="ft-file"><span class="ft-name">getApplications</span><span class="ft-desc">list jobs the user has applied to</span></div>
+                <div class="ft-file"><span class="ft-name">upsertApplication</span><span class="ft-desc">track a new or updated application</span></div>
+                <div class="ft-file"><span class="ft-name">deleteApplication</span><span class="ft-desc">remove an application record</span></div>
+              </div>
+            </div>
+
+            <div class="ft-folder">
+              <span class="ft-name">Cover letter operations</span>
+              <div class="ft-children">
+                <div class="ft-file"><span class="ft-name">insertCoverLetter</span><span class="ft-desc">save an AI-generated cover letter</span></div>
+                <div class="ft-file"><span class="ft-name">getCoverLetter</span><span class="ft-desc">fetch a cover letter by job ID</span></div>
+                <div class="ft-file"><span class="ft-name">updateCoverLetter</span><span class="ft-desc">save edits to an existing letter</span></div>
+              </div>
+            </div>
+
+            <div class="ft-folder">
+              <span class="ft-name">User operations</span>
+              <div class="ft-children">
+                <div class="ft-file"><span class="ft-name">getUserProfile</span><span class="ft-desc">load the user&rsquo;s account data</span></div>
+                <div class="ft-file"><span class="ft-name">updateUserEmbedding</span><span class="ft-desc">store the AI vector for semantic matching</span></div>
+              </div>
+            </div>
+
+            <div class="ft-folder">
+              <span class="ft-name">Onboarding operations</span>
+              <div class="ft-children">
+                <div class="ft-file"><span class="ft-name">saveOnboardingAnswers</span><span class="ft-desc">persist the 5 preference questions</span></div>
+                <div class="ft-file"><span class="ft-name">getOnboardingAnswers</span><span class="ft-desc">load preferences for scoring</span></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-info animate-in">
+        <div class="callout-icon">💡</div>
+        <div class="callout-content">
+          <span class="callout-title">What is a data access layer?</span>
+          <p>
+            A <span class="tooltip" data-tip="A 'data access layer' is a centralized place in the codebase where all database reads and writes live. Nothing outside it touches the database directly — so if you ever switch databases, you change this one layer and nothing else breaks.">data access layer</span>
+            is a centralized place for all database operations. The benefit: if you ever switch databases, you only change one file. The rest of the app is untouched.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 2 — Three Databases, One Interface
+  ============================================================ -->
+  <div class="module-screen" id="m5s2">
+    <div class="module-content">
+
+      <h2 class="section-title animate-in">Run Anywhere — PostgreSQL, Supabase, or SQLite</h2>
+      <p class="animate-in">
+        The same <code>getJobs()</code> function works whether you&rsquo;re running on
+        <span class="tooltip" data-tip="Neon is a serverless PostgreSQL database — it scales automatically and charges only for what you use. Postgres is the most popular open-source relational database in the world.">Neon Postgres</span>
+        in production,
+        <span class="tooltip" data-tip="Supabase is an open-source Firebase alternative that provides a hosted PostgreSQL database, authentication, and real-time subscriptions. Often used for staging environments.">Supabase</span>
+        in staging, or
+        <span class="tooltip" data-tip="SQLite is a database stored as a single file on your computer — no server required. Perfect for local development because it works entirely offline with zero setup.">SQLite</span>
+        on your laptop. The function detects which database is configured and routes to the right implementation.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">function</span> <span class="code-function">getDbType</span>():</span>
+<span class="code-line">    <span class="code-string">'postgres'</span> | <span class="code-string">'supabase'</span> | <span class="code-string">'sqlite'</span> {</span>
+<span class="code-line">  <span class="code-keyword">if</span> (<span class="code-property">process.env</span>.<span class="code-property">DATABASE_URL</span></span>
+<span class="code-line">      ?.<span class="code-function">includes</span>(<span class="code-string">'neon.tech'</span>))</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">'postgres'</span>;</span>
+<span class="code-line">  <span class="code-keyword">if</span> (<span class="code-property">process.env</span></span>
+<span class="code-line">      .<span class="code-property">NEXT_PUBLIC_SUPABASE_URL</span>)</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-string">'supabase'</span>;</span>
+<span class="code-line">  <span class="code-keyword">return</span> <span class="code-string">'sqlite'</span>;</span>
+<span class="code-line">}</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">export</span> <span class="code-keyword">async</span> <span class="code-keyword">function</span> <span class="code-function">getAllPublicJobs</span>(</span>
+<span class="code-line">  userId: <span class="code-property">string</span>,</span>
+<span class="code-line">  options: <span class="code-property">GetJobsOptions</span></span>
+<span class="code-line">) {</span>
+<span class="code-line">  <span class="code-keyword">const</span> dbType = <span class="code-function">getDbType</span>();</span>
+<span class="code-line">  <span class="code-keyword">if</span> (dbType === <span class="code-string">'postgres'</span>)</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-function">getJobsFromPostgres</span>(</span>
+<span class="code-line">      userId, options);</span>
+<span class="code-line">  <span class="code-keyword">if</span> (dbType === <span class="code-string">'supabase'</span>)</span>
+<span class="code-line">    <span class="code-keyword">return</span> <span class="code-function">getJobsFromSupabase</span>(</span>
+<span class="code-line">      userId, options);</span>
+<span class="code-line">  <span class="code-keyword">return</span> <span class="code-function">getJobsFromSQLite</span>(</span>
+<span class="code-line">    userId, options);</span>
+<span class="code-line">}</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>getDbType()</strong> &rarr; Look at <span class="tooltip" data-tip="Environment variables are settings stored outside your code — like a config file the server reads at startup. They let the same code behave differently in different environments (dev vs production) without changing any code.">environment variables</span> to figure out which database is connected &mdash; like checking which power outlet you are plugging into.</p>
+            <p class="tl"><strong>process.env.DATABASE_URL?.includes(&lsquo;neon.tech&rsquo;)</strong> &rarr; Is our database URL pointing at Neon? The <code>?.</code> means &ldquo;if this exists, then check&rdquo; &mdash; safe even if the variable is missing.</p>
+            <p class="tl"><strong>process.env.NEXT_PUBLIC_SUPABASE_URL</strong> &rarr; Is the Supabase URL configured? If yes, we are in Supabase mode.</p>
+            <p class="tl"><strong>return &lsquo;sqlite&rsquo;</strong> &rarr; If neither Postgres nor Supabase is configured, fall back to local SQLite &mdash; works offline with zero setup.</p>
+            <p class="tl"><strong>getAllPublicJobs(userId, options)</strong> &rarr; The public-facing function &mdash; callers never know which database runs underneath.</p>
+            <p class="tl"><strong>The if/else chain</strong> &rarr; Runtime routing: each call goes to the right backend transparently, like a switchboard operator connecting you to the right office.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-accent animate-in">
+        <div class="callout-icon">🔀</div>
+        <div class="callout-content">
+          <span class="callout-title">Environment-based configuration</span>
+          <p>
+            This pattern lets the same codebase run in development (<span class="tooltip" data-tip="SQLite stores the entire database in a single file on your hard drive. No server, no setup — just open the file and go. Used by millions of apps for local development and small projects.">SQLite</span>), staging (<span class="tooltip" data-tip="Supabase is a hosted backend platform built on PostgreSQL. Teams use it for staging because it's easy to set up and mirrors production closely.">Supabase</span>), and production (<span class="tooltip" data-tip="PostgreSQL (often shortened to 'Postgres') is a powerful, open-source relational database. It's one of the most popular databases for production web apps because of its reliability and feature set.">Postgres</span>) without a single code change &mdash; just different environment variables.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 3 — User Preferences: Weighted Scoring
+  ============================================================ -->
+  <div class="module-screen" id="m5s3">
+    <div class="module-content">
+
+      <h2 class="section-title animate-in">How Aladdin Learns What You Want</h2>
+      <p class="animate-in">
+        During onboarding, you answer 5 questions about the kind of jobs you want.
+        Those answers become a scoring system that ranks every job in your feed.
+      </p>
+
+      <div class="badge-list animate-in" style="margin: var(--space-6) 0;">
+        <div class="badge-item">
+          <span class="badge-code">work_areas</span>
+          <span class="badge-desc"><strong>(30 pts)</strong> &rarr; Does the job title match your preferred role family (Frontend, Backend, Full Stack)?</span>
+        </div>
+        <div class="badge-item">
+          <span class="badge-code">regions</span>
+          <span class="badge-desc"><strong>(25 pts)</strong> &rarr; Does the job location match your preferred regions?</span>
+        </div>
+        <div class="badge-item">
+          <span class="badge-code">role_types</span>
+          <span class="badge-desc"><strong>(20 pts)</strong> &rarr; Does the employment type match (full-time, internship, contract)?</span>
+        </div>
+        <div class="badge-item">
+          <span class="badge-code">work_style</span>
+          <span class="badge-desc"><strong>(15 pts)</strong> &rarr; Does the job match your preferred work style (remote, onsite, hybrid)?</span>
+        </div>
+        <div class="badge-item">
+          <span class="badge-code">career_levels</span>
+          <span class="badge-desc"><strong>(10 pts)</strong> &rarr; Does the seniority level match your career stage?</span>
+        </div>
+      </div>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">export</span> <span class="code-keyword">function</span> <span class="code-function">computePreferenceScore</span>(</span>
+<span class="code-line">  job: <span class="code-property">Job</span>,</span>
+<span class="code-line">  answersByKey: <span class="code-property">Record</span>&lt;<span class="code-string">string</span>,</span>
+<span class="code-line">    <span class="code-property">OnboardingAnswerRecord</span>&gt;</span>
+<span class="code-line">): <span class="code-property">number</span> {</span>
+<span class="code-line">  <span class="code-keyword">let</span> score = <span class="code-number">0</span>;</span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">const</span> workAreasAnswer =</span>
+<span class="code-line">    answersByKey[<span class="code-string">'work_areas'</span>];</span>
+<span class="code-line">  <span class="code-keyword">if</span> (workAreasAnswer) {</span>
+<span class="code-line">    <span class="code-keyword">const</span> selected =</span>
+<span class="code-line">      <span class="code-function">toStringArray</span>(workAreasAnswer.value);</span>
+<span class="code-line">    <span class="code-keyword">const</span> titleLower =</span>
+<span class="code-line">      (job.title ?? <span class="code-string">''</span>).<span class="code-function">toLowerCase</span>();</span>
+<span class="code-line">    <span class="code-keyword">const</span> matched = selected.<span class="code-function">some</span>(</span>
+<span class="code-line">      (value) => {</span>
+<span class="code-line">        <span class="code-keyword">const</span> keyword = value</span>
+<span class="code-line">          .<span class="code-function">replace</span>(<span class="code-string">/_/g</span>, <span class="code-string">' '</span>)</span>
+<span class="code-line">          .<span class="code-function">replace</span>(<span class="code-string">/\s+engineer$/</span>, <span class="code-string">''</span>)</span>
+<span class="code-line">          .<span class="code-function">trim</span>();</span>
+<span class="code-line">        <span class="code-keyword">return</span> keyword.length &gt; <span class="code-number">0</span></span>
+<span class="code-line">          &amp;&amp; titleLower.<span class="code-function">includes</span>(keyword);</span>
+<span class="code-line">      });</span>
+<span class="code-line">    <span class="code-keyword">if</span> (matched) score += <span class="code-number">30</span>;</span>
+<span class="code-line">  }</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>computePreferenceScore(job, answersByKey)</strong> &rarr; Given a job and your saved preferences, calculate how well the job matches what you told us you wanted.</p>
+            <p class="tl"><strong>let score = 0</strong> &rarr; Start at zero &mdash; each matching preference adds points toward the total.</p>
+            <p class="tl"><strong>answersByKey[&lsquo;work_areas&rsquo;]</strong> &rarr; Look up the work areas preference you chose (Frontend, Backend, etc.) by its key name.</p>
+            <p class="tl"><strong>toStringArray(...)</strong> &rarr; Convert the stored preference value into a plain list of strings we can loop over.</p>
+            <p class="tl"><strong>selected.some((value) =&gt; ...)</strong> &rarr; Does ANY of your preferred work areas match this job title? We only need one match.</p>
+            <p class="tl"><strong>value.replace(/_/g, &lsquo; &rsquo;)</strong> &rarr; Convert stored format (<code>full_stack</code>) to readable format (<code>full stack</code>) for title matching.</p>
+            <p class="tl"><strong>.replace(/\s+engineer$/, &lsquo;&rsquo;)</strong> &rarr; Remove &ldquo;engineer&rdquo; from the end so &ldquo;frontend engineer&rdquo; matches a &ldquo;Frontend Developer&rdquo; title too.</p>
+            <p class="tl"><strong>if (matched) score += 30</strong> &rarr; Work areas match! Add 30 points &mdash; the highest-weight preference in the whole scoring system.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 4 — The Postgres Queue: Deep Dive
+  ============================================================ -->
+  <div class="module-screen" id="m5s4">
+    <div class="module-content">
+
+      <h2 class="section-title animate-in">A Job Queue Without Redis</h2>
+      <p class="animate-in">
+        Most apps use <span class="tooltip" data-tip="Redis is an in-memory data store often used as a message queue for background jobs. It's fast but requires a separate server to run alongside your app.">Redis</span>
+        as a message queue for background jobs. Aladdin uses the database itself &mdash; each task is just a row in a table. The trick: a special SQL clause atomically claims tasks so no two workers grab the same one.
+      </p>
+
+      <div class="translation-block animate-in">
+        <div class="translation-code">
+          <span class="translation-label">CODE</span>
+          <pre><code>
+<span class="code-line"><span class="code-keyword">async</span> <span class="code-function">enqueue</span>(</span>
+<span class="code-line">    input: <span class="code-property">EnqueueInput</span>): <span class="code-property">Promise</span>&lt;<span class="code-keyword">void</span>&gt; {</span>
+<span class="code-line">  <span class="code-keyword">await</span> <span class="code-keyword">this</span>.<span class="code-function">withRetry</span>(() =&gt;</span>
+<span class="code-line">    <span class="code-keyword">this</span>.prisma.jobQueue.<span class="code-function">create</span>({</span>
+<span class="code-line">      <span class="code-property">data</span>: {</span>
+<span class="code-line">        <span class="code-property">type</span>: input.type,</span>
+<span class="code-line">        <span class="code-property">source</span>: input.source ?? <span class="code-keyword">null</span>,</span>
+<span class="code-line">        <span class="code-property">payload</span>: input.payload</span>
+<span class="code-line">          <span class="code-keyword">as</span> <span class="code-property">Prisma.InputJsonValue</span>,</span>
+<span class="code-line">        <span class="code-property">status</span>: <span class="code-string">'pending'</span>,</span>
+<span class="code-line">        <span class="code-property">priority</span>: input.priority ?? <span class="code-number">2</span>,</span>
+<span class="code-line">        <span class="code-property">runAt</span>: input.runAt ?? <span class="code-keyword">new</span> <span class="code-function">Date</span>(),</span>
+<span class="code-line">        <span class="code-property">maxAttempts</span>:</span>
+<span class="code-line">          input.maxAttempts</span>
+<span class="code-line">          ?? DEFAULT_MAX_ATTEMPTS,</span>
+<span class="code-line">        <span class="code-property">attempts</span>: <span class="code-number">0</span>,</span>
+<span class="code-line">      },</span>
+<span class="code-line">    })</span>
+<span class="code-line">  )</span>
+<span class="code-line">}</span>
+          </code></pre>
+        </div>
+        <div class="translation-english">
+          <span class="translation-label">PLAIN ENGLISH</span>
+          <div class="translation-lines">
+            <p class="tl"><strong>enqueue(input)</strong> &rarr; Add a new task to the <span class="tooltip" data-tip="A queue is a line of tasks waiting to be processed, like a ticket dispenser at the DMV. Tasks are added to the back and picked up from the front.">queue</span> &mdash; like dropping a ticket into a dispenser.</p>
+            <p class="tl"><strong>this.withRetry(...)</strong> &rarr; If the database connection drops, retry once before giving up.</p>
+            <p class="tl"><strong>this.prisma.jobQueue.create({...})</strong> &rarr; Insert a new row into the job_queue table &mdash; this IS the task. <span class="tooltip" data-tip="Prisma is an ORM (Object-Relational Mapper) — a library that lets you interact with a database using JavaScript objects instead of raw SQL. You write prisma.table.create(...) instead of INSERT INTO table...">Prisma</span> translates this to SQL for you.</p>
+            <p class="tl"><strong>status: &lsquo;pending&rsquo;</strong> &rarr; New tasks start as &ldquo;waiting to be picked up.&rdquo;</p>
+            <p class="tl"><strong>priority: input.priority ?? 2</strong> &rarr; Default priority is 2. Higher numbers run first.</p>
+            <p class="tl"><strong>runAt: input.runAt ?? new Date()</strong> &rarr; When to run this task. Default: immediately.</p>
+            <p class="tl"><strong>maxAttempts: ... ?? DEFAULT_MAX_ATTEMPTS</strong> &rarr; How many times to retry if it fails before marking as permanently dead.</p>
+            <p class="tl"><strong>attempts: 0</strong> &rarr; Fresh task &mdash; has not been tried yet.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="animate-in" style="margin-top: var(--space-8); margin-bottom: var(--space-4); font-size: var(--text-base); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; opacity: .7;">Task Lifecycle</h3>
+      <div class="step-cards stagger-children animate-in">
+        <div class="step-card animate-in">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <code>pending</code>
+            <p>Waiting in the queue</p>
+          </div>
+        </div>
+        <div class="step-card animate-in">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <code>processing</code>
+            <p>A worker has claimed and is running it</p>
+          </div>
+        </div>
+        <div class="step-card animate-in">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <code>completed</code>
+            <p>Done successfully</p>
+          </div>
+        </div>
+        <div class="step-card animate-in">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <code>failed</code>
+            <p>Error occurred &mdash; will retry up to maxAttempts</p>
+          </div>
+        </div>
+        <div class="step-card animate-in">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <code>dead</code>
+            <p>Exceeded max retries &mdash; needs manual intervention</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout callout-info animate-in">
+        <div class="callout-icon">🔒</div>
+        <div class="callout-content">
+          <span class="callout-title">The secret sauce: FOR UPDATE SKIP LOCKED</span>
+          <p>
+            <span class="tooltip" data-tip="FOR UPDATE SKIP LOCKED is a SQL clause that locks a row for the worker that claimed it, and tells all other workers to skip it. It's the database equivalent of putting your hand on a ticket before anyone else can grab it.">FOR UPDATE SKIP LOCKED</span>
+            is a SQL clause that atomically claims a row for one worker while other workers skip it. This is how two workers can run at the same time without picking up the same task.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 5 — Auth: The Bouncer at Every Door
+  ============================================================ -->
+  <div class="module-screen" id="m5s5">
+    <div class="module-content">
+
+      <h2 class="section-title animate-in">Why Every API Route Starts With auth()</h2>
+      <p class="animate-in">
+        <span class="tooltip" data-tip="Authentication is the process of verifying who you are — proving to the server that you are who you claim to be. Not to be confused with authorization (what you're allowed to do).">Authentication</span>
+        is handled by
+        <span class="tooltip" data-tip="Clerk is a third-party service that manages user accounts, login flows, and session tokens. Instead of building auth from scratch, apps use Clerk to handle the hard parts securely.">Clerk</span>
+        &mdash; a third-party service that manages user accounts and
+        <span class="tooltip" data-tip="A session token is a unique string that proves you're logged in. After you log in, the server gives your browser a token. Your browser sends it with every request so the server knows who you are without you logging in again.">session tokens</span>.
+        The app calls <code>auth()</code> at the start of every API route to verify who&rsquo;s asking.
+      </p>
+
+      <div class="flow-animation animate-in" data-steps='[
+        {"highlight":"flow-actor-1","label":"Browser sends request with session cookie"},
+        {"highlight":"flow-actor-2","label":"Clerk middleware validates the session token","packet":true,"from":"actor-1","to":"actor-2"},
+        {"highlight":"flow-actor-2","label":"Token valid &mdash; extracting userId"},
+        {"highlight":"flow-actor-3","label":"API route receives userId and proceeds","packet":true,"from":"actor-2","to":"actor-3"},
+        {"highlight":"flow-actor-3","label":"If userId is null: return 401 Unauthorized immediately"},
+        {"highlight":"flow-actor-3","label":"If userId exists: run the real logic (database, AI, etc.)"}
+      ]'>
+        <div class="flow-actors">
+          <div class="flow-actor" id="flow-actor-1">
+            <div class="flow-actor-icon">🌐</div>
+            <span>Browser</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-2">
+            <div class="flow-actor-icon">🔐</div>
+            <span>Clerk</span>
+          </div>
+          <div class="flow-actor" id="flow-actor-3">
+            <div class="flow-actor-icon">⚡</div>
+            <span>API Route</span>
+          </div>
+        </div>
+        <div class="flow-packet" id="flow-packet"></div>
+        <div class="flow-step-label" id="flow-label">Click &ldquo;Next Step&rdquo; to begin</div>
+        <div class="flow-controls">
+          <button class="btn flow-next-btn">Next Step</button>
+          <button class="btn flow-reset-btn">Restart</button>
+          <span class="flow-progress"></span>
+        </div>
+      </div>
+
+      <div class="callout callout-accent animate-in">
+        <div class="callout-icon">🛡️</div>
+        <div class="callout-content">
+          <span class="callout-title">Authentication is always the first check.</span>
+          <p>
+            Never run database queries or AI calls before verifying identity &mdash; an unauthenticated request could access anyone&rsquo;s data. Think of it like a bouncer who checks your ID before letting you past the velvet rope. No ID, no entry &mdash; no exceptions.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 6 — The Patterns That Make It Production-Grade
+  ============================================================ -->
+  <div class="module-screen" id="m5s6">
+    <div class="module-content">
+
+      <h2 class="section-title animate-in">Five Patterns Every Production App Uses</h2>
+      <p class="animate-in">
+        The engineering patterns in Aladdin aren&rsquo;t academic &mdash; they&rsquo;re the same ones used at every major tech company.
+      </p>
+
+      <div class="pattern-cards stagger-children animate-in">
+
+        <div class="pattern-card animate-in">
+          <div class="pattern-icon">🔀</div>
+          <div class="pattern-title">
+            <span class="tooltip" data-tip="Database abstraction means hiding which specific database you're using behind a common interface. Your code calls getJobs() — it doesn't care whether that runs on Postgres, SQLite, or anything else.">Database Abstraction</span>
+          </div>
+          <div class="pattern-desc">One interface, multiple backends. Run on any database without changing business logic.</div>
+        </div>
+
+        <div class="pattern-card animate-in">
+          <div class="pattern-icon">🔌</div>
+          <div class="pattern-title">
+            <span class="tooltip" data-tip="The adapter pattern wraps different external services (APIs, databases, job boards) behind a common interface. Your pipeline calls one method and each adapter handles the translation to the specific service.">Adapter Pattern</span>
+          </div>
+          <div class="pattern-desc">One interface, multiple implementations. Add a new job source by writing one class &mdash; the pipeline handles the rest.</div>
+        </div>
+
+        <div class="pattern-card animate-in">
+          <div class="pattern-icon">📋</div>
+          <div class="pattern-title">
+            <span class="tooltip" data-tip="Queue-based processing means heavy or slow tasks are added to a queue and processed in the background — separate from the main web server. This keeps the app fast and responsive for users while work happens asynchronously.">Queue-Based Processing</span>
+          </div>
+          <div class="pattern-desc">Background tasks run in a queue, not on the web server. Heavy work doesn&rsquo;t block user requests.</div>
+        </div>
+
+        <div class="pattern-card animate-in">
+          <div class="pattern-icon">📡</div>
+          <div class="pattern-title">
+            <span class="tooltip" data-tip="Streaming responses send data incrementally as it's generated, rather than waiting until everything is ready. This is how AI text appears word-by-word instead of all at once after a long pause.">Streaming Responses</span>
+          </div>
+          <div class="pattern-desc">Send data as it&rsquo;s generated, not all at once. Users see progress instead of a loading spinner.</div>
+        </div>
+
+        <div class="pattern-card animate-in">
+          <div class="pattern-icon">🔑</div>
+          <div class="pattern-title">
+            <span class="tooltip" data-tip="Content deduplication uses a hash (a unique fingerprint) to identify identical content. If two sources submit the same job posting, the hash matches and only one copy is stored — no duplicates.">Content Deduplication</span>
+          </div>
+          <div class="pattern-desc">
+            <span class="tooltip" data-tip="A hash is a short unique fingerprint generated from a piece of content. The same input always produces the same hash — so you can instantly detect duplicates without comparing every word.">Hash</span>-based
+            fingerprinting ensures the same job from two sources is stored only once.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Final empowering callout -->
+      <div class="callout callout-success animate-in" style="background: var(--color-success-light); border-color: var(--color-success); margin-top: var(--space-10);">
+        <div class="callout-icon">🎓</div>
+        <div class="callout-content">
+          <span class="callout-title">You understand how production apps are built.</span>
+          <p>
+            You&rsquo;ve seen database abstraction, adapter patterns, queue-based processing, streaming APIs, and content deduplication. When you ask AI to build your next project, you can now ask for these patterns by name &mdash; and know if AI got them right.
+          </p>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           QUIZ — Module 5
+      ============================================================ -->
+      <div class="quiz-container animate-in" id="quiz-module5" style="margin-top: var(--space-12);">
+
+        <div class="quiz-header">
+          <h3 class="quiz-title">Check Your Understanding</h3>
+          <p class="quiz-subtitle">Apply what you learned to new scenarios.</p>
+        </div>
+
+        <!-- Q1 -->
+        <div class="quiz-question-block"
+             data-correct="option-d"
+             data-explanation-right="Exactly! The database abstraction means you add one new implementation block and one new detection condition in getDbType(). Every other file stays the same &mdash; that is the power of the abstraction layer."
+             data-explanation-wrong="The whole point of the abstraction is that callers do not need to change. Only db.ts knows about specific databases &mdash; adding a new one means adding code there, not everywhere.">
+          <h3 class="quiz-question">You want to deploy Aladdin on a server that only supports MySQL (not PostgreSQL or SQLite). What would need to change?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Rewrite the entire db.ts file from scratch</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Update all 40+ API routes to use MySQL syntax</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Add a MySQL environment variable and it will auto-detect</span>
+            </button>
+            <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Add a MySQL implementation in db.ts and update getDbType() to detect it</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question-block"
+             data-correct="option-b"
+             data-explanation-right="Exactly! FOR UPDATE SKIP LOCKED is the critical SQL clause. It claims a row as an atomic database operation &mdash; two workers cannot both claim the same row simultaneously."
+             data-explanation-wrong="The unique constraint prevents duplicate rows &mdash; it doesn&apos;t prevent two workers from claiming the same row. Think about the SQL-level locking mechanism.">
+          <h3 class="quiz-question">Two queue workers accidentally grab the same task at the same moment. Both start processing it, causing duplicate data. Which database feature is supposed to prevent this?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>A unique constraint on the task ID column</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>FOR UPDATE SKIP LOCKED &mdash; a SQL clause that atomically claims a row for one worker</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The withRetry() wrapper &mdash; it serializes concurrent calls</span>
+            </button>
+            <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The maxAttempts field &mdash; it limits how many times a task runs</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question-block"
+             data-correct="option-a"
+             data-explanation-right="Exactly! If preferences are saved but scores are 0, the issue is in the scoring logic itself. The most common cause: the answer key (e.g., &apos;work_areas&apos;) does not match what is in answersByKey, so the if-block never fires."
+             data-explanation-wrong="The data is in the database &mdash; the bug is in how it is being used. Follow the computation: how does answersByKey get populated, and are the keys matching what the scoring function expects?">
+          <h3 class="quiz-question">A user&rsquo;s preference score is 0 for every job even though they completed onboarding. The preferences are saved correctly in the database. Where would you look next?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>computePreferenceScore &mdash; specifically how answersByKey is passed in, and whether the right answer keys match the job fields being checked</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The job source adapters &mdash; maybe jobs are missing the fields being scored</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The Zustand store &mdash; the preferences might not be loaded into state</span>
+            </button>
+            <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>The Clerk auth &mdash; the userId might not match the preferences record</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="quiz-question-block"
+             data-correct="option-c"
+             data-explanation-right="Exactly! The adapter pattern is the right approach. Create an AnthropicAdapter with the same interface as the existing adapters. The pipeline code does not need to change &mdash; it just calls callLLM() and gets Claude back."
+             data-explanation-wrong="The app already uses an adapter pattern for LLM providers. Adding a new provider means adding a new adapter &mdash; not modifying the pipeline or adding special cases.">
+          <h3 class="quiz-question">You want to add Anthropic Claude as a direct LLM integration (not through OpenRouter). Based on the patterns in this app, what is the right approach?</h3>
+          <div class="quiz-options">
+            <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Edit the cover letter API route to call the Anthropic API directly</span>
+            </button>
+            <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Add a CLAUDE_API_KEY environment variable and it will auto-configure</span>
+            </button>
+            <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Create a new adapter in src/lib/adapters/ that implements the same callLLM interface, then update the model routing logic</span>
+            </button>
+            <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+              <div class="quiz-option-radio"></div>
+              <span>Modify pipeline.ts to add a special case for Claude</span>
+            </button>
+          </div>
+          <div class="quiz-feedback"></div>
+        </div>
+
+        <button class="quiz-check-btn" onclick="checkQuiz('quiz-module5')">Check Answers</button>
+        <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module5')">Try Again</button>
+
+      </div>
+      <!-- /quiz -->
+
+    </div>
+  </div>
+  <!-- /screen 6 -->
+
+</section>

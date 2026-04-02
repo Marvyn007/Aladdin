@@ -1,0 +1,344 @@
+<section class="module" id="module-1" style="background: var(--color-bg)">
+  <div class="module-content">
+
+    <!-- ═══════════════════════════════════════════════
+         MODULE HEADER
+    ═══════════════════════════════════════════════ -->
+    <header class="module-header animate-in">
+      <span class="module-number">01</span>
+      <h1 class="module-title">The Wish List</h1>
+      <p class="module-subtitle">What Aladdin is, who it's for, and what happens the moment you use it</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- ═══════════════════════════════════════════════
+           SCREEN 1: What Is Aladdin?
+      ═══════════════════════════════════════════════ -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">What Is Aladdin?</h2>
+
+        <p class="animate-in">
+          Think of a personal talent scout — you describe exactly what you want, and they spend all day scouring the entire job market, bringing back only the listings that actually fit. Aladdin is that scout, built for entry-level software engineers who are tired of wading through "Senior" roles that clog every job board.
+        </p>
+        <p class="animate-in">
+          It's a <span class="term" data-definition="A full-stack app is one that handles both the user-facing interface (what you see) AND the behind-the-scenes logic (data storage, AI calls, etc.) — as opposed to just a website or just a server.">full-stack</span> AI job search engine that combines job aggregation, <span class="term" data-definition="Resume analysis: automatically reading a PDF resume and extracting structured information — skills, past job titles, contact info — so a computer can work with it.">resume analysis</span>, AI writing tools, and <span class="term" data-definition="Application tracking: a system that records every job you've applied to, what stage it's at (applied, interview, offer, rejected), and lets you move jobs through stages — like a to-do list for your job hunt.">application tracking</span> into one opinionated system. No accounts scattered across five sites. One place.
+        </p>
+
+        <div class="pattern-cards stagger-children" style="margin-top: var(--space-8)">
+          <div class="pattern-card animate-in">
+            <div class="pattern-icon">🎯</div>
+            <div class="pattern-title">Job Discovery</div>
+            <div class="pattern-desc">Automatically discovers jobs from 6 sources every few minutes — no manual searching required.</div>
+          </div>
+          <div class="pattern-card animate-in">
+            <div class="pattern-icon">⭐</div>
+            <div class="pattern-title">Smart Scoring</div>
+            <div class="pattern-desc">Rates each job 0–100 based on your actual resume, so the best matches float to the top.</div>
+          </div>
+          <div class="pattern-card animate-in">
+            <div class="pattern-icon">✉️</div>
+            <div class="pattern-title">Cover Letters</div>
+            <div class="pattern-desc">Generates tailored cover letters in seconds — word by word, streamed live as you watch.</div>
+          </div>
+          <div class="pattern-card animate-in">
+            <div class="pattern-icon">📄</div>
+            <div class="pattern-title">Resume Tailoring</div>
+            <div class="pattern-desc">Rewrites your resume to highlight the skills that match each specific job description.</div>
+          </div>
+          <div class="pattern-card animate-in">
+            <div class="pattern-icon">📋</div>
+            <div class="pattern-title">Application Tracking</div>
+            <div class="pattern-desc">A drag-and-drop <span class="term" data-definition="Kanban: a visual board where cards (jobs, tasks) live in columns representing stages (e.g., Applied → Interview → Offer). You drag cards across columns as they progress. Used everywhere from software teams to job hunters.">Kanban</span> board tracks every application's status at a glance.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════
+           SCREEN 2: The Problem It Solves
+      ═══════════════════════════════════════════════ -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Problem It Solves</h2>
+
+        <p class="animate-in">
+          The traditional job search is designed for people who already have experience — not for new grads. Aladdin flips that by automating every tedious part and ruthlessly filtering out the noise.
+        </p>
+
+        <div class="animate-in" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); margin: var(--space-8) 0;">
+
+          <!-- OLD WAY -->
+          <div style="background: var(--color-surface-warm); border-radius: var(--radius-md); padding: var(--space-6); border: 2px solid var(--color-border);">
+            <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-5);">
+              <span style="font-size: 1.4rem;">😩</span>
+              <strong style="font-size: var(--text-base); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em;">The Old Way</strong>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+              <div style="display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); background: #fff3f3; border-radius: var(--radius-sm); border-left: 3px solid #e57373;">
+                <span style="font-size: 1.1rem; flex-shrink: 0;">⏳</span>
+                <span style="font-size: var(--text-sm);">Scroll job boards for hours — most listings are "Senior" roles you can't apply to</span>
+              </div>
+              <div style="display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); background: #fff3f3; border-radius: var(--radius-sm); border-left: 3px solid #e57373;">
+                <span style="font-size: 1.1rem; flex-shrink: 0;">✍️</span>
+                <span style="font-size: var(--text-sm);">Write every cover letter from scratch — 30 minutes each, multiplied by every application</span>
+              </div>
+              <div style="display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); background: #fff3f3; border-radius: var(--radius-sm); border-left: 3px solid #e57373;">
+                <span style="font-size: 1.1rem; flex-shrink: 0;">📊</span>
+                <span style="font-size: var(--text-sm);">Track applications in a chaotic spreadsheet that quickly becomes a mess</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ALADDIN'S WAY -->
+          <div style="background: var(--color-surface-warm); border-radius: var(--radius-md); padding: var(--space-6); border: 2px solid var(--color-accent);">
+            <div style="display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-5);">
+              <span style="font-size: 1.4rem;">✨</span>
+              <strong style="font-size: var(--text-base); color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.05em;">Aladdin's Way</strong>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+              <div style="display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); background: #f0faf5; border-radius: var(--radius-sm); border-left: 3px solid var(--color-accent);">
+                <span style="font-size: 1.1rem; flex-shrink: 0;">🤖</span>
+                <span style="font-size: var(--text-sm);">Auto-discovers entry-level jobs 24/7 — Senior roles are automatically deleted before you ever see them</span>
+              </div>
+              <div style="display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); background: #f0faf5; border-radius: var(--radius-sm); border-left: 3px solid var(--color-accent);">
+                <span style="font-size: 1.1rem; flex-shrink: 0;">⚡</span>
+                <span style="font-size: var(--text-sm);">AI generates a tailored cover letter in seconds — customized to each job, not a generic template</span>
+              </div>
+              <div style="display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); background: #f0faf5; border-radius: var(--radius-sm); border-left: 3px solid var(--color-accent);">
+                <span style="font-size: 1.1rem; flex-shrink: 0;">📋</span>
+                <span style="font-size: var(--text-sm);">Kanban board tracks every application's stage — Applied, Interview, Offer, Rejected — all in one place</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="callout callout-accent animate-in">
+          <div class="callout-icon">🔪</div>
+          <div class="callout-content">
+            <div class="callout-title">The Ruthless Cleanup Filter</div>
+            <p>Auto-deletes any job with <strong>"Senior"</strong>, <strong>"Lead"</strong>, <strong>"Manager"</strong>, or <strong>"Director"</strong> in the title. False negatives (missing a good job) are acceptable. False positives (showing you a bad job) are not.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════
+           SCREEN 3: The Journey
+      ═══════════════════════════════════════════════ -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">From Signup to Application in 5 Steps</h2>
+
+        <p class="animate-in">
+          Every step in Aladdin is designed to feed more context into the <span class="term" data-definition="AI (Artificial Intelligence): software that can perform tasks that normally require human intelligence, like reading a resume, writing prose, or scoring how well a job matches your background.">AI</span> — making each output smarter than the last.
+        </p>
+
+        <div class="flow-steps animate-in" style="margin: var(--space-8) 0;">
+
+          <div class="flow-step">
+            <div class="step-num">1</div>
+            <p><strong>Sign up & set preferences</strong><br>Tell Aladdin what you want — work areas, regions, and work style (remote / hybrid / on-site).</p>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="step-num">2</div>
+            <p><strong>Upload your resume <span class="term" data-definition="PDF (Portable Document Format): a file format that looks identical on every device and printer — fonts, layout, everything is locked in. Resumes are almost always PDFs because they can't accidentally reformat.">PDF</span></strong><br>AI <span class="term" data-definition="Parsing: reading a file or text and extracting its structured data — like pulling 'Python', 'React', 'UC Berkeley' out of a resume PDF so a program can actually use those values.">parses</span> it instantly — skills, job history, and contact info become structured data the scoring engine can use.</p>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="step-num">3</div>
+            <p><strong>Browse your personalized feed</strong><br>Jobs appear ranked by match score (0–100) — the best fits first, senior roles already gone.</p>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="step-num">4</div>
+            <p><strong>Click a job → generate documents</strong><br>One click generates a tailored cover letter AND a rewritten resume — both customized to that specific posting.</p>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="step-num">5</div>
+            <p><strong>Mark as Applied</strong><br>The job moves onto your <span class="term" data-definition="Kanban board: a visual project management tool where items (cards) move through columns representing stages. Invented at Toyota, now used everywhere. In Aladdin, each column is an application stage: Saved → Applied → Interview → Offer.">Kanban board</span> — status tracked automatically from there.</p>
+          </div>
+
+        </div>
+
+        <div class="callout callout-info animate-in">
+          <div class="callout-icon">💡</div>
+          <div class="callout-content">
+            <div class="callout-title">The Design Insight</div>
+            <p>The whole flow is built around one idea: <strong>AI is most useful when it has rich context.</strong> Every step — preferences, resume, job description — feeds more context into the AI, making the next output sharper.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════
+           SCREEN 4: Tech Stack at a Glance
+      ═══════════════════════════════════════════════ -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">The Tech Stack at a Glance</h2>
+
+        <p class="animate-in">
+          Aladdin is built from 5 key technologies. You don't need to understand each one deeply — just know what role it plays. A <span class="term" data-definition="Tech stack: the complete list of technologies an app is built with — the framework, database, AI provider, authentication service, file storage, etc. Knowing the stack helps you give AI coding agents precise instructions.">tech stack</span> is just the list of tools an app uses.
+        </p>
+
+        <div class="icon-rows stagger-children" style="margin: var(--space-8) 0;">
+
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-accent-light)">⚡</div>
+            <div>
+              <strong><span class="term" data-definition="Next.js: a framework built on top of React (a popular UI library) that adds superpowers — it runs both the website (frontend) AND the server-side logic (backend) in one codebase, so you don't need a separate server app.">Next.js</span></strong>
+              <p>The <span class="term" data-definition="Framework: a pre-built set of tools and rules that handle the boring, repetitive parts of building an app (routing, rendering, data fetching) so you can focus on the unique parts. Like using a house blueprint instead of designing from scratch.">framework</span> that runs both the website AND the server — two-for-one, one codebase.</p>
+            </div>
+          </div>
+
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-accent-light)">🗄️</div>
+            <div>
+              <strong><span class="term" data-definition="PostgreSQL: a powerful open-source relational database — think of it as a super-organized spreadsheet system where every piece of data lives in a table with rows and columns, and you can query across multiple tables at once.">PostgreSQL</span></strong>
+              <p>The <span class="term" data-definition="Database: a structured system for storing and retrieving data. Like a filing cabinet with a very fast search function — you can ask 'give me all jobs posted in the last 24 hours with score above 80' and get the answer instantly.">database</span> that stores all jobs, resumes, and applications — the app's permanent memory.</p>
+            </div>
+          </div>
+
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-accent-light)">🤖</div>
+            <div>
+              <strong><span class="term" data-definition="OpenRouter: a service that lets you access many different AI models (GPT-4, Gemini, Claude, etc.) through one unified API, so you can switch models without rewriting your code.">OpenRouter</span> / Gemini</strong>
+              <p>The <span class="term" data-definition="AI provider: a company or service that hosts AI models and lets your app send text to them and get AI-generated text back. Like renting a very smart brain instead of building one yourself.">AI provider</span> that writes cover letters and tailors resumes — the intelligence behind the writing tools.</p>
+            </div>
+          </div>
+
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-accent-light)">🔐</div>
+            <div>
+              <strong><span class="term" data-definition="Clerk: a third-party authentication service. Instead of building login/password/session logic yourself (which is surprisingly hard to get right securely), you plug in Clerk and it handles all of that for you.">Clerk</span></strong>
+              <p>Handles login, passwords, and sessions — so the app doesn't have to build that security from scratch.</p>
+            </div>
+          </div>
+
+          <div class="icon-row animate-in">
+            <div class="icon-circle" style="background: var(--color-accent-light)">☁️</div>
+            <div>
+              <strong><span class="term" data-definition="AWS S3 (Amazon Simple Storage Service): cloud file storage. Like Google Drive for your app — you upload a file (a resume PDF, a cover letter), it stores it and gives you a URL to retrieve it later from anywhere.">AWS S3</span></strong>
+              <p>Stores uploaded <span class="term" data-definition="PDF: Portable Document Format — a file type where the visual layout is locked in and looks identical on every device. Resumes are almost always PDFs for this reason.">PDF</span> files — resumes and cover letters — safely in the cloud.</p>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="callout callout-info animate-in">
+          <div class="callout-icon">🧭</div>
+          <div class="callout-content">
+            <div class="callout-title">Why This Matters for Steering AI</div>
+            <p>Knowing the stack transforms your instructions. Instead of "add a login page," you can say "add a <span class="term" data-definition="Clerk-authenticated route: a page in Next.js that checks whether the user is logged in (using Clerk) before showing any content. If they're not logged in, they get redirected to the login page.">Clerk-authenticated route</span>." Precise vocabulary = better AI output, every time.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════
+           SCREEN 5: Quiz
+      ═══════════════════════════════════════════════ -->
+      <section class="screen animate-in">
+        <h2 class="screen-heading">Quiz — Test Your Understanding</h2>
+
+        <p class="animate-in">
+          These are scenario questions — no definitions to memorize, just apply what you just learned to situations you might actually face.
+        </p>
+
+        <div class="quiz-container animate-in" id="quiz-module1">
+
+          <!-- Q1 -->
+          <div class="quiz-question-block"
+               data-correct="option-b"
+               data-explanation-right="Exactly! The Zustand store is the shared memory for the UI — any component that needs the same piece of data should read it from there."
+               data-explanation-wrong="Think about which components need to show this data. When two components both need the same info, where should that live?">
+            <h3 class="quiz-question">You want to add a "save to favorites" feature. The saved count should appear in both the sidebar AND the job list. Which part of the system is the right place to store it?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>In the <span class="term" data-definition="Database: persistent, server-side storage — data that survives page refreshes and is shared across devices and users. Good for things that need to be saved permanently.">database</span> — save it as a column on the jobs table</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>In the shared state (<span class="term" data-definition="Zustand store: a lightweight JavaScript library for managing shared UI state — think of it as a whiteboard any component in the app can read from or write to. It's Aladdin's shared memory layer for the frontend.">Zustand</span> store) — both components need to read from it</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>In the sidebar component itself — that's where the icon lives</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>In the <span class="term" data-definition="URL (Uniform Resource Locator): the web address in your browser bar. You can encode state into a URL (e.g., ?filter=remote) so it persists when shared — but it's visible, limited in size, and not ideal for user-specific UI state.">URL</span> — so it persists across refreshes</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <!-- Q2 -->
+          <div class="quiz-question-block"
+               data-correct="option-c"
+               data-explanation-right="Exactly! The ruthless filter uses pattern matching — and 'Senior' appearing anywhere in the title triggers deletion, even in compound titles like 'Senior Intern.'"
+               data-explanation-wrong="The filter is intentionally aggressive. When a job disappears, the filter is usually the first suspect.">
+            <h3 class="quiz-question">Aladdin automatically deletes jobs with "Senior" in the title. A user complains they can't find a "Senior Software Engineer Intern" role they saw on LinkedIn. What's most likely happening?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The job was never fetched from any source</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The database is full</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>The cleanup filter deleted it because it matched the "Senior" <span class="term" data-definition="Pattern matching: checking whether a string of text contains a specific word or phrase. Here, the filter checks if a job title contains 'Senior' anywhere — so 'Senior Engineer Intern' still gets deleted even though it's technically an intern role.">pattern</span></span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>LinkedIn jobs aren't supported</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <!-- Q3 -->
+          <div class="quiz-question-block"
+               data-correct="option-a"
+               data-explanation-right="Exactly! A raw PDF is just pixels to the scoring algorithm. It needs to be parsed into structured JSON (skills list, job titles, etc.) before it can be compared to a job description."
+               data-explanation-wrong="The system needs to understand the resume, not just store or display it. What does 'understanding' a resume mean computationally?">
+            <h3 class="quiz-question">A user uploads their resume. What's the NEXT thing the system needs to do to make the resume useful for scoring?</h3>
+            <div class="quiz-options">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Parse it with AI — extract skills, work history, and contact info into structured <span class="term" data-definition="JSON (JavaScript Object Notation): a text format for storing structured data — like a labeled list. Instead of a PDF with text everywhere, JSON looks like: { 'skills': ['Python', 'React'], 'name': 'Alex' }. Computers can instantly read and search JSON.">JSON</span></span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Save it to <span class="term" data-definition="S3: AWS's cloud file storage service. It holds the actual PDF file bytes — like a cloud hard drive. But storing a file doesn't mean the computer understands what's in it.">S3</span> — store the PDF file</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Display it in the UI — show the resume preview</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+                <div class="quiz-option-radio"></div>
+                <span>Score all existing jobs — run the match algorithm immediately</span>
+              </button>
+            </div>
+            <div class="quiz-feedback"></div>
+          </div>
+
+          <button class="quiz-check-btn" onclick="checkQuiz('quiz-module1')">Check Answers</button>
+          <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module1')">Try Again</button>
+
+        </div>
+      </section>
+
+    </div><!-- /.module-body -->
+  </div><!-- /.module-content -->
+</section>

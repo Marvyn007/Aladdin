@@ -1,0 +1,639 @@
+<section class="module" id="module-4" style="background: var(--color-bg-warm)">
+  <div class="module-content">
+
+    <!-- MODULE HEADER -->
+    <header class="module-header animate-in">
+      <span class="module-number">04</span>
+      <h1 class="module-title">Your AI Genie</h1>
+      <p class="module-subtitle">How Aladdin uses AI to parse resumes, generate cover letters, and tailor your resume to each job</p>
+    </header>
+
+    <div class="module-body">
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SCREEN 1 · Three AI Superpowers
+      ═══════════════════════════════════════════════════════════ -->
+      <section class="screen animate-in">
+        <p class="screen-intro" style="font-size: var(--text-lg); color: var(--color-text-secondary); margin-bottom: var(--space-8);">
+          Aladdin uses <abbr title="Large Language Model — the AI brain behind ChatGPT, Gemini, Claude, and similar systems. It reads text, understands meaning, and generates human-quality responses." class="tooltip">AI</abbr> for three distinct tasks — each more sophisticated than it looks.
+        </p>
+
+        <div class="pattern-cards stagger-children" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-6); margin-bottom: var(--space-8);">
+
+          <!-- Card 1: Resume Parsing -->
+          <div class="pattern-card animate-in" style="background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: var(--shadow-md); border-top: 4px solid var(--color-actor-2);">
+            <div style="font-size: 2rem; margin-bottom: var(--space-3);">📤</div>
+            <h3 style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; color: var(--color-actor-2); margin-bottom: var(--space-2);">Resume Parsing</h3>
+            <p style="font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--color-text-secondary);">
+              Upload a <abbr title="Portable Document Format — a file format that preserves exact layout across devices. Great for human reading, terrible for computers to parse." class="tooltip">PDF</abbr>, get back structured <abbr title="JavaScript Object Notation — a lightweight text format for storing data as key-value pairs that any programming language can read." class="tooltip">JSON</abbr>: your name, skills, work history, frameworks. The <abbr title="Large Language Model — the AI brain behind ChatGPT, Gemini, Claude, and similar systems." class="tooltip">AI</abbr> reads your resume like a human would.
+            </p>
+          </div>
+
+          <!-- Card 2: Cover Letter Generation -->
+          <div class="pattern-card animate-in" style="background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: var(--shadow-md); border-top: 4px solid var(--color-actor-1);">
+            <div style="font-size: 2rem; margin-bottom: var(--space-3);">✉️</div>
+            <h3 style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; color: var(--color-actor-1); margin-bottom: var(--space-2);">Cover Letter Generation</h3>
+            <p style="font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--color-text-secondary);">
+              Feed the <abbr title="Large Language Model — the AI brain that reads and generates text." class="tooltip">AI</abbr> your resume + the job description, get back a tailored HTML cover letter — generated word by word, live in your browser using <abbr title="Server-Sent Events — a browser technology that keeps a connection open so the server can push data to your browser in real time, without you needing to ask repeatedly." class="tooltip">SSE</abbr>.
+            </p>
+          </div>
+
+          <!-- Card 3: Resume Tailoring -->
+          <div class="pattern-card animate-in" style="background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: var(--shadow-md); border-top: 4px solid var(--color-actor-4);">
+            <div style="font-size: 2rem; margin-bottom: var(--space-3);">📄</div>
+            <h3 style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; color: var(--color-actor-4); margin-bottom: var(--space-2);">Resume Tailoring</h3>
+            <p style="font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--color-text-secondary);">
+              A two-pass pipeline rewrites every bullet point on your resume to match the job description, with validators to ensure nothing gets fabricated. Not find-and-replace — actually rewritten.
+            </p>
+          </div>
+
+        </div>
+
+        <div class="callout callout-info animate-in" style="background: var(--color-info-light); border-left: 4px solid var(--color-info); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6);">
+          <p style="margin: 0; font-size: var(--text-sm); color: var(--color-text); line-height: var(--leading-normal);">
+            <strong>AI doesn't replace your judgment — it amplifies your preparation.</strong> Every generated document starts from your actual experience and the specific job you're applying to. The AI is a ghostwriter who has read your entire portfolio AND the job posting — and writes every document from scratch, tailored to that specific audience.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SCREEN 2 · Resume Parsing — From PDF to Brain Food
+      ═══════════════════════════════════════════════════════════ -->
+      <section class="screen animate-in" style="margin-top: var(--space-16);">
+        <h2 class="screen-heading animate-in" style="font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-4);">How a PDF Becomes Data</h2>
+
+        <p class="animate-in" style="font-size: var(--text-base); line-height: var(--leading-normal); color: var(--color-text-secondary); max-width: 640px; margin-bottom: var(--space-8);">
+          A <abbr title="Portable Document Format — a file designed for human eyes. It has no concept of 'skills' or 'job titles' — just coordinates telling the screen where to draw each character." class="tooltip">PDF</abbr> is just pixels to a computer — it has no idea what a "skill" or "job title" is. Resume parsing uses an <abbr title="Large Language Model — an AI trained on billions of text documents that can read and extract meaning from unstructured text." class="tooltip">LLM</abbr> to read the text and extract structured fields the scoring algorithm can use.
+        </p>
+
+        <div class="step-cards stagger-children" style="display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-8);">
+
+          <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="step-num" style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--color-actor-2); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">1</div>
+            <div class="step-body">
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">User uploads PDF</strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">Browser sends it as a file to <code style="font-family: var(--font-mono); font-size: var(--text-xs); background: var(--color-border-light); padding: 2px 6px; border-radius: 4px;">POST /api/resume</code> — a dedicated <abbr title="Application Programming Interface Route — a URL on the server that accepts incoming data and knows how to process it." class="tooltip">API route</abbr> that handles the upload.</p>
+            </div>
+          </div>
+
+          <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="step-num" style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--color-actor-2); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">2</div>
+            <div class="step-body">
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">pdf-parse extracts raw text</strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">The <code style="font-family: var(--font-mono); font-size: var(--text-xs); background: var(--color-border-light); padding: 2px 6px; border-radius: 4px;">pdf-parse</code> library strips the PDF formatting and pulls out plain text from the <abbr title="Buffer — a chunk of raw binary data held in memory. When a file is uploaded, it arrives as a Buffer (a sequence of bytes) before being converted to readable text." class="tooltip">buffer</abbr>. Think of it as photocopying without the layout.</p>
+            </div>
+          </div>
+
+          <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="step-num" style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--color-actor-2); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">3</div>
+            <div class="step-body">
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">LLM reads and extracts fields</strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);"><abbr title="Large Language Model — can understand the meaning of unstructured text the way a human reader would." class="tooltip">LLM</abbr> reads the raw text and identifies: name, contact info, skills, work history, education, frameworks, and languages. It understands context, not just keywords.</p>
+            </div>
+          </div>
+
+          <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="step-num" style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--color-actor-2); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">4</div>
+            <div class="step-body">
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">Structured JSON saved to database</strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">The extracted fields are formatted as <abbr title="JavaScript Object Notation — a structured data format with named fields like { name: 'Alex', skills: ['React', 'Python'] }." class="tooltip">JSON</abbr> and saved to the <code style="font-family: var(--font-mono); font-size: var(--text-xs); background: var(--color-border-light); padding: 2px 6px; border-radius: 4px;">resumes</code> table in the database — one record per user.</p>
+            </div>
+          </div>
+
+          <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="step-num" style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--color-actor-2); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">5</div>
+            <div class="step-body">
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">All future scoring uses this data</strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">Every job match score, every cover letter, every tailored resume — all powered by this structured data. The PDF is never re-read. Parse once, use everywhere.</p>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="callout callout-accent animate-in" style="background: var(--color-accent-light); border-left: 4px solid var(--color-accent); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6);">
+          <p style="margin: 0; font-size: var(--text-sm); color: var(--color-text); line-height: var(--leading-normal);">
+            <strong>This is called "structured extraction"</strong> — turning messy human text into machine-readable fields. It is one of the most valuable things you can do with an <abbr title="Large Language Model — uniquely suited to this task because it understands human writing the way a human does." class="tooltip">LLM</abbr>, and it powers every feature that follows.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SCREEN 3 · Cover Letter Streaming — Live as It Writes
+      ═══════════════════════════════════════════════════════════ -->
+      <section class="screen animate-in" style="margin-top: var(--space-16);">
+        <h2 class="screen-heading animate-in" style="font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-4);">Why the Cover Letter Types Itself</h2>
+
+        <p class="animate-in" style="font-size: var(--text-base); line-height: var(--leading-normal); color: var(--color-text-secondary); max-width: 640px; margin-bottom: var(--space-8);">
+          Cover letters don't wait for the full AI response — they <abbr title="Streaming — sending data in small chunks as it is produced, rather than waiting for everything to finish before sending anything. Like watching a video while it downloads instead of downloading first." class="tooltip">stream</abbr> word by word using <abbr title="Server-Sent Events — a browser standard where the server keeps an HTTP connection open and sends chunks of data as they become available. Works one-way: server to browser." class="tooltip">Server-Sent Events (SSE)</abbr>. The server keeps a connection open and sends text chunks the moment the AI generates them.
+        </p>
+
+        <div class="translation-block animate-in" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-md); margin-bottom: var(--space-8);">
+          <div class="translation-code" style="background: var(--color-bg-code); color: #CDD6F4; padding: var(--space-6); font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7; position: relative; overflow-x: hidden;">
+            <span class="translation-label" style="position: absolute; top: var(--space-2); right: var(--space-3); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.5; color: #CDD6F4;">CODE</span>
+            <pre><code style="white-space: pre-wrap; word-break: break-word;"><span class="code-line"><span class="code-keyword">function</span> <span class="code-function">createSSEStream</span>(<span class="code-property">req</span>: Request) {</span>
+<span class="code-line">  <span class="code-keyword">const</span> encoder = <span class="code-keyword">new</span> <span class="code-function">TextEncoder</span>();</span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">const</span> stream = <span class="code-keyword">new</span> <span class="code-function">ReadableStream</span>({</span>
+<span class="code-line">    <span class="code-keyword">async</span> <span class="code-function">start</span>(controller) {</span>
+<span class="code-line">      <span class="code-keyword">const</span> <span class="code-function">sendEvent</span> =</span>
+<span class="code-line">          (event: <span class="code-property">string</span>, data: <span class="code-property">any</span>) =&gt; {</span>
+<span class="code-line">        <span class="code-keyword">const</span> message =</span>
+<span class="code-line">          <span class="code-string">`event: ${event}\n`</span> +</span>
+<span class="code-line">          <span class="code-string">`data: ${JSON.stringify(data)}\n\n`</span>;</span>
+<span class="code-line">        controller.<span class="code-function">enqueue</span>(</span>
+<span class="code-line">          encoder.<span class="code-function">encode</span>(message));</span>
+<span class="code-line">      };</span>
+<span class="code-line"></span>
+<span class="code-line">      <span class="code-keyword">const</span> { userId } = <span class="code-keyword">await</span> <span class="code-function">auth</span>();</span>
+<span class="code-line">      <span class="code-keyword">if</span> (!userId) {</span>
+<span class="code-line">        <span class="code-function">sendEvent</span>(<span class="code-string">"error"</span>,</span>
+<span class="code-line">          { message: <span class="code-string">"Unauthorized"</span> });</span>
+<span class="code-line">        controller.<span class="code-function">close</span>();</span>
+<span class="code-line">        <span class="code-keyword">return</span>;</span>
+<span class="code-line">      }</span>
+<span class="code-line"></span>
+<span class="code-line">      <span class="code-function">sendEvent</span>(<span class="code-string">"stage"</span>, {</span>
+<span class="code-line">        stageId: <span class="code-string">"stage1_load-job"</span>,</span>
+<span class="code-line">        name: <span class="code-string">"Loading job details..."</span>,</span>
+<span class="code-line">      });</span></code></pre>
+          </div>
+          <div class="translation-english" style="background: var(--color-surface-warm); padding: var(--space-6); font-size: var(--text-sm); line-height: 1.7; border-left: 3px solid var(--color-accent);">
+            <span class="translation-label" style="display: block; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-muted); margin-bottom: var(--space-4);">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">createSSEStream(req)</code> → Set up a live data channel — like opening a radio station that broadcasts as content is produced</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">new TextEncoder()</code> → Converts JavaScript strings to bytes that the network can transmit</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">new ReadableStream({ start(controller) {...} })</code> → Create an open pipe — data will be pushed through it as it becomes available, not all at once</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">sendEvent(event, data)</code> → Format and send one message in the <abbr title="Server-Sent Events format: each message has an event type, a JSON data payload, and ends with a blank line." class="tooltip">SSE format</abbr>: event type + JSON data + blank line separator</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">controller.enqueue(...)</code> → Push one chunk of data through the pipe RIGHT NOW</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">await auth()</code> → Verify the user is logged in before doing any AI work — check ID before letting anyone in</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">sendEvent("error", ...)</code> → If not logged in, send an error event and close the connection</p>
+              <p class="tl" style="margin: 0; padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">sendEvent("stage", {...})</code> → Tell the browser "stage 1 is starting" — this updates the progress indicator the user sees</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-info animate-in" style="background: var(--color-info-light); border-left: 4px solid var(--color-info); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6);">
+          <p style="margin: 0; font-size: var(--text-sm); color: var(--color-text); line-height: var(--leading-normal);">
+            <strong><abbr title="Server-Sent Events — a browser technology that keeps a connection open between server and browser." class="tooltip">Server-Sent Events (SSE)</abbr> is a browser technology that keeps a connection open between server and browser.</strong> The server can push data at any time. This is how the cover letter appears to type itself — each chunk of words arrives as a separate event the moment the AI produces it.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SCREEN 4 · Group Chat — The Cover Letter Pipeline
+      ═══════════════════════════════════════════════════════════ -->
+      <section class="screen animate-in" style="margin-top: var(--space-16);">
+        <h2 class="screen-heading animate-in" style="font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-4);">The Cover Letter Pipeline</h2>
+
+        <p class="animate-in" style="font-size: var(--text-base); line-height: var(--leading-normal); color: var(--color-text-secondary); max-width: 640px; margin-bottom: var(--space-8);">
+          Here is the exact sequence of events from clicking "Generate Cover Letter" to seeing the first words appear.
+        </p>
+
+        <div class="chat-window animate-in" id="chat-module4" style="background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; margin-bottom: var(--space-6);">
+          <div class="chat-messages" style="padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); min-height: 320px;">
+
+            <!-- Message 1: Browser -->
+            <div class="chat-message" data-msg="0" data-sender="browser" style="display:none">
+              <div class="chat-avatar" style="background: var(--color-actor-2); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">🌐</div>
+              <div class="chat-bubble" style="background: var(--color-info-light); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-2); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">Your Browser</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">Generate cover letter for Job #42, please!</p>
+              </div>
+            </div>
+
+            <!-- Message 2: API -->
+            <div class="chat-message" data-msg="1" data-sender="api" style="display:none; flex-direction: row-reverse;">
+              <div class="chat-avatar" style="background: var(--color-actor-1); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">⚡</div>
+              <div class="chat-bubble" style="background: var(--color-accent-light); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-1); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">API Route</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">Opening <abbr title="Server-Sent Events — a live connection between server and browser for streaming data." class="tooltip">SSE</abbr> stream. Loading job #42 from database...</p>
+              </div>
+            </div>
+
+            <!-- Message 3: API -->
+            <div class="chat-message" data-msg="2" data-sender="api" style="display:none; flex-direction: row-reverse;">
+              <div class="chat-avatar" style="background: var(--color-actor-1); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">⚡</div>
+              <div class="chat-bubble" style="background: var(--color-accent-light); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-1); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">API Route</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">Loading your resume and LinkedIn profile... Merging into master profile...</p>
+              </div>
+            </div>
+
+            <!-- Message 4: LLM -->
+            <div class="chat-message" data-msg="3" data-sender="llm" style="display:none;">
+              <div class="chat-avatar" style="background: var(--color-actor-4); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">🤖</div>
+              <div class="chat-bubble" style="background: #FDF8E8; border: 1px solid #F0E0A0; border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-4); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">Gemini Flash</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">I have the master profile and job description. Writing cover letter now...</p>
+              </div>
+            </div>
+
+            <!-- Message 5: API -->
+            <div class="chat-message" data-msg="4" data-sender="api" style="display:none; flex-direction: row-reverse;">
+              <div class="chat-avatar" style="background: var(--color-actor-1); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">⚡</div>
+              <div class="chat-bubble" style="background: var(--color-accent-light); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-1); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">API Route</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">Streaming first chunk: <em style="color: var(--color-success);">"Dear Hiring Manager, I am writing to express..."</em></p>
+              </div>
+            </div>
+
+            <!-- Message 6: Browser -->
+            <div class="chat-message" data-msg="5" data-sender="browser" style="display:none;">
+              <div class="chat-avatar" style="background: var(--color-actor-2); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">🌐</div>
+              <div class="chat-bubble" style="background: var(--color-info-light); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-2); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">Your Browser</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">Got chunk! Appending to the preview. The letter is appearing word by word...</p>
+              </div>
+            </div>
+
+            <!-- Message 7: LLM -->
+            <div class="chat-message" data-msg="6" data-sender="llm" style="display:none;">
+              <div class="chat-avatar" style="background: var(--color-actor-4); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">🤖</div>
+              <div class="chat-bubble" style="background: #FDF8E8; border: 1px solid #F0E0A0; border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-4); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">Gemini Flash</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">Complete. Cover letter finished.</p>
+              </div>
+            </div>
+
+            <!-- Message 8: API -->
+            <div class="chat-message" data-msg="7" data-sender="api" style="display:none; flex-direction: row-reverse;">
+              <div class="chat-avatar" style="background: var(--color-actor-1); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">⚡</div>
+              <div class="chat-bubble" style="background: var(--color-accent-light); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); max-width: 80%;">
+                <span class="chat-sender" style="color: var(--color-actor-1); font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--space-1);">API Route</span>
+                <p style="margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal);">Done! Saving cover letter to database. Generating <abbr title="PDF — a portable document format used for final document delivery." class="tooltip">PDF</abbr>. All finished.</p>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Typing indicator -->
+          <div class="chat-typing" id="chat-module4-typing" style="display:none; padding: 0 var(--space-6) var(--space-3); align-items: center; gap: var(--space-3);">
+            <div class="chat-avatar" id="chat-module4-typing-avatar" style="width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; background: var(--color-actor-1); color: white;">⚡</div>
+            <div class="chat-typing-dots" style="display: flex; gap: var(--space-2); align-items: center;">
+              <span class="typing-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-muted);"></span>
+              <span class="typing-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-muted);"></span>
+              <span class="typing-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-muted);"></span>
+            </div>
+          </div>
+
+          <div class="chat-controls" style="padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border); display: flex; gap: var(--space-3); align-items: center; background: var(--color-surface-warm);">
+            <button class="btn chat-next-btn" style="padding: var(--space-2) var(--space-4); background: var(--color-accent); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-body); font-size: var(--text-sm); cursor: pointer;">Next Message</button>
+            <button class="btn chat-all-btn" style="padding: var(--space-2) var(--space-4); background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: var(--text-sm); cursor: pointer;">Play All</button>
+            <button class="btn chat-reset-btn" style="padding: var(--space-2) var(--space-4); background: var(--color-surface); color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: var(--text-sm); cursor: pointer;">Replay</button>
+            <span class="chat-progress" style="margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted);"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SCREEN 5 · The Two-Pass Resume Tailoring Pipeline
+      ═══════════════════════════════════════════════════════════ -->
+      <section class="screen animate-in" style="margin-top: var(--space-16);">
+        <h2 class="screen-heading animate-in" style="font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-4);">Not Find-and-Replace — Actually Tailored</h2>
+
+        <p class="animate-in" style="font-size: var(--text-base); line-height: var(--leading-normal); color: var(--color-text-secondary); max-width: 640px; margin-bottom: var(--space-8);">
+          Tailoring your resume isn't just swapping keywords. Aladdin runs a two-pass pipeline that rewrites each bullet point individually, then polishes the whole thing for consistency.
+        </p>
+
+        <!-- Pass 1 -->
+        <div class="animate-in" style="margin-bottom: var(--space-6);">
+          <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4);">
+            <span style="background: var(--color-actor-1); color: white; font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 700; padding: var(--space-1) var(--space-3); border-radius: var(--radius-full); text-transform: uppercase; letter-spacing: 0.05em;">Pass 1</span>
+            <span style="font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600;">Per-Bullet Rewrites</span>
+          </div>
+          <div class="step-cards stagger-children" style="display: flex; flex-direction: column; gap: var(--space-3);">
+
+            <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+              <div class="step-num" style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--color-actor-1); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">1</div>
+              <div class="step-body">
+                <strong style="font-size: var(--text-sm);">Parse resume <abbr title="PDF — Portable Document Format. Must be converted to text before an AI can read it." class="tooltip">PDF</abbr> into structured data</strong>
+                <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--color-text-secondary);">Sections, roles, and individual bullet points are identified and stored as separate objects.</p>
+              </div>
+            </div>
+
+            <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+              <div class="step-num" style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--color-actor-1); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">2</div>
+              <div class="step-body">
+                <strong style="font-size: var(--text-sm);">Embed the job description into <abbr title="Vector — a list of numbers that represents the meaning of a piece of text. Similar texts produce similar vectors, allowing semantic comparison." class="tooltip">vector</abbr> chunks</strong>
+                <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--color-text-secondary);">The job description is split and converted to <abbr title="Embeddings — numeric representations of text meaning, used for semantic search. Chunks with similar meaning score close together in vector space." class="tooltip">embeddings</abbr> so we can find the most relevant parts for each bullet.</p>
+              </div>
+            </div>
+
+            <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+              <div class="step-num" style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--color-actor-1); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">3</div>
+              <div class="step-body">
+                <strong style="font-size: var(--text-sm);">For each bullet: retrieve the most relevant job description chunks</strong>
+                <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--color-text-secondary);">Semantic search finds which parts of the job posting are most relevant to each specific bullet point.</p>
+              </div>
+            </div>
+
+            <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+              <div class="step-num" style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--color-actor-1); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">4</div>
+              <div class="step-body">
+                <strong style="font-size: var(--text-sm);">Call <abbr title="Large Language Model — the AI that does the actual rewriting." class="tooltip">LLM</abbr>: "Rewrite this bullet to highlight the skills this job needs"</strong>
+                <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--color-text-secondary);">Each bullet is rewritten in context — it understands what this specific role is looking for.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Pass 2 -->
+        <div class="animate-in" style="margin-bottom: var(--space-8);">
+          <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4);">
+            <span style="background: var(--color-actor-4); color: white; font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 700; padding: var(--space-1) var(--space-3); border-radius: var(--radius-full); text-transform: uppercase; letter-spacing: 0.05em;">Pass 2</span>
+            <span style="font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600;">Role Assembly</span>
+          </div>
+          <div class="step-cards stagger-children" style="display: flex; flex-direction: column; gap: var(--space-3);">
+
+            <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+              <div class="step-num" style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--color-actor-4); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">5</div>
+              <div class="step-body">
+                <strong style="font-size: var(--text-sm);">Combine all rewritten bullets for each work role</strong>
+                <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--color-text-secondary);">All the individually-rewritten bullets for each job are assembled back together as a role section.</p>
+              </div>
+            </div>
+
+            <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+              <div class="step-num" style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--color-actor-4); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">6</div>
+              <div class="step-body">
+                <strong style="font-size: var(--text-sm);">Call <abbr title="Large Language Model." class="tooltip">LLM</abbr> again: "Polish this role section — fix grammar, ensure consistent tone"</strong>
+                <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--color-text-secondary);">The second LLM call acts as an editor pass — it makes all bullets feel like they came from the same voice.</p>
+              </div>
+            </div>
+
+            <div class="step-card animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm); border-left: 4px solid var(--color-success);">
+              <div class="step-num" style="flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--color-success); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 700;">7</div>
+              <div class="step-body">
+                <strong style="font-size: var(--text-sm);">Run validators</strong>
+                <p style="margin: 4px 0 0; font-size: var(--text-xs); color: var(--color-text-secondary);">Three safety checks: <strong>no deleted bullets</strong> — every original bullet must appear. <strong>No fabricated experience</strong> — no invented companies or roles. <strong>No invented skills</strong> — only skills from your original resume.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Translation Block: generateTailoredResume -->
+        <div class="translation-block animate-in" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-md); margin-bottom: var(--space-8);">
+          <div class="translation-code" style="background: var(--color-bg-code); color: #CDD6F4; padding: var(--space-6); font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7; position: relative; overflow-x: hidden;">
+            <span class="translation-label" style="position: absolute; top: var(--space-2); right: var(--space-3); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.5; color: #CDD6F4;">CODE</span>
+            <pre><code style="white-space: pre-wrap; word-break: break-word;"><span class="code-keyword">export</span> <span class="code-keyword">async</span> <span class="code-keyword">function</span> <span class="code-function">generateTailoredResume</span>(
+  params: <span class="code-property">GenerateTailoredResumeParams</span>
+): <span class="code-keyword">Promise</span>&lt;<span class="code-property">TailoredResumeOutput</span>&gt; {
+  <span class="code-keyword">const</span> { resumePdf, linkedinPdf,
+    linkedinData, jobDescription } = params;
+  <span class="code-keyword">const</span> model =
+    process.<span class="code-property">env</span>.<span class="code-property">LLM_MODEL</span>
+    || <span class="code-string">"openai/gpt-4o-mini"</span>;
+
+  <span class="code-keyword">const</span> resumeBuffer =
+    Buffer.<span class="code-function">isBuffer</span>(resumePdf)
+      ? resumePdf
+      : Buffer.<span class="code-function">from</span>(
+          <span class="code-keyword">await</span> (resumePdf <span class="code-keyword">as</span> File)
+            .<span class="code-function">arrayBuffer</span>());
+
+  <span class="code-keyword">const</span> resumeParseResult =
+    <span class="code-keyword">await</span> <span class="code-function">parsePdfToDynamicResume</span>(
+      resumeBuffer);
+
+  <span class="code-keyword">if</span> (params.onProgress) {
+    params.<span class="code-function">onProgress</span>(<span class="code-string">"complete"</span>,
+      { stageId: <span class="code-string">"stage2_resume-parse"</span> });
+  }</code></pre>
+          </div>
+          <div class="translation-english" style="background: var(--color-surface-warm); padding: var(--space-6); font-size: var(--text-sm); line-height: 1.7; border-left: 3px solid var(--color-accent);">
+            <span class="translation-label" style="display: block; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-muted); margin-bottom: var(--space-4);">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">GenerateTailoredResumeParams</code> → Everything the pipeline needs: your resume <abbr title="PDF — Portable Document Format." class="tooltip">PDF</abbr>, optional LinkedIn PDF, and the target job description</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">const model = process.env.LLM_MODEL || ...</code> → Which AI model to use — read from config so it can be swapped without code changes</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">Buffer.isBuffer(resumePdf) ? resumePdf : Buffer.from(...)</code> → Handle two cases: <abbr title="Buffer — raw binary data in memory." class="tooltip">PDF already in memory</abbr>, or PDF coming as a File object that needs to be read</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">parsePdfToDynamicResume(resumeBuffer)</code> → Extract text from the PDF bytes and structure it into <abbr title="JSON — a data format with named fields like { roles: [...], skills: [...] }." class="tooltip">JSON</abbr> (roles, bullets, skills)</p>
+              <p class="tl" style="margin: 0; padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">params.onProgress("complete", {...})</code> → Send a progress update to the <abbr title="Streaming — the live connection where status updates are sent as they happen." class="tooltip">streaming client</abbr> — "Step 2 done!" updates the progress bar the user sees</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout callout-accent animate-in" style="background: var(--color-accent-light); border-left: 4px solid var(--color-accent); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6);">
+          <p style="margin: 0; font-size: var(--text-sm); color: var(--color-text); line-height: var(--leading-normal);">
+            <strong>The two-pass approach matters</strong> because a single-pass rewrite often produces inconsistent tone across bullets. Pass 2 is the "editor" pass — it makes everything coherent. Think of Pass 1 as a team of writers each drafting one sentence, and Pass 2 as a single editor reading the whole thing aloud.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SCREEN 6 · The Scoring Algorithm
+      ═══════════════════════════════════════════════════════════ -->
+      <section class="screen animate-in" style="margin-top: var(--space-16);">
+        <h2 class="screen-heading animate-in" style="font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-4);">How Aladdin Knows Which Jobs Are a Good Match</h2>
+
+        <p class="animate-in" style="font-size: var(--text-base); line-height: var(--leading-normal); color: var(--color-text-secondary); max-width: 640px; margin-bottom: var(--space-8);">
+          Before any AI is involved, a pure math algorithm scores each job 0–100 against your resume. No <abbr title="Large Language Model — not needed here. This step is pure arithmetic." class="tooltip">AI</abbr> needed — just text matching and weighted arithmetic.
+        </p>
+
+        <!-- Scoring breakdown: icon-label rows -->
+        <div class="icon-rows stagger-children animate-in" style="display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-8);">
+
+          <div class="icon-row animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="icon-circle" style="background: var(--color-accent-light); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;">🎯</div>
+            <div>
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">Role Match <span style="font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-accent); background: var(--color-accent-light); padding: 2px 8px; border-radius: var(--radius-full);">30 pts</span></strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">How similar is the job title to your past roles? Uses <abbr title="Jaccard similarity — a way to measure text similarity by counting shared words divided by the total unique words in both strings. Returns 0.0 (no overlap) to 1.0 (identical)." class="tooltip">Jaccard similarity</abbr> on shared words.</p>
+            </div>
+          </div>
+
+          <div class="icon-row animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="icon-circle" style="background: var(--color-accent-light); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;">🛠️</div>
+            <div>
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">Skill Match <span style="font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-accent); background: var(--color-accent-light); padding: 2px 8px; border-radius: var(--radius-full);">50 pts</span></strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">How many of your skills appear in the job description? More skills = more points, with diminishing returns past 15 matches.</p>
+            </div>
+          </div>
+
+          <div class="icon-row animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="icon-circle" style="background: var(--color-accent-light); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;">📍</div>
+            <div>
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">Location Match <span style="font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-accent); background: var(--color-accent-light); padding: 2px 8px; border-radius: var(--radius-full);">10 pts</span></strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">Remote job? Full 10 pts. Your city? 10 pts. Elsewhere? 5 pts. Location matters less than skills, so its weight is small.</p>
+            </div>
+          </div>
+
+          <div class="icon-row animate-in" style="display: flex; align-items: flex-start; gap: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-4) var(--space-5); box-shadow: var(--shadow-sm);">
+            <div class="icon-circle" style="background: var(--color-accent-light); width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0;">📋</div>
+            <div>
+              <strong style="font-family: var(--font-display); font-size: var(--text-base);">Base Score <span style="font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-accent); background: var(--color-accent-light); padding: 2px 8px; border-radius: var(--radius-full);">10 pts</span></strong>
+              <p style="margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-text-secondary);">You uploaded a resume. That's worth something — every scored applicant starts with a floor of 10 points.</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Translation Block: scoring -->
+        <div class="translation-block animate-in" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-md); margin-bottom: var(--space-8);">
+          <div class="translation-code" style="background: var(--color-bg-code); color: #CDD6F4; padding: var(--space-6); font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.7; position: relative; overflow-x: hidden;">
+            <span class="translation-label" style="position: absolute; top: var(--space-2); right: var(--space-3); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.5; color: #CDD6F4;">CODE</span>
+            <pre><code style="white-space: pre-wrap; word-break: break-word;"><span class="code-comment">// 3. ROLE MATCHING (30 Points)</span>
+<span class="code-keyword">const</span> titleSimilarity =
+  <span class="code-function">calculateTextSimilarity</span>(
+    jobTitle, targetRoles);
+components.<span class="code-property">roleMatch</span> =
+  Math.<span class="code-function">min</span>(<span class="code-number">30</span>,
+    Math.<span class="code-function">ceil</span>(titleSimilarity * <span class="code-number">100</span>));
+
+<span class="code-comment">// 4. SKILL MATCHING (50 Points)</span>
+<span class="code-keyword">let</span> foundSkills = <span class="code-number">0</span>;
+allSkills.<span class="code-function">forEach</span>(skill =&gt; {
+  <span class="code-keyword">if</span> (jobText.<span class="code-function">includes</span>(skill)) {
+    foundSkills++;
+  }
+});
+components.<span class="code-property">skillMatch</span> =
+  Math.<span class="code-function">min</span>(<span class="code-number">50</span>,
+    Math.<span class="code-function">ceil</span>(foundSkills * <span class="code-number">3.5</span>));</code></pre>
+          </div>
+          <div class="translation-english" style="background: var(--color-surface-warm); padding: var(--space-6); font-size: var(--text-sm); line-height: 1.7; border-left: 3px solid var(--color-accent);">
+            <span class="translation-label" style="display: block; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-muted); margin-bottom: var(--space-4);">PLAIN ENGLISH</span>
+            <div class="translation-lines">
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">calculateTextSimilarity(jobTitle, targetRoles)</code> → Measure how similar two strings are: count the shared words, divide by total unique words (<abbr title="Jaccard similarity — a classic algorithm for measuring overlap between two sets. 'Software Engineer' vs 'Engineer' shares 1 word out of 2 unique words = 0.5 similarity." class="tooltip">Jaccard similarity</abbr>). Returns 0.0 to 1.0.</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">Math.min(30, Math.ceil(...))</code> → Cap at 30 points — role match can never exceed its category maximum</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">allSkills.forEach(skill => if(jobText.includes(skill)))</code> → For each skill on your resume, check if that exact word appears in the job description</p>
+              <p class="tl" style="margin: 0 0 var(--space-3); padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">foundSkills++</code> → Count up every skill match</p>
+              <p class="tl" style="margin: 0; padding-left: var(--space-3); border-left: 2px solid var(--color-border);"><code style="font-size: var(--text-xs); color: var(--color-accent);">Math.ceil(foundSkills * 3.5)</code> → 1 matching skill = 3.5 pts, 10 skills = 35 pts, 15+ skills → capped at 50 pts</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════
+             QUIZ
+        ══════════════════════════════════════════ -->
+        <div class="quiz-container animate-in" id="quiz-module4" style="background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-8); box-shadow: var(--shadow-md); margin-top: var(--space-8);">
+
+          <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-8);">
+            <span style="font-size: 1.5rem;">🧞</span>
+            <h3 style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; margin: 0;">Check Your Understanding</h3>
+          </div>
+
+          <!-- Q1 -->
+          <div class="quiz-question-block" style="margin-bottom: var(--space-8);"
+               data-correct="option-a"
+               data-explanation-right="Exactly! The stream emits 'stage' events at the start of each pipeline stage. Listening for these lets you show real-time progress like 'Loading job... Parsing resume... Writing cover letter...'"
+               data-explanation-wrong="Look at the stream events defined at the top of the route file: stage, log, complete, done, error. Which one signals the start of a new phase?">
+            <h3 class="quiz-question" style="font-family: var(--font-display); font-size: var(--text-base); font-weight: 600; margin-bottom: var(--space-4);">Cover letter generation feels slow. You want to show the user "Stage 2: Parsing resume..." as a progress indicator. Which event type from the <abbr title="Server-Sent Events stream — the live channel where the server sends progress updates." class="tooltip">SSE</abbr> stream would you listen for?</h3>
+            <div class="quiz-options" style="display: flex; flex-direction: column; gap: var(--space-2);">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The 'stage' event — it fires whenever a new stage begins</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The 'done' event — it fires when the whole thing is complete</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The 'log' event — it fires for detailed logs within a stage</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">There is no event for progress — you would add a loading spinner instead</span>
+              </button>
+            </div>
+            <div class="quiz-feedback" style="max-height: 0; overflow: hidden; opacity: 0;"></div>
+          </div>
+
+          <!-- Q2 -->
+          <div class="quiz-question-block" style="margin-bottom: var(--space-8);"
+               data-correct="option-b"
+               data-explanation-right="Exactly! The enforceNoDrops() validator runs after generation and ensures that every bullet from the original resume is present in the tailored version. If it detects a missing bullet, it rejects the output."
+               data-explanation-wrong="The pipeline has three validators in Pass 2. One checks for dropped bullets, one checks for fabrication, one checks evidence coverage. Which one is specifically about missing bullets?">
+            <h3 class="quiz-question" style="font-family: var(--font-display); font-size: var(--text-base); font-weight: 600; margin-bottom: var(--space-4);">A user reports their tailored resume removed an important bullet from a past job. Which validation step should have prevented this?</h3>
+            <div class="quiz-options" style="display: flex; flex-direction: column; gap: var(--space-2);">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The ATS score validator — it checks keyword coverage</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The 'no drops' enforcer — it ensures every original bullet appears in the output</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The fabrication checker — it catches invented experience</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The LLM temperature setting — a lower temperature prevents deletion</span>
+              </button>
+            </div>
+            <div class="quiz-feedback" style="max-height: 0; overflow: hidden; opacity: 0;"></div>
+          </div>
+
+          <!-- Q3 -->
+          <div class="quiz-question-block" style="margin-bottom: var(--space-8);"
+               data-correct="option-c"
+               data-explanation-right="Exactly! Adding a small random offset (like Math.random() * 6 - 3) makes scores feel computed rather than rounded. The codebase actually does this — look for the 'jitter' comment in scoring.ts."
+               data-explanation-wrong="The scoring math naturally produces round-ish numbers because each component is an integer. Adding a small random offset is a common trick to make algorithmic scores feel more natural.">
+            <h3 class="quiz-question" style="font-family: var(--font-display); font-size: var(--text-base); font-weight: 600; margin-bottom: var(--space-4);">Every job in the feed has a round match score — 50, 60, 70. No scores like 53 or 67. A user thinks the scoring is fake. What would you change to make scores feel more authentic?</h3>
+            <div class="quiz-options" style="display: flex; flex-direction: column; gap: var(--space-2);">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">Use a more sophisticated ML model for matching</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">Add more skills categories to the scoring algorithm</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">Add a small random jitter to the total score (e.g., ±3 points)</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">This is expected behavior — scores should be round numbers</span>
+              </button>
+            </div>
+            <div class="quiz-feedback" style="max-height: 0; overflow: hidden; opacity: 0;"></div>
+          </div>
+
+          <!-- Q4 -->
+          <div class="quiz-question-block" style="margin-bottom: var(--space-8);"
+               data-correct="option-d"
+               data-explanation-right="Exactly! The model is configurable via LLM_MODEL in the environment config. The callLLM() utility abstracts the AI provider, so changing the model string is often all that's needed."
+               data-explanation-wrong="The AI model isn't hardcoded in a component — it's configured at the infrastructure level. Think about where the model name is set in the pipeline code.">
+            <h3 class="quiz-question" style="font-family: var(--font-display); font-size: var(--text-base); font-weight: 600; margin-bottom: var(--space-4);">You want to swap from Gemini Flash to Claude Sonnet for cover letter generation. Based on what you learned, which part of the system would you change?</h3>
+            <div class="quiz-options" style="display: flex; flex-direction: column; gap: var(--space-2);">
+              <button class="quiz-option" data-value="option-a" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The CoverLetterModal.tsx component</span>
+              </button>
+              <button class="quiz-option" data-value="option-b" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The Zustand store</span>
+              </button>
+              <button class="quiz-option" data-value="option-c" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The database schema</span>
+              </button>
+              <button class="quiz-option" data-value="option-d" onclick="selectOption(this)" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 2px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; width: 100%; text-align: left;">
+                <div class="quiz-option-radio" style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--color-border); flex-shrink: 0;"></div>
+                <span style="font-size: var(--text-sm);">The LLM_MODEL environment variable and/or the callLLM() utility function</span>
+              </button>
+            </div>
+            <div class="quiz-feedback" style="max-height: 0; overflow: hidden; opacity: 0;"></div>
+          </div>
+
+          <div style="display: flex; gap: var(--space-3); flex-wrap: wrap;">
+            <button class="quiz-check-btn" onclick="checkQuiz('quiz-module4')" style="padding: var(--space-3) var(--space-6); background: var(--color-accent); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-body); font-size: var(--text-sm); font-weight: 600; cursor: pointer; transition: background var(--duration-fast);">Check Answers</button>
+            <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module4')" style="padding: var(--space-3) var(--space-6); background: var(--color-surface); color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: var(--text-sm); cursor: pointer;">Try Again</button>
+          </div>
+
+        </div>
+        <!-- /quiz -->
+
+      </section>
+      <!-- /screen 6 -->
+
+    </div>
+    <!-- /module-body -->
+  </div>
+  <!-- /module-content -->
+</section>

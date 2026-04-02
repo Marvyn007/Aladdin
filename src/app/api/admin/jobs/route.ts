@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { getAdminDashboardStats } from '@/lib/admin/data'
+import { getAdminJobs } from '@/lib/admin/data'
 import { requireRole } from '@/lib/admin/rbac'
 
 export const dynamic = 'force-dynamic'
@@ -12,10 +12,10 @@ export async function GET() {
   }
 
   try {
-    const stats = await getAdminDashboardStats()
-    return NextResponse.json(stats)
+    const jobs = await getAdminJobs()
+    return NextResponse.json({ jobs })
   } catch (error) {
-    console.error('[admin:dashboard-stats] Error:', error)
+    console.error('[admin:jobs] Error:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

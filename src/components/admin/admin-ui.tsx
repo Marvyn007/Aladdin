@@ -3,11 +3,19 @@
 import type { ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 
-import { getInitials } from "@/components/admin/admin-data";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
 
 export function AdminPageIntro({
   eyebrow,
@@ -22,18 +30,16 @@ export function AdminPageIntro({
 }) {
   return (
     <section className="admin-page-intro admin-enter">
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <p className="admin-kicker">{eyebrow}</p>
-        <h1 className="text-[1.625rem] font-semibold tracking-[-0.03em] text-foreground sm:text-[1.875rem]">
+        <h1 className="text-[1.68rem] font-semibold tracking-[-0.04em] text-foreground sm:text-[2rem]">
           {title}
         </h1>
-        <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+        <p className="max-w-[44rem] text-sm leading-6 text-muted-foreground">
           {description}
         </p>
       </div>
-      {actions ? (
-        <div className="flex flex-wrap items-center gap-3">{actions}</div>
-      ) : null}
+      {actions ? <div className="admin-page-intro-actions">{actions}</div> : null}
     </section>
   );
 }
@@ -50,7 +56,7 @@ export function DashboardCard({
   badge?: string;
 }) {
   return (
-    <div className="dashboard-card">
+    <div className="dashboard-card admin-enter">
       <div className="dashboard-card-header">
         <p className="dashboard-card-title">{title}</p>
         {badge ? (
@@ -105,21 +111,21 @@ export function AdminPanel({
   flush?: boolean;
 }) {
   return (
-    <Card className={cn("admin-panel", className)}>
-      <CardHeader className="gap-2 border-b border-border/70 px-6 pb-4 pt-5">
+    <Card className={cn("admin-panel admin-enter", flush && "admin-panel--flush", className)}>
+      <CardHeader className="gap-1.5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 flex-1 space-y-1">
-            <CardTitle className="text-[1.05rem] font-semibold tracking-[-0.02em] text-foreground">
+            <CardTitle className="text-[1rem] font-semibold tracking-[-0.02em] text-foreground">
               {title}
             </CardTitle>
-            <CardDescription className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            <CardDescription className="max-w-[42rem] text-sm leading-6 text-muted-foreground">
               {description}
             </CardDescription>
           </div>
           {action ? <div className="w-full xl:w-auto xl:max-w-[48%] xl:shrink-0">{action}</div> : null}
         </div>
       </CardHeader>
-      <CardContent className={flush ? "p-0" : "p-5"}>{children}</CardContent>
+      <CardContent>{children}</CardContent>
     </Card>
   );
 }
@@ -134,16 +140,16 @@ export function AdminIdentity({
   badge?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <Avatar className="size-10 border border-border/80 bg-secondary/80 text-foreground">
+    <div className="flex items-start gap-3">
+      <Avatar className="size-9 border border-border/80 bg-white text-foreground shadow-none">
         <AvatarFallback>{getInitials(name)}</AvatarFallback>
       </Avatar>
-      <div className="space-y-0.5">
+      <div className="min-w-0 space-y-0.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-foreground">{name}</span>
+          <span className="truncate font-medium text-foreground">{name}</span>
           {badge}
         </div>
-        <p className="text-sm text-muted-foreground">{secondary}</p>
+        <p className="truncate text-sm text-muted-foreground">{secondary}</p>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
@@ -18,6 +18,12 @@ const isProtectedRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
     console.log(`[Proxy] Request hitting: ${req.nextUrl.pathname}`);
+    if (process.env.NODE_ENV !== 'production' && req.nextUrl.hostname === '127.0.0.1') {
+        const canonicalUrl = req.nextUrl.clone();
+        canonicalUrl.hostname = 'localhost';
+        return NextResponse.redirect(canonicalUrl);
+    }
+
     const { userId } = await auth();
 
     // Fire-and-forget activity tracking for authenticated users
@@ -32,6 +38,12 @@ export default clerkMiddleware(async (auth, req) => {
 
     // TEMP: Admin auth bypassed for development — restore before production
     if (isAdminRoute(req)) {
+        if (!userId) {
+            const signInUrl = new URL('/sign-in', req.url);
+            signInUrl.searchParams.set('redirect_url', req.url);
+            return NextResponse.redirect(signInUrl);
+        }
+
         return NextResponse.next();
     }
 

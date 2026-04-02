@@ -1,0 +1,432 @@
+<section class="module" id="module-3" style="background: var(--color-bg)">
+
+  <!-- ============================================================
+       SCREEN 1: The 6 Correspondents
+       ============================================================ -->
+  <div class="module-screen">
+    <div class="module-content animate-in">
+      <div class="module-tag">Module 03 · The Pipeline</div>
+      <h2 class="module-heading">How Jobs Find You</h2>
+      <p class="module-subheading">The automated pipeline that discovers, filters, and scores thousands of jobs without you lifting a finger</p>
+    </div>
+
+    <div class="module-content animate-in" style="margin-top: var(--space-8)">
+      <h3 class="section-heading">The 6 Correspondents</h3>
+      <p>Every few minutes, 6 different <span class="tooltip" data-tip="An adapter is a piece of code that translates between two different formats or interfaces — like a power adapter converts plugs. Here, each adapter translates a different job board&apos;s data into one standard format Aladdin understands.">adapters</span> are running in the background, fetching fresh jobs from their assigned sources. Think of them as six specialized journalists — each fluent in a different job board&apos;s language.</p>
+    </div>
+
+    <div class="pattern-cards stagger-children" style="margin-top: var(--space-8)">
+
+      <div class="pattern-card animate-in">
+        <div class="pattern-icon">🌿</div>
+        <div class="pattern-title">Greenhouse</div>
+        <div class="pattern-desc">Polls company career pages via their public <span class="tooltip" data-tip="ATS stands for Applicant Tracking System — the software companies use to manage job postings and applications (think: the backend of a careers page). Greenhouse, Lever, and Workday are all ATSes.">ATS</span> <span class="tooltip" data-tip="API stands for Application Programming Interface — a set of rules that lets two software programs talk to each other. A public API means anyone can use it without special permission.">API</span>. Used by hundreds of tech companies.</div>
+      </div>
+
+      <div class="pattern-card animate-in">
+        <div class="pattern-icon">🔧</div>
+        <div class="pattern-title">Lever</div>
+        <div class="pattern-desc">Another <span class="tooltip" data-tip="ATS stands for Applicant Tracking System — software that manages job postings and candidate pipelines. Lever is a popular competitor to Greenhouse used by many startups.">ATS</span> with its own public board <span class="tooltip" data-tip="API (Application Programming Interface) — a way for programs to request data from each other. Lever exposes an API so developers can fetch all open jobs at any company using Lever.">API</span>.</div>
+      </div>
+
+      <div class="pattern-card animate-in">
+        <div class="pattern-icon">🎭</div>
+        <div class="pattern-title">The Muse</div>
+        <div class="pattern-desc"><span class="tooltip" data-tip="REST API is a style of API that uses standard web requests (GET, POST, etc.) to send and receive data, usually as JSON. Most modern APIs are REST APIs.">REST API</span> with 10,000+ jobs. Requires an API key to authenticate requests.</div>
+      </div>
+
+      <div class="pattern-card animate-in">
+        <div class="pattern-icon">🌍</div>
+        <div class="pattern-title">Arbeitnow</div>
+        <div class="pattern-desc">Open <span class="tooltip" data-tip="REST API (Representational State Transfer) — a common pattern for web APIs that uses URLs and HTTP methods. &quot;Open&quot; means no key needed — just make a request and get data.">REST API</span>, no key needed. 2,000+ remote jobs from a European-founded board.</div>
+      </div>
+
+      <div class="pattern-card animate-in">
+        <div class="pattern-icon">🏔️</div>
+        <div class="pattern-title">Himalayas</div>
+        <div class="pattern-desc">Remote-first job board <span class="tooltip" data-tip="REST API — a way to fetch structured data over HTTP. Himalayas exposes one so developers can pull their 5,000+ listings programmatically instead of scraping their website.">REST API</span> with 5,000+ listings. Focused entirely on remote-friendly roles.</div>
+      </div>
+
+      <div class="pattern-card animate-in">
+        <div class="pattern-icon">⚙️</div>
+        <div class="pattern-title">Workday</div>
+        <div class="pattern-desc">Scrapes Workday cloud portals using <span class="tooltip" data-tip="XPath (XML Path Language) is a syntax for navigating and extracting data from HTML/XML documents — like giving GPS coordinates inside a webpage. Used here because Workday has no official API.">XPath</span>. No official <span class="tooltip" data-tip="API — a defined interface for requesting data from software. Workday doesn&apos;t offer one, so Aladdin has to scrape the page HTML directly using XPath selectors.">API</span> available, so Aladdin reads the raw page structure.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 2: The Adapter Pattern
+       ============================================================ -->
+  <div class="module-screen">
+    <div class="module-content animate-in">
+      <h3 class="section-heading">The Adapter Pattern</h3>
+      <p>All 6 adapters speak the same language — they all implement a <code>SourceAdapter</code> <span class="tooltip" data-tip="An interface in programming is a contract — a list of methods a class must have. Any class that &quot;implements&quot; an interface promises to include those methods with those signatures. Think of it like a job description: to be hired as a chef, you must be able to cook, plate, and season food.">interface</span> with a <code>poll()</code> method. Like a universal power adapter: the wall socket is different in every country, but the plug coming out is always the same.</p>
+    </div>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE</span>
+        <pre><code>
+<span class="code-line"><span class="code-keyword">export class</span> <span class="code-function">GreenhouseAdapter</span></span>
+<span class="code-line">    <span class="code-keyword">implements</span> SourceAdapter {</span>
+<span class="code-line">  <span class="code-property">name</span> = <span class="code-string">'greenhouse'</span> <span class="code-keyword">as const</span></span>
+<span class="code-line">  <span class="code-keyword">private</span> <span class="code-property">lastRequestAt</span> = <span class="code-string">0</span></span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">private async</span> <span class="code-function">rateLimit</span>():</span>
+<span class="code-line">      Promise&lt;<span class="code-keyword">void</span>&gt; {</span>
+<span class="code-line">    <span class="code-keyword">const</span> <span class="code-property">elapsed</span> =</span>
+<span class="code-line">      Date.<span class="code-function">now</span>() - <span class="code-keyword">this</span>.<span class="code-property">lastRequestAt</span></span>
+<span class="code-line">    <span class="code-keyword">if</span> (elapsed &lt; RATE_LIMIT_INTERVAL_MS) {</span>
+<span class="code-line">      <span class="code-keyword">await new</span> <span class="code-function">Promise</span>((r) =&gt;</span>
+<span class="code-line">        <span class="code-function">setTimeout</span>(r,</span>
+<span class="code-line">          RATE_LIMIT_INTERVAL_MS - elapsed))</span>
+<span class="code-line">    }</span>
+<span class="code-line">    <span class="code-keyword">this</span>.<span class="code-property">lastRequestAt</span> = Date.<span class="code-function">now</span>()</span>
+<span class="code-line">  }</span>
+<span class="code-line"></span>
+<span class="code-line">  <span class="code-keyword">async</span> <span class="code-function">poll</span>(target: PollTarget):</span>
+<span class="code-line">      Promise&lt;NormalizedJob[]&gt; {</span>
+<span class="code-line">    <span class="code-keyword">await this</span>.<span class="code-function">rateLimit</span>()</span>
+<span class="code-line">    <span class="code-comment">// ... fetch and normalize jobs</span></span>
+<span class="code-line">  }</span>
+<span class="code-line">}</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl"><strong>implements SourceAdapter</strong> — This class signs a contract: it will have a <code>poll()</code> method that returns normalized jobs — same shape as every other adapter.</p>
+          <p class="tl"><strong>name = 'greenhouse'</strong> — Self-identification tag used in logs and task routing so the system knows which adapter ran.</p>
+          <p class="tl"><strong>lastRequestAt = 0</strong> — Timestamp of the last <span class="tooltip" data-tip="An API request is a message your code sends to another service asking for data. Making too many too fast can get you blocked — like calling someone 50 times a minute.">API request</span> — used to enforce politeness delays between calls.</p>
+          <p class="tl"><strong>rateLimit()</strong> — Before every request, check: has enough time passed? If not, wait. This prevents getting blocked by Greenhouse&apos;s servers.</p>
+          <p class="tl"><strong>elapsed &lt; RATE_LIMIT_INTERVAL_MS</strong> — Have we waited long enough since the last request?</p>
+          <p class="tl"><strong>await new Promise(...)</strong> — Pause execution for the remaining wait time — this is how JavaScript &quot;sleeps&quot; without freezing the whole program.</p>
+          <p class="tl"><strong>this.lastRequestAt = Date.now()</strong> — Record that we just made a request so the next call can calculate the wait correctly.</p>
+          <p class="tl"><strong>poll(target)</strong> — The main method: given a company, fetch all their open jobs and return them in the standard format.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-accent animate-in" style="margin-top: var(--space-8)">
+      <strong>The Adapter Pattern</strong> is one of the most powerful in software engineering. Adding support for a new job source means writing ONE new class that implements <code>SourceAdapter</code> — the rest of the pipeline just works. You could ask an AI to "create a LinkedInAdapter that implements SourceAdapter" and the entire system would pick it up automatically.
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 3: Data Flow Animation — From Cron to Database
+       ============================================================ -->
+  <div class="module-screen">
+    <div class="module-content animate-in">
+      <h3 class="section-heading">From Cron to Database</h3>
+      <p>Here&apos;s the complete journey a job takes from being posted on a company&apos;s website to appearing in your feed. Every step happens automatically, every few minutes, for every company in the system.</p>
+    </div>
+
+    <div class="flow-animation animate-in" data-steps='[
+      {"highlight":"flow-actor-1","label":"Cron timer fires every 5 minutes: POST /api/cron/tick"},
+      {"highlight":"flow-actor-2","label":"Scheduler checks: which companies need re-polling?","packet":true,"from":"actor-1","to":"actor-2"},
+      {"highlight":"flow-actor-2","label":"New tasks added to the Postgres queue: &quot;poll Stripe on Greenhouse&quot;"},
+      {"highlight":"flow-actor-3","label":"Worker dequeues the task and routes to GreenhouseAdapter","packet":true,"from":"actor-2","to":"actor-3"},
+      {"highlight":"flow-actor-3","label":"GreenhouseAdapter fetches all of Stripe&apos;s open jobs"},
+      {"highlight":"flow-actor-4","label":"32 jobs returned — running cleanup filter...","packet":true,"from":"actor-3","to":"actor-4"},
+      {"highlight":"flow-actor-4","label":"8 jobs rejected (Senior/Lead titles). 5 are duplicates. 19 are new."},
+      {"highlight":"flow-actor-5","label":"19 new entry-level jobs saved to the database","packet":true,"from":"actor-4","to":"actor-5"},
+      {"highlight":"flow-actor-5","label":"Task marked complete. Queue moves to next company."}
+    ]'>
+      <div class="flow-actors">
+        <div class="flow-actor" id="flow-actor-1"><div class="flow-actor-icon">⏰</div><span><span class="tooltip" data-tip="A cron job is a task scheduled to run automatically at set intervals — like an alarm clock for code. The name comes from Unix systems. &quot;POST /api/cron/tick&quot; is the web address Vercel calls to trigger it.">Cron</span></span></div>
+        <div class="flow-actor" id="flow-actor-2"><div class="flow-actor-icon">📋</div><span><span class="tooltip" data-tip="A queue is a waiting list of tasks to be processed in order — like a print queue. Here it stores jobs like &quot;poll Stripe on Greenhouse&quot; that workers pick up one by one.">Queue</span></span></div>
+        <div class="flow-actor" id="flow-actor-3"><div class="flow-actor-icon">🔌</div><span>Adapter</span></div>
+        <div class="flow-actor" id="flow-actor-4"><div class="flow-actor-icon">🚫</div><span>Filter</span></div>
+        <div class="flow-actor" id="flow-actor-5"><div class="flow-actor-icon">🗄️</div><span>Database</span></div>
+      </div>
+      <div class="flow-packet" id="flow-packet"></div>
+      <div class="flow-step-label" id="flow-label">Click "Next Step" to begin</div>
+      <div class="flow-controls">
+        <button class="btn flow-next-btn">Next Step</button>
+        <button class="btn flow-reset-btn">Restart</button>
+        <span class="flow-progress"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 4: The Ruthless Cleanup Filter
+       ============================================================ -->
+  <div class="module-screen">
+    <div class="module-content animate-in">
+      <h3 class="section-heading">The Editor Who Never Apologizes</h3>
+      <p>After jobs are fetched, every single one runs through the cleanup filter. It&apos;s intentionally aggressive — missing a good job is fine, but showing you a bad one wastes your time.</p>
+    </div>
+
+    <div class="step-cards stagger-children" style="margin-top: var(--space-8)">
+
+      <div class="step-card animate-in">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>🚫 Auto-Delete: Senior titles</strong>
+          <p>Title contains <em>"Senior", "Lead", "Principal", "Manager", "Director", "VP"</em> — immediately rejected. These are not entry-level roles regardless of the job description.</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>🚫 Auto-Delete: Too much experience required</strong>
+          <p>More than 2 years of experience explicitly stated in the description — auto-deleted. The filter parses the description looking for phrases like "5+ years required."</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>🚫 Auto-Delete: Wrong field</strong>
+          <p>Healthcare, finance, HR, sales, marketing, legal — out. Aladdin is for software engineers, not every job that uses a computer.</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>🚫 Auto-Delete: Bad description</strong>
+          <p>Fewer than 3,000 characters or placeholder text detected (e.g., "click to apply", "view full description") — the job content didn&apos;t load properly, so it gets dropped.</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <strong>✅ Passes all checks</strong>
+          <p>Job survives every filter — it&apos;s saved to the database and appears in your feed. Only the best reach you.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="module-content animate-in" style="margin-top: var(--space-10)">
+      <h4 style="margin-bottom: var(--space-4); font-size: var(--text-lg)">The Filter in Code</h4>
+    </div>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE</span>
+        <pre><code>
+<span class="code-line"><span class="code-keyword">export const</span> <span class="code-property">MIN_DESCRIPTION_LENGTH</span></span>
+<span class="code-line">  = <span class="code-string">3000</span>;</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">export const</span> <span class="code-property">CONFIDENCE_THRESHOLDS</span> = {</span>
+<span class="code-line">  <span class="code-property">description</span>: <span class="code-string">0.6</span>,</span>
+<span class="code-line">  <span class="code-property">date</span>: <span class="code-string">0.5</span>,</span>
+<span class="code-line">  <span class="code-property">location</span>: <span class="code-string">0.4</span>,</span>
+<span class="code-line">} <span class="code-keyword">as const</span>;</span>
+<span class="code-line"></span>
+<span class="code-line"><span class="code-keyword">const</span> <span class="code-property">PLACEHOLDER_PATTERNS</span> = [</span>
+<span class="code-line">  <span class="code-string">/view full description/i</span>,</span>
+<span class="code-line">  <span class="code-string">/click to apply/i</span>,</span>
+<span class="code-line">  <span class="code-string">/please log in/i</span>,</span>
+<span class="code-line">  <span class="code-string">/sign in to view/i</span>,</span>
+<span class="code-line">] <span class="code-keyword">as const</span>;</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl"><strong>MIN_DESCRIPTION_LENGTH = 3000</strong> — Reject any job with fewer than 3,000 characters in the description. A real job posting is detailed; a stub is not.</p>
+          <p class="tl"><strong>CONFIDENCE_THRESHOLDS</strong> — Minimum confidence scores for scraped data. If the scraper isn&apos;t confident enough it got the real content, the job is rejected.</p>
+          <p class="tl"><strong>description: 0.6</strong> — Must be at least 60% confident the description field is real content, not garbled HTML or an error message.</p>
+          <p class="tl"><strong>PLACEHOLDER_PATTERNS</strong> — <span class="tooltip" data-tip="Regex (short for Regular Expression) is a pattern-matching language for text. It lets you search for specific sequences of characters — like searching &quot;view full description&quot; anywhere in a string, case-insensitively.">Regex</span> patterns that identify fake descriptions. If these phrases appear, the job page didn&apos;t load properly.</p>
+          <p class="tl"><strong>/view full description/i</strong> — Case-insensitive match for this exact placeholder phrase. The <code>/i</code> means it catches "View Full Description" and "VIEW FULL DESCRIPTION" too.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-warning animate-in" style="margin-top: var(--space-8)">
+      <strong>The philosophy:</strong> false negatives (missing a good job) are acceptable. False positives (keeping a bad job) are not. When in doubt, delete.
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 5: Content Deduplication
+       ============================================================ -->
+  <div class="module-screen">
+    <div class="module-content animate-in">
+      <h3 class="section-heading">The Fingerprint System</h3>
+      <p>The same job often appears on multiple sources simultaneously. Before saving any job, the system generates a unique fingerprint (a <span class="tooltip" data-tip="A hash is the output of a mathematical function that converts any input text into a fixed-length string of characters. The same input always produces the same hash. Even a tiny change in the input produces a completely different hash — this makes hashes perfect for detecting duplicates.">hash</span>) and checks if it already exists.</p>
+    </div>
+
+    <div class="step-cards stagger-children" style="margin-top: var(--space-8)">
+
+      <div class="step-card animate-in">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Take the raw job data</strong>
+          <p>Combine: job title + company name + location + full description. These four fields together uniquely identify a specific job posting.</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong><span class="tooltip" data-tip="Normalize means to put data into a consistent standard form — like making sure &quot;New York&quot;, &quot;new york&quot;, and &quot;NEW YORK&quot; all become &quot;new york&quot; before comparison. This prevents the same content from hashing differently just due to formatting.">Normalize</span> it</strong>
+          <p>Lowercase everything, trim whitespace from edges, strip special characters. This ensures "Software Engineer, NYC" and "Software Engineer,  NYC" produce the same fingerprint.</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Run <span class="tooltip" data-tip="SHA-256 is a specific hashing algorithm — a mathematical recipe that turns any text into exactly 64 characters. It&apos;s used in everything from blockchain to password storage. The &quot;256&quot; refers to the 256-bit output size.">SHA-256</span> hash</strong>
+          <p>A mathematical function that turns the normalized text into a unique 64-character fingerprint. It&apos;s one-way — you can&apos;t reverse it — and deterministic — same input, always same output.</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>Check the database</strong>
+          <p>Does a job with this exact hash already exist? The database has an index on the hash column so this lookup is nearly instant, even with millions of jobs stored.</p>
+        </div>
+      </div>
+
+      <div class="step-card animate-in">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <strong>If yes → skip silently. If no → save it.</strong>
+          <p><span class="tooltip" data-tip="Deduplication means removing duplicates from a dataset. Here it means the same job from two different sources only gets stored once, keeping the database clean and preventing users from seeing the same listing twice.">Deduplication</span> is silent — no errors, no logs, just a quiet skip. The second copy is discarded without ceremony.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="callout callout-info animate-in" style="margin-top: var(--space-8)">
+      <strong>A hash is like a fingerprint for data.</strong> Run the same text through SHA-256 twice, you get the exact same output. Change even one character, and the hash is completely different. This makes <span class="tooltip" data-tip="Deduplication — the process of identifying and removing duplicate entries. Using a hash makes this O(1) fast: you just look up whether the hash exists, no need to compare full text.">deduplication</span> both fast and reliable.
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SCREEN 6: Quiz
+       ============================================================ -->
+  <div class="module-screen">
+    <div class="module-content animate-in">
+      <h3 class="section-heading">Test Your Understanding</h3>
+      <p>Four scenarios. Apply what you learned — no scrolling back for the answers.</p>
+    </div>
+
+    <div class="quiz-container animate-in" id="quiz-module3">
+
+      <!-- Q1 -->
+      <div class="quiz-question-block"
+           data-correct="option-d"
+           data-explanation-right="Exactly! The adapter pattern means each source gets its own class. Creating LinkedInAdapter means the rest of the pipeline — queue, filter, database — works automatically without any changes."
+           data-explanation-wrong="The adapter pattern is key here. Each source is a separate class with the same interface. Adding a source means adding a class, not modifying existing code.">
+        <h3 class="quiz-question">You want to add LinkedIn as a new job source. Based on what you learned, what&apos;s the right approach?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>Edit the existing GreenhouseAdapter to also handle LinkedIn</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>Create a new API route at /api/linkedin-jobs</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>Write the LinkedIn fetching logic directly in the cron endpoint</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>Create a new LinkedInAdapter class that implements SourceAdapter</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q2 -->
+      <div class="quiz-question-block"
+           data-correct="option-b"
+           data-explanation-right="Exactly! The filter is the most common reason a job vanishes. Even a role like &apos;Senior Intern Engineer&apos; would be rejected because &apos;Senior&apos; triggers the title filter."
+           data-explanation-wrong="When a specific job is missing from the feed, the filter is always the first suspect. It&apos;s intentionally aggressive — a single matching keyword is enough to delete a job.">
+        <h3 class="quiz-question">A user complains they can&apos;t find a job at a company that definitely posts on Greenhouse. The job exists on the company&apos;s website. What&apos;s the most likely cause?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The database is down</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The cleanup filter rejected the job (e.g., the title contained a filtered keyword)</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>Greenhouse&apos;s API is returning a 404</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The company is not in the seed list of companies to poll</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q3 -->
+      <div class="quiz-question-block"
+           data-correct="option-c"
+           data-explanation-right="Exactly! Content hashing is the deduplication mechanism. The same job, regardless of which source found it, produces the same hash — so only the first insert succeeds and the second is silently skipped."
+           data-explanation-wrong="Think about the fingerprint system. Two copies of the same content produce the same hash. What does the database do when it sees a duplicate hash?">
+        <h3 class="quiz-question">The same Software Engineer role at Stripe appears on both Greenhouse AND Lever. What prevents it from showing up twice in the database?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The scheduler only assigns each company to one adapter</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The duplicate is saved but hidden from the UI</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The content hash deduplication check — the normalized job text produces the same hash, so the second insert is skipped</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>Only one adapter is allowed to run at a time</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q4 -->
+      <div class="quiz-question-block"
+           data-correct="option-a"
+           data-explanation-right="Exactly! Each adapter manages its own rate limiting via the rateLimit() method. RATE_LIMIT_INTERVAL_MS is the minimum milliseconds between requests to that source — increase it to slow down."
+           data-explanation-wrong="Rate limiting happens inside the adapter itself — each source controls its own pace to be polite to the external API. The cron timer controls how often the pipeline runs, not how fast each adapter makes requests.">
+        <h3 class="quiz-question">The Greenhouse adapter is making requests too frequently and getting <span class="tooltip" data-tip="Rate limiting is when a server deliberately slows down or blocks requests from a client making too many calls too fast. Like a nightclub bouncer letting in only 10 people per minute — once you hit the limit, you wait.">rate-limited</span> (blocked) by Greenhouse&apos;s servers. Which part of the code controls how often requests are made?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The rateLimit() method and RATE_LIMIT_INTERVAL_MS constant in GreenhouseAdapter</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The cron endpoint&apos;s timer interval</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The queue priority field</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The database connection pool size</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <button class="quiz-check-btn" onclick="checkQuiz('quiz-module3')">Check Answers</button>
+      <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module3')">Try Again</button>
+
+    </div>
+  </div>
+
+</section>

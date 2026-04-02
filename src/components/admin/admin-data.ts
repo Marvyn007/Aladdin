@@ -17,6 +17,11 @@ export type AdminUserRecord = {
   linkedinUrl: string | null;
   notes: string;
   joinedAt: string;
+  timeSpentHours: number;
+  weeklySessions: number;
+  weeklyActiveDays: number;
+  lastSeenAt: string;
+  activityHighlights: string[];
 };
 
 export type AdminJobRecord = {
@@ -24,7 +29,9 @@ export type AdminJobRecord = {
   title: string;
   company: string;
   source: string;
+  discoveredFrom: string;
   location: string;
+  postedAt: string;
   qualityScore: number;
   applications: number;
   resumeRuns: number;
@@ -39,10 +46,12 @@ export type AdminInterviewRecord = {
   title: string;
   company: string;
   usefulVotes: number;
+  notHelpfulVotes: number;
   reportCount: number;
   reviewState: "Approved" | "Needs Review" | "Escalated";
   reviewer: string;
   submittedAt: string;
+  postedBy: string;
   summary: string;
 };
 
@@ -64,8 +73,13 @@ export const adminUsers: AdminUserRecord[] = [
     focus: "Full-stack roles",
     resumeLinks: ["https://drive.google.com/file/d/mock-resume-marvin-v3", "https://drive.google.com/file/d/mock-resume-marvin-v2"],
     linkedinUrl: "https://linkedin.com/in/marvinchaudhary",
-    notes: "Power user. Actively applying to FAANG-adjacent roles. Good candidate for Premium upsell case study.",
+    notes: "Power user. Actively applying to FAANG-adjacent roles. Good candidate for a Premium upsell case study.",
     joinedAt: "Jan 12, 2025",
+    timeSpentHours: 18.6,
+    weeklySessions: 14,
+    weeklyActiveDays: 6,
+    lastSeenAt: "Today, 9:42 PM",
+    activityHighlights: ["Resume editor 6h 20m", "Job tracker 4h 10m", "Cover letters 2h 35m", "Practice prep 1h 50m"],
   },
   {
     id: "u_118",
@@ -84,8 +98,13 @@ export const adminUsers: AdminUserRecord[] = [
     focus: "Platform engineering",
     resumeLinks: ["https://drive.google.com/file/d/mock-resume-sarah-v2"],
     linkedinUrl: "https://linkedin.com/in/sarahjohnson-eng",
-    notes: "Consistent applicant. High ATS match rates. Referred two friends — potential advocate.",
+    notes: "Consistent applicant. High ATS match rates. Referred two friends - potential advocate.",
     joinedAt: "Feb 3, 2025",
+    timeSpentHours: 12.4,
+    weeklySessions: 10,
+    weeklyActiveDays: 5,
+    lastSeenAt: "Today, 3:14 PM",
+    activityHighlights: ["Resume editor 3h 45m", "Saved jobs 2h 15m", "Applications 1h 50m", "Interview prep 1h 5m"],
   },
   {
     id: "u_093",
@@ -106,6 +125,11 @@ export const adminUsers: AdminUserRecord[] = [
     linkedinUrl: null,
     notes: "Skipped preference setup. May need onboarding nudge. Check if email bounce.",
     joinedAt: "Mar 5, 2025",
+    timeSpentHours: 3.1,
+    weeklySessions: 3,
+    weeklyActiveDays: 2,
+    lastSeenAt: "6 days ago, 11:08 AM",
+    activityHighlights: ["Job search 1h 20m", "Profile setup 28m", "Resume upload 12m"],
   },
   {
     id: "u_122",
@@ -126,6 +150,11 @@ export const adminUsers: AdminUserRecord[] = [
     linkedinUrl: "https://linkedin.com/in/emilydavis-swe",
     notes: "No resume yet despite 1 day activity. High intent signal from browsing. Priority nudge candidate.",
     joinedAt: "Mar 28, 2025",
+    timeSpentHours: 2.2,
+    weeklySessions: 4,
+    weeklyActiveDays: 2,
+    lastSeenAt: "Yesterday, 8:11 PM",
+    activityHighlights: ["Job browsing 1h 5m", "Onboarding 24m", "Profile edit 18m"],
   },
   {
     id: "u_135",
@@ -146,6 +175,11 @@ export const adminUsers: AdminUserRecord[] = [
     linkedinUrl: "https://linkedin.com/in/jameswilson-backend",
     notes: "Premium but dormant. Had high activity burst in Jan. Worth a re-engagement email.",
     joinedAt: "Nov 19, 2024",
+    timeSpentHours: 8.7,
+    weeklySessions: 2,
+    weeklyActiveDays: 1,
+    lastSeenAt: "12 days ago, 2:40 PM",
+    activityHighlights: ["Resume editor 2h 10m", "Applications 1h 55m", "Saved jobs 48m"],
   },
   {
     id: "u_141",
@@ -164,8 +198,13 @@ export const adminUsers: AdminUserRecord[] = [
     focus: "New-grad programs",
     resumeLinks: ["https://drive.google.com/file/d/mock-resume-olivia-v1"],
     linkedinUrl: null,
-    notes: "Free tier but surprisingly active. Good upgrade candidate — surface Pro trial.",
+    notes: "Free tier but surprisingly active. Good upgrade candidate - surface a Pro trial.",
     joinedAt: "Mar 30, 2025",
+    timeSpentHours: 4.9,
+    weeklySessions: 6,
+    weeklyActiveDays: 4,
+    lastSeenAt: "Today, 7:03 PM",
+    activityHighlights: ["Job search 2h 10m", "Practice prep 54m", "Applications 31m"],
   },
 ];
 
@@ -175,7 +214,9 @@ export const adminJobs: AdminJobRecord[] = [
     title: "Frontend Engineer",
     company: "Stripe",
     source: "Greenhouse",
+    discoveredFrom: "Stripe careers API",
     location: "Remote",
+    postedAt: "Apr 1, 2026",
     qualityScore: 93,
     applications: 56,
     resumeRuns: 44,
@@ -189,7 +230,9 @@ export const adminJobs: AdminJobRecord[] = [
     title: "Backend Developer",
     company: "Ramp",
     source: "Lever",
+    discoveredFrom: "Ramp jobs sync",
     location: "New York, NY",
+    postedAt: "Mar 30, 2026",
     qualityScore: 88,
     applications: 34,
     resumeRuns: 21,
@@ -203,7 +246,9 @@ export const adminJobs: AdminJobRecord[] = [
     title: "Platform Engineer",
     company: "Notion",
     source: "Greenhouse",
+    discoveredFrom: "Notion ATS poller",
     location: "San Francisco, CA",
+    postedAt: "Mar 28, 2026",
     qualityScore: 61,
     applications: 19,
     resumeRuns: 12,
@@ -217,7 +262,9 @@ export const adminJobs: AdminJobRecord[] = [
     title: "Software Engineer I",
     company: "Mercury",
     source: "Workday",
+    discoveredFrom: "Workday importer",
     location: "Remote",
+    postedAt: "Mar 22, 2026",
     qualityScore: 48,
     applications: 11,
     resumeRuns: 5,
@@ -231,7 +278,9 @@ export const adminJobs: AdminJobRecord[] = [
     title: "Full Stack Engineer",
     company: "Vercel",
     source: "Lever",
+    discoveredFrom: "Lever ingest",
     location: "Hybrid",
+    postedAt: "Apr 2, 2026",
     qualityScore: 90,
     applications: 39,
     resumeRuns: 24,
@@ -248,10 +297,12 @@ export const adminInterviews: AdminInterviewRecord[] = [
     title: "Google SWE Phone Screen",
     company: "Google",
     usefulVotes: 120,
+    notHelpfulVotes: 8,
     reportCount: 1,
     reviewState: "Approved",
     reviewer: "Jamie",
     submittedAt: "Mar 24",
+    postedBy: "Sarah Johnson",
     summary: "Strong candidate prep notes with clear rubric references.",
   },
   {
@@ -259,10 +310,12 @@ export const adminInterviews: AdminInterviewRecord[] = [
     title: "Meta Product Infra Loop",
     company: "Meta",
     usefulVotes: 86,
+    notHelpfulVotes: 14,
     reportCount: 4,
     reviewState: "Needs Review",
     reviewer: "Avery",
     submittedAt: "Mar 22",
+    postedBy: "Mike Chen",
     summary: "Useful detail, but some compensation claims need verification.",
   },
   {
@@ -270,10 +323,12 @@ export const adminInterviews: AdminInterviewRecord[] = [
     title: "Stripe Backend Onsite",
     company: "Stripe",
     usefulVotes: 152,
+    notHelpfulVotes: 21,
     reportCount: 7,
     reviewState: "Escalated",
     reviewer: "Morgan",
     submittedAt: "Mar 20",
+    postedBy: "James Wilson",
     summary: "High engagement, but flagged for interview leakage concerns.",
   },
   {
@@ -281,10 +336,12 @@ export const adminInterviews: AdminInterviewRecord[] = [
     title: "Datadog New Grad OA",
     company: "Datadog",
     usefulVotes: 64,
+    notHelpfulVotes: 5,
     reportCount: 0,
     reviewState: "Approved",
     reviewer: "Jamie",
     submittedAt: "Mar 18",
+    postedBy: "Olivia Martin",
     summary: "Compact, structured, and aligned with user voting patterns.",
   },
 ];

@@ -1,0 +1,427 @@
+<section class="module" id="module-2" style="background: var(--color-bg-warm)">
+
+  <!-- ============================================================
+       SCREEN 1: The Component Map
+       ============================================================ -->
+  <div class="module-screen animate-in">
+    <div class="module-header">
+      <span class="module-eyebrow">Module 2 · Meet the Cast</span>
+      <h2 class="module-title">The Component Map</h2>
+      <p class="module-subtitle">The dashboard you see isn't one big thing — it's 5 separate
+        <span class="tooltip" data-tip="A component is a self-contained building block of a React app — it owns its own layout, logic, and display. Think of it like a LEGO brick: snap them together to build a page.">components</span>,
+        each responsible for one column or overlay.
+      </p>
+    </div>
+
+    <div class="arch-diagram animate-in">
+
+      <!-- Row 1: three columns side by side -->
+      <div style="display:flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; margin-bottom: var(--space-4);">
+
+        <div class="arch-zone" style="flex:1; min-width: 160px;">
+          <h4 class="arch-zone-label">Left Column</h4>
+          <div class="arch-component"
+               data-desc="Upload resume, import jobs, navigation links, settings. The control panel you use before interacting with jobs."
+               onclick="showArchDesc(this)">
+            <div class="arch-icon">🗂️</div>
+            <span>Sidebar.tsx</span>
+          </div>
+        </div>
+
+        <div class="arch-zone" style="flex:1; min-width: 160px;">
+          <h4 class="arch-zone-label">Center Column</h4>
+          <div class="arch-component"
+               data-desc="Scrollable list of job cards with match scores, search bar, and filters. Your main browsing surface."
+               onclick="showArchDesc(this)">
+            <div class="arch-icon">📋</div>
+            <span>JobList.tsx</span>
+          </div>
+        </div>
+
+        <div class="arch-zone" style="flex:1; min-width: 160px;">
+          <h4 class="arch-zone-label">Right Column</h4>
+          <div class="arch-component"
+               data-desc="Selected job details, skill badges, Generate Cover Letter and Tailored Resume buttons. Everything about the one job you clicked."
+               onclick="showArchDesc(this)">
+            <div class="arch-icon">📄</div>
+            <span>JobDetail.tsx</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Row 2: orchestrator -->
+      <div style="display:flex; gap: var(--space-4); flex-wrap: wrap; justify-content: center; margin-bottom: var(--space-4);">
+
+        <div class="arch-zone" style="flex:1; min-width: 200px; border: 2px dashed var(--color-accent);">
+          <h4 class="arch-zone-label" style="color: var(--color-accent);">Orchestrator</h4>
+          <div class="arch-component"
+               data-desc="The director — renders all three columns, manages which view is showing (list, map, tracker). Nothing displays without Dashboard.tsx saying so."
+               onclick="showArchDesc(this)">
+            <div class="arch-icon">🎬</div>
+            <span>Dashboard.tsx</span>
+          </div>
+        </div>
+
+        <div class="arch-zone" style="flex:1; min-width: 200px;">
+          <h4 class="arch-zone-label">Overlays</h4>
+          <div class="arch-component"
+               data-desc="Pops up over everything when you click Generate Cover Letter — shows the streaming AI output word by word as it's written."
+               onclick="showArchDesc(this)"
+               style="margin-bottom: var(--space-2);">
+            <div class="arch-icon">✉️</div>
+            <span>CoverLetterModal.tsx</span>
+          </div>
+          <div class="arch-component"
+               data-desc="Two-panel editor: original resume on the left, AI-generated tailored version on the right. Side-by-side so you can see exactly what changed."
+               onclick="showArchDesc(this)">
+            <div class="arch-icon">📝</div>
+            <span>TailoredResumeEditor.tsx</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="arch-description" id="arch-desc">Click any component to learn what it does</div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 2: The Shared Memory — Zustand Store
+       ============================================================ -->
+  <div class="module-screen animate-in">
+    <div class="module-header">
+      <span class="module-eyebrow">Module 2 · Screen 2</span>
+      <h2 class="module-title">The Shared Memory</h2>
+      <p class="module-subtitle">
+        All five components read from and write to one shared object called the
+        <span class="tooltip" data-tip="Zustand is a tiny state-management library for React. It creates a global object that any component can read or update — without the usual boilerplate of Redux or Context.">Zustand store</span>.
+        Think of it as a whiteboard in the middle of the room — any component can write on it, any component can read from it.
+      </p>
+    </div>
+
+    <div class="translation-block animate-in">
+      <div class="translation-code">
+        <span class="translation-label">CODE</span>
+        <pre><code>
+<span class="code-line"><span class="code-keyword">const</span> <span class="code-function">useStore</span> = <span class="code-function">create</span>&lt;<span class="code-function">AppState</span>&gt;()(</span>
+<span class="code-line">  <span class="code-function">persist</span>(</span>
+<span class="code-line">    (<span class="code-property">set</span>, <span class="code-property">get</span>) =&gt; ({</span>
+<span class="code-line">      <span class="code-property">jobs</span>: [],</span>
+<span class="code-line">      <span class="code-property">selectedJob</span>: <span class="code-keyword">null</span>,</span>
+<span class="code-line">      <span class="code-property">filters</span>: {},</span>
+<span class="code-line">      <span class="code-property">setJobs</span>: (<span class="code-property">jobs</span>) =&gt; <span class="code-function">set</span>({ <span class="code-property">jobs</span> }),</span>
+<span class="code-line">      <span class="code-property">setSelectedJob</span>: (<span class="code-property">job</span>) =&gt;</span>
+<span class="code-line">        <span class="code-function">set</span>({ <span class="code-property">selectedJob</span>: <span class="code-property">job</span> }),</span>
+<span class="code-line">    }),</span>
+<span class="code-line">    { <span class="code-property">name</span>: <span class="code-string">'aladdin-store'</span> }</span>
+<span class="code-line">  )</span>
+<span class="code-line">);</span>
+        </code></pre>
+      </div>
+      <div class="translation-english">
+        <span class="translation-label">PLAIN ENGLISH</span>
+        <div class="translation-lines">
+          <p class="tl">
+            <strong>create&lt;AppState&gt;()()</strong> → Create a global store that any
+            <span class="tooltip" data-tip="A component is a self-contained UI building block in React — it renders part of the screen and can react to data changes.">component</span>
+            can subscribe to — when it changes, every listening component re-renders automatically
+          </p>
+          <p class="tl">
+            <strong>persist(...)</strong> → Automatically save
+            <span class="tooltip" data-tip="State is the current data the UI needs to display — think of it as the app's short-term memory. 'State management' means keeping that memory organized and in sync across components.">state</span>
+            to
+            <span class="tooltip" data-tip="localStorage is a small storage area built into every browser. Data saved here survives page refreshes — like a sticky note the browser keeps for you.">localStorage</span>
+            — so if you refresh the page, your selected job and filters are still there
+          </p>
+          <p class="tl"><strong>jobs: []</strong> → Start with an empty list of jobs (filled in when the page loads)</p>
+          <p class="tl"><strong>selectedJob: null</strong> → Nothing is selected yet — clicking a job card sets this</p>
+          <p class="tl"><strong>filters: {}</strong> → No filters applied yet</p>
+          <p class="tl"><strong>setJobs / setSelectedJob</strong> → Functions that components call to update the shared memory — like writing on the whiteboard</p>
+          <p class="tl"><strong>'aladdin-store'</strong> → The localStorage key used to save and restore this state</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-accent animate-in">
+      <strong>What is Zustand?</strong>
+      "Zustand" is German for "state." A
+      <span class="tooltip" data-tip="A library is pre-written code you can add to your project to solve a common problem — so you don't have to build it yourself. npm is the package manager that installs them.">library</span>
+      built by the open-source community. "State" just means "the current values the UI needs to display." Managing it in one place means components never fall out of sync.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 3: The API Routes — The Back Room
+       ============================================================ -->
+  <div class="module-screen animate-in">
+    <div class="module-header">
+      <span class="module-eyebrow">Module 2 · Screen 3</span>
+      <h2 class="module-title">The API Routes — The Back Room</h2>
+      <p class="module-subtitle">
+        The UI components talk to the browser.
+        <span class="tooltip" data-tip="An API route is a URL that runs server-side code instead of returning a web page. When your app calls fetch('/api/jobs'), Next.js finds the matching route file and executes it on the server.">API routes</span>
+        handle the real work: databases, AI calls, file storage.
+      </p>
+    </div>
+
+    <div class="badge-list animate-in">
+
+      <div class="badge-item">
+        <span class="badge-code">GET /api/jobs</span>
+        <span class="badge-desc">
+          <span class="tooltip" data-tip="GET is an HTTP method meaning 'give me data.' You use it to fetch information without changing anything on the server.">Fetch</span>
+          jobs from the database, calculate match scores
+        </span>
+      </div>
+
+      <div class="badge-item">
+        <span class="badge-code">POST /api/resume</span>
+        <span class="badge-desc">
+          Accept a
+          <span class="tooltip" data-tip="PDF (Portable Document Format) is a file type that preserves formatting across all devices. Your resume is probably a PDF.">PDF</span>
+          upload, parse it into structured
+          <span class="tooltip" data-tip="JSON (JavaScript Object Notation) is a text format for structured data. Instead of a PDF, it's a clean key-value list a computer can actually work with — like {name: 'Alex', skills: ['React', 'TypeScript']}.">JSON</span>
+        </span>
+      </div>
+
+      <div class="badge-item">
+        <span class="badge-code">POST /api/generate-cover-letter-stream</span>
+        <span class="badge-desc">
+          Stream an AI-written cover letter word by word — the text appears in real time like someone typing
+        </span>
+      </div>
+
+      <div class="badge-item">
+        <span class="badge-code">POST /api/application</span>
+        <span class="badge-desc">Create or update a Kanban board card for tracking your application status</span>
+      </div>
+
+      <div class="badge-item">
+        <span class="badge-code">POST /api/import-job</span>
+        <span class="badge-desc">Manually import a job from a description or URL — parses the posting and adds it to your list</span>
+      </div>
+
+      <div class="badge-item">
+        <span class="badge-code">POST /api/cron/process-queue</span>
+        <span class="badge-desc">
+          Background worker: dequeue and run a scheduled job task — keeps things moving without user interaction
+        </span>
+      </div>
+
+    </div>
+
+    <div class="callout callout-info animate-in">
+      <strong>What IS an API route?</strong>
+      It's a URL that does
+      <span class="tooltip" data-tip="Server-side means the code runs on a remote computer (the server), not in the user's browser. The browser never sees the code itself — only the result it sends back.">server-side</span>
+      work instead of returning a web page. When a
+      <span class="tooltip" data-tip="A component is one piece of the UI — a button, a panel, a form. It runs in the browser and can make requests to the server via fetch().">component</span>
+      calls
+      <code style="font-family: var(--font-mono); font-size: var(--text-sm);">fetch('/api/jobs')</code>,
+      <span class="tooltip" data-tip="Next.js is the React framework Aladdin is built on. It handles routing, server-side rendering, and API routes — all in one project.">Next.js</span>
+      runs the matching route file and returns data.
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 4: Group Chat — How a Click Flows
+       ============================================================ -->
+  <div class="module-screen animate-in">
+    <div class="module-header">
+      <span class="module-eyebrow">Module 2 · Screen 4</span>
+      <h2 class="module-title">Group Chat — How a Click Flows</h2>
+      <p class="module-subtitle">Here's the exact sequence of events when you click a job card.</p>
+    </div>
+
+    <div class="chat-window animate-in" id="chat-module2">
+      <div class="chat-messages">
+
+        <!-- Message 0: User -->
+        <div class="chat-message" data-msg="0" data-sender="user" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-text-muted); font-size: 1.1rem; display:flex; align-items:center; justify-content:center;">👤</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-text-muted)">You</span>
+            <p>I click on "Software Engineer at Stripe" in the job list</p>
+          </div>
+        </div>
+
+        <!-- Message 1: JobList.tsx -->
+        <div class="chat-message" data-msg="1" data-sender="joblist" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-2)">JL</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-2)">JobList.tsx</span>
+            <p>onClick fired! I'm calling <code style="font-family: var(--font-mono); font-size: 0.85em;">setSelectedJob(stripeJob)</code></p>
+          </div>
+        </div>
+
+        <!-- Message 2: Zustand Store -->
+        <div class="chat-message" data-msg="2" data-sender="store" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-4)">S</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-4)">Zustand Store</span>
+            <p>Got it. <code style="font-family: var(--font-mono); font-size: 0.85em;">selectedJob</code> is now the Stripe job. Notifying subscribers...</p>
+          </div>
+        </div>
+
+        <!-- Message 3: JobDetail.tsx re-render -->
+        <div class="chat-message" data-msg="3" data-sender="jobdetail" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">JD</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">JobDetail.tsx</span>
+            <p>Store changed! My <code style="font-family: var(--font-mono); font-size: 0.85em;">selectedJob</code> subscription just fired. Re-rendering with Stripe job data...</p>
+          </div>
+        </div>
+
+        <!-- Message 4: JobDetail.tsx fetches logo -->
+        <div class="chat-message" data-msg="4" data-sender="jobdetail" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">JD</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">JobDetail.tsx</span>
+            <p>Calling <code style="font-family: var(--font-mono); font-size: 0.85em;">GET /api/company-logos?name=Stripe</code> to fetch their logo</p>
+          </div>
+        </div>
+
+        <!-- Message 5: API Route responds -->
+        <div class="chat-message" data-msg="5" data-sender="api" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-1)">API</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-1)">API Route</span>
+            <p>Logo found in cache. Returning Stripe's logo URL.</p>
+          </div>
+        </div>
+
+        <!-- Message 6: JobDetail.tsx finishes -->
+        <div class="chat-message" data-msg="6" data-sender="jobdetail" style="display:none">
+          <div class="chat-avatar" style="background: var(--color-actor-3)">JD</div>
+          <div class="chat-bubble">
+            <span class="chat-sender" style="color: var(--color-actor-3)">JobDetail.tsx</span>
+            <p>Got it. Displaying: job title, description, match score, skill badges, and action buttons.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Typing indicator -->
+      <div class="chat-typing" style="display:none">
+        <div class="chat-avatar" id="chat-module2-typing-avatar">?</div>
+        <div class="chat-typing-dots">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </div>
+      </div>
+
+      <div class="chat-controls">
+        <button class="btn chat-next-btn">Next Message</button>
+        <button class="btn chat-all-btn">Play All</button>
+        <button class="btn chat-reset-btn">Replay</button>
+        <span class="chat-progress"></span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================
+       SCREEN 5: Quiz
+       ============================================================ -->
+  <div class="module-screen animate-in">
+    <div class="module-header">
+      <span class="module-eyebrow">Module 2 · Quiz</span>
+      <h2 class="module-title">Test Your Understanding</h2>
+      <p class="module-subtitle">Three scenarios. Apply what you just learned.</p>
+    </div>
+
+    <div class="quiz-container animate-in" id="quiz-module2">
+
+      <!-- Q1 -->
+      <div class="quiz-question-block"
+           data-correct="option-b"
+           data-explanation-right="Exactly! The store is the right home for any data that multiple components need to share. If JobList sets a bookmark and Sidebar needs to show the count, the store is the bridge."
+           data-explanation-wrong="Think about which TWO components both need this data. When two components need the same info, where should the single source of truth live?">
+        <h3 class="quiz-question">You want to add a "bookmark job" feature. The bookmark count should appear in the sidebar AND the job list. Which is the right place to store the bookmark data?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>In JobList.tsx — that's where users see the jobs</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>In the Zustand store — both components need to read the same data</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>In the sidebar component — that's where the bookmark icon will live</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>In a new API route — fetch it fresh each time</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q2 -->
+      <div class="quiz-question-block"
+           data-correct="option-c"
+           data-explanation-right="Exactly! The job detail panel reads selectedJob from the store. If clicking doesn't update selectedJob, the detail panel has no reason to change."
+           data-explanation-wrong="Follow the data: JobDetail shows whatever the store says is selected. If the display is wrong, trace back to where selectedJob gets set.">
+        <h3 class="quiz-question">A user reports the job detail panel is showing yesterday's job, not the one they just clicked. Based on what you learned, where would you look first?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The database — the job data might be stale</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>JobDetail.tsx — it might be caching its own state</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The store's selectedJob — if setSelectedJob isn't being called, the store never updates</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The Clerk auth — the user might not be logged in</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <!-- Q3 -->
+      <div class="quiz-question-block"
+           data-correct="option-a"
+           data-explanation-right="Exactly! API keys, AI calls, and database operations belong in server-side API routes — never in browser-side components. Putting them in components would expose your API keys to anyone who opens DevTools."
+           data-explanation-wrong="Think about security: if AI calls happened in a component, the OpenAI API key would be visible in the browser. API routes run on the server, so secrets stay secret.">
+        <h3 class="quiz-question">Which layer is responsible for calling the OpenAI API to generate a cover letter?</h3>
+        <div class="quiz-options">
+          <button class="quiz-option" data-value="option-a" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>An API route — server-side logic like AI calls should never run in the browser</span>
+          </button>
+          <button class="quiz-option" data-value="option-b" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The Zustand store — it manages all application state including AI responses</span>
+          </button>
+          <button class="quiz-option" data-value="option-c" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>The CoverLetterModal component — it's the one that displays the result</span>
+          </button>
+          <button class="quiz-option" data-value="option-d" onclick="selectOption(this)">
+            <div class="quiz-option-radio"></div>
+            <span>Dashboard.tsx — it's the director component</span>
+          </button>
+        </div>
+        <div class="quiz-feedback"></div>
+      </div>
+
+      <button class="quiz-check-btn" onclick="checkQuiz('quiz-module2')">Check Answers</button>
+      <button class="quiz-reset-btn" onclick="resetQuiz('quiz-module2')">Try Again</button>
+
+    </div>
+  </div>
+
+</section>
