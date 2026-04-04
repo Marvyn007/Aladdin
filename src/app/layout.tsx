@@ -41,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider afterSignUpUrl="/tour">
       <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
         <body className={inter.className} suppressHydrationWarning>
           <ThemeRegistry>
