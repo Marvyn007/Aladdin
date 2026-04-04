@@ -60,8 +60,8 @@ export function AladdinCharacter({
 
   return (
     <div
-      onTransitionEnd={() => {
-        if (phase === 'flying') {
+      onTransitionEnd={(e) => {
+        if (phase === 'flying' && e.propertyName === 'left') {
           onArrived();
         }
       }}

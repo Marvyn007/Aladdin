@@ -9,7 +9,6 @@ interface SpeechBubbleProps {
   maxWidth: number;
   side: 'left' | 'right'; // which side of Aladdin the bubble appears on
   onNext: () => void;
-  onSkip: () => void;
   visible: boolean;
 }
 
@@ -20,7 +19,6 @@ export function SpeechBubble({
   maxWidth,
   side,
   onNext,
-  onSkip,
   visible,
 }: SpeechBubbleProps) {
   const isLast = stepIndex === totalSteps - 1;
