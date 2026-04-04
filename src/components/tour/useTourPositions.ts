@@ -63,12 +63,15 @@ export function useTourTarget(dataId: string, stepIndex: number): DOMRect | null
   }, [dataId]);
 
   useEffect(() => {
-    measure();
-
     const el = document.querySelector(`[data-tour-id="${dataId}"]`);
     if (el) {
-      observerRef.current = new ResizeObserver(measure);
+      setRect(el.getBoundingClientRect());
+      observerRef.current = new ResizeObserver(() => {
+        setRect(el.getBoundingClientRect());
+      });
       observerRef.current.observe(el);
+    } else {
+      setRect(null);
     }
 
     window.addEventListener('scroll', measure, { passive: true });
