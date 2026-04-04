@@ -14,31 +14,37 @@ export function Pagination({ currentPage, totalPages, totalItems, limit, onPageC
 
     // Generate page numbers
     const getPageNumbers = () => {
-        const pages = [];
-        const maxVisiblePages = 5;
-
-        // Same logic as before for calculating which pages to show
-        if (totalPages <= maxVisiblePages) {
-            for (let i = 1; i <= totalPages; i++) {
-                pages.push(i);
-            }
-        } else {
-            if (currentPage <= 3) {
-                for (let i = 1; i <= 4; i++) pages.push(i);
-                pages.push(-1);
-                pages.push(totalPages);
-            } else if (currentPage >= totalPages - 2) {
-                pages.push(1);
-                pages.push(-1);
-                for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-            } else {
-                pages.push(1);
-                pages.push(-1);
-                for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-                pages.push(-1);
-                pages.push(totalPages);
-            }
+        const pages: number[] = [];
+        const delta = 2; // +- 2 pages
+        
+        // Show all if small enough
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+            return pages;
         }
+
+        // Always show first
+        pages.push(1);
+
+        const left = currentPage - delta;
+        const right = currentPage + delta;
+
+        if (left > 2) {
+            pages.push(-1); // Ellipsis
+        }
+
+        // Window of +- 2
+        for (let i = Math.max(2, left); i <= Math.min(totalPages - 1, right); i++) {
+            pages.push(i);
+        }
+
+        if (right < totalPages - 1) {
+            pages.push(-1); // Ellipsis
+        }
+
+        // Always show last
+        pages.push(totalPages);
+
         return pages;
     };
 

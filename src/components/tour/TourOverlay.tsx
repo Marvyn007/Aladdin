@@ -21,29 +21,45 @@ interface TourOverlayProps {
   onComplete: () => Promise<void>;
 }
 
-/**
- * Full-screen overlay that runs the guided tour.
- * Manages the 3-phase state machine: flying → pointing → (next) → flying…
- */
 export function TourOverlay({ onComplete }: TourOverlayProps) {
   const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>('flying');
   const [bubbleVisible, setBubbleVisible] = useState(false);
-  const [finishing, setFinishing] = useState(false);
-  const [aladdinPos, setAladdinPos] = useState<Position>({ x: 20, y: 20 });
+  const [aladdinPos, setAladdinPos] = useState<Position>({ x: -300, y: -300 }); // off-screen until logo found
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== 'undefined' ? window.innerWidth : 1440,
   );
 
   const completingRef = useRef(false);
+  const returningRef = useRef(false);   // true while flying back to logo
+  const arrivalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logoElRef = useRef<HTMLElement | null>(null);
+  const logoRectRef = useRef<Position | null>(null);
 
   const step = TOUR_STEPS[stepIndex];
   const aladdinSize = getAladdinSize(viewportWidth);
   const bubbleWidth = getSpeechBubbleWidth(viewportWidth);
   const mirrored = isMirrored(step.aladdinSide);
+  const effectiveBubbleSide: 'left' | 'right' =
+    step.bubbleSide ?? (step.aladdinSide === 'left' ? 'right' : 'left');
 
   const targetRect = useTourTarget(step.dataId, stepIndex);
+
+  // On mount: hide the sidebar logo and start Aladdin from its exact position
+  useEffect(() => {
+    const logoEl = document.querySelector(
+      '[data-tour-id="aladdin-sidebar-logo"]',
+    ) as HTMLElement | null;
+    if (logoEl) {
+      logoElRef.current = logoEl;
+      const rect = logoEl.getBoundingClientRect();
+      const pos = { x: rect.left, y: rect.top };
+      logoRectRef.current = pos;
+      setAladdinPos(pos);
+      logoEl.style.visibility = 'hidden';
+    }
+  }, []);
 
   // Track viewport width for breakpoint-aware sizing
   useEffect(() => {
@@ -52,112 +68,104 @@ export function TourOverlay({ onComplete }: TourOverlayProps) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // When we have a target rect and phase is flying, move Aladdin toward the target
+  const handleArrived = useCallback(() => {
+    if (returningRef.current) return; // ignore arrival while flying back to logo
+    if (arrivalTimerRef.current) {
+      clearTimeout(arrivalTimerRef.current);
+      arrivalTimerRef.current = null;
+    }
+    setPhase('pointing');
+    setTimeout(() => setBubbleVisible(true), 250);
+  }, []);
+
+  // Move Aladdin toward target when flying
   useEffect(() => {
+    if (returningRef.current) return;
     if (targetRect && phase === 'flying') {
       const pos = getAladdinPosition(targetRect, step.aladdinSide, aladdinSize, viewportWidth);
       setAladdinPos(pos);
+
+      if (arrivalTimerRef.current) clearTimeout(arrivalTimerRef.current);
+      arrivalTimerRef.current = setTimeout(() => handleArrived(), 1500);
     }
-  }, [targetRect, phase, step.aladdinSide, aladdinSize, viewportWidth]);
+    return () => {
+      if (arrivalTimerRef.current) {
+        clearTimeout(arrivalTimerRef.current);
+        arrivalTimerRef.current = null;
+      }
+    };
+  }, [targetRect, phase, step.aladdinSide, aladdinSize, viewportWidth, handleArrived]);
 
-  // Called when Aladdin's CSS transition ends (arrives at target)
-  const handleArrived = useCallback(() => {
-    setPhase('pointing');
-    setTimeout(() => setBubbleVisible(true), 100);
-  }, []);
+  /** Fly Aladdin back to the sidebar logo, show it, then navigate. */
+  const returnToLogo = useCallback(async () => {
+    if (completingRef.current) return;
+    completingRef.current = true;
 
-  // Called when user clicks Next / Finish
+    setBubbleVisible(false);
+    await onComplete();
+
+    returningRef.current = true;
+    setPhase('flying'); // show flying animation during return
+
+    if (logoRectRef.current) {
+      setAladdinPos(logoRectRef.current);
+      // After the transition (650ms), reveal the logo so the swap is invisible
+      setTimeout(() => {
+        if (logoElRef.current) logoElRef.current.style.visibility = '';
+      }, 1250);
+    }
+    // Navigate after the full return flight
+    setTimeout(() => router.push('/onboarding'), 1450);
+  }, [onComplete, router]);
+
   const handleNext = useCallback(async () => {
     setBubbleVisible(false);
 
     if (stepIndex === TOUR_STEPS.length - 1) {
-      if (completingRef.current) return;
-      completingRef.current = true;
-      // Finish
-      setFinishing(true);
-      await onComplete();
-      setTimeout(() => router.push('/onboarding'), 1600);
+      await returnToLogo();
       return;
     }
 
-    // Pause briefly for bubble to fade out, then fly to next stop
     setTimeout(() => {
       setPhase('flying');
       setStepIndex((i) => i + 1);
-    }, 250);
-  }, [stepIndex, onComplete, router]);
+    }, 500);
+  }, [stepIndex, returnToLogo]);
 
-  // Called when user clicks Skip Tour
   const handleSkip = useCallback(async () => {
-    if (completingRef.current) return;
-    completingRef.current = true;
-    await onComplete();
-    router.push('/onboarding');
-  }, [onComplete, router]);
+    await returnToLogo();
+  }, [returnToLogo]);
 
-  // Lift the active target element above the blur overlay
-  useEffect(() => {
-    const el = document.querySelector(`[data-tour-id="${step.dataId}"]`) as HTMLElement | null;
-    if (!el) return;
-
-    const prevPosition = el.style.position;
-    const prevZIndex = el.style.zIndex;
-    const prevBorderRadius = el.style.borderRadius;
-
-    el.style.position = 'relative';
-    el.style.zIndex = '60';
-    el.style.borderRadius = '8px';
-
-    return () => {
-      el.style.position = prevPosition;
-      el.style.zIndex = prevZIndex;
-      el.style.borderRadius = prevBorderRadius;
-    };
-  }, [step.dataId]);
-
-  // Speech bubble offset relative to Aladdin
+  // Speech bubble position
   const bubbleLeft =
-    step.aladdinSide === 'left'
+    effectiveBubbleSide === 'right'
       ? aladdinPos.x + aladdinSize + 12
       : aladdinPos.x - bubbleWidth - 12;
 
   return (
     <>
-      {/* Full-screen blur + dim overlay */}
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 49,
-          backdropFilter: 'blur(3px) brightness(0.55)',
-          WebkitBackdropFilter: 'blur(3px) brightness(0.55)',
-          background: 'rgba(0,0,0,0.15)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      {/* Spotlight box around active element */}
-      {targetRect && phase === 'pointing' && (
+      {/* Minimal border around the active element */}
+      {targetRect && phase === 'pointing' && !returningRef.current && (
         <SpotlightBox rect={targetRect} />
       )}
 
-      {/* Aladdin character */}
       <AladdinCharacter
         position={aladdinPos}
         phase={phase}
         mirrored={mirrored}
         size={aladdinSize}
+        stepKey={stepIndex}
         onArrived={handleArrived}
       />
 
       {/* Speech bubble */}
-      {phase === 'pointing' && (
+      {phase === 'pointing' && !returningRef.current && (
         <div
           style={{
             position: 'fixed',
             top: aladdinPos.y,
             left: Math.max(8, Math.min(bubbleLeft, viewportWidth - bubbleWidth - 8)),
-            zIndex: 63,
+            zIndex: 115,
           }}
         >
           <SpeechBubble
@@ -165,22 +173,22 @@ export function TourOverlay({ onComplete }: TourOverlayProps) {
             stepIndex={stepIndex}
             totalSteps={TOUR_STEPS.length}
             maxWidth={bubbleWidth}
-            side={step.aladdinSide === 'left' ? 'right' : 'left'}
+            side={effectiveBubbleSide === 'right' ? 'right' : 'left'}
             onNext={handleNext}
             visible={bubbleVisible}
           />
         </div>
       )}
 
-      {/* Skip Tour button — hidden once finishing */}
-      {!finishing && (
+      {/* Skip Tour button */}
+      {!returningRef.current && (
         <div
           style={{
             position: 'fixed',
             bottom: 28,
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 70,
+            zIndex: 120,
           }}
         >
           <button
@@ -202,38 +210,6 @@ export function TourOverlay({ onComplete }: TourOverlayProps) {
           >
             Skip Tour
           </button>
-        </div>
-      )}
-
-      {/* Finish overlay */}
-      {finishing && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 80,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.6)',
-            backdropFilter: 'blur(6px)',
-          }}
-        >
-          <div style={{
-            background: '#fff',
-            borderRadius: 20,
-            padding: '40px 48px',
-            textAlign: 'center',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-          }}>
-            <p style={{ fontSize: 32, margin: '0 0 12px' }}>🎉</p>
-            <p style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>
-              You're all set!
-            </p>
-            <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
-              Let's get you onboarded…
-            </p>
-          </div>
         </div>
       )}
     </>

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
         const { userId } = await auth();
         const searchParams = request.nextUrl.searchParams;
         const page = parseInt(searchParams.get('page') || '1', 10);
-        const limit = parseInt(searchParams.get('limit') || '1000', 10);
+        const limit = parseInt(searchParams.get('limit') || '25', 10);
         const sortByRaw = (searchParams.get('sort_by') || 'time') as 'time' | 'imported' | 'score' | 'preferences';
         const sortDir = (searchParams.get('sort_dir') || 'desc') as 'asc' | 'desc';
         const statusParam = searchParams.get('status');

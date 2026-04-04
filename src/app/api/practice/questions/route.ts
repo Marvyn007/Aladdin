@@ -37,6 +37,17 @@ export async function GET(request: Request) {
             }
         });
 
+        // Fetch mapped company logos
+        const dbCompanies = await prisma.company.findMany({
+            where: { logoUrl: { not: null } },
+            select: { name: true, logoUrl: true }
+        });
+        const logoMap = new Map<string, string>();
+        for (const c of dbCompanies) {
+            logoMap.set(c.name.toLowerCase(), c.logoUrl as string);
+            logoMap.set(c.name.toLowerCase().replace(/\s+/g, '-'), c.logoUrl as string);
+        }
+
         // Map and Sort
         let result = questions.map(q => ({
             id: q.id,
@@ -46,7 +57,13 @@ export async function GET(request: Request) {
             difficulty: q.difficulty,
             acceptanceRate: q.acceptanceRate,
             companyCount: q._count.companies,
-            companyNames: q.companies.map(c => c.companyName)
+            companyNames: q.companies.map(c => {
+                const slug = c.companyName.toLowerCase();
+                return {
+                    name: c.companyName,
+                    logoUrl: logoMap.get(slug) || '/default company icon.png' // Use real logo if exists, else placeholder
+                };
+            })
         }));
 
         const sortDir = searchParams.get('sortDir') || 'desc';

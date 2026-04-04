@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "pipeline:test": "vitest src/lib/resume-generation/tests/ --run",
-    "daily-fetch": "node --loader ts-node/esm scripts/seed-data.ts"
+    "daily-fetch": "node --loader ts-node/esm scripts/seed-data.ts",
+    "crawler": "npx tsx scripts/local-crawler.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.965.0",
@@ -66,6 +67,7 @@
     "recharts": "^3.8.1",
     "rss-parser": "^3.13.0",
     "shadcn": "^4.1.0",
+    "svix": "^1.90.0",
     "tailwind-merge": "^3.5.0",
     "tw-animate-css": "^1.4.0",
     "uuid": "^13.0.0",

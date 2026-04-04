@@ -59,16 +59,12 @@ export function QuestionTableView({ searchQuery }: { searchQuery: string }) {
                 const res = await fetch('/api/practice/questions');
                 const data = await res.json();
                 // API returns companyNames (string[]), transform to companies objects
-                const logoToken = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN;
                 const mapped = data.map((q: Record<string, unknown>) => ({
                     ...q,
-                    companies: (q.companyNames as string[] || []).map((name: string) => {
-                        const domain = name.replace(/-/g, '') + '.com';
+                    companies: (q.companyNames as any[] || []).map((comp: any) => {
                         return {
-                            name,
-                            logoUrl: logoToken
-                                ? `https://img.logo.dev/${domain}?token=${logoToken}&size=64`
-                                : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&size=64`
+                            name: comp.name || comp,
+                            logoUrl: comp.logoUrl || '/default company icon.png'
                         };
                     })
                 }));
@@ -371,9 +367,8 @@ export function QuestionTableView({ searchQuery }: { searchQuery: string }) {
                                                         }}
                                                         title={comp.name}
                                                     >
-                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                                         <img 
-                                                            src={comp.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(comp.name)}&background=random`} 
+                                                            src={comp.logoUrl || '/default company icon.png'} 
                                                             alt={comp.name}
                                                             style={{ width: '20px', height: '20px', objectFit: 'contain' }}
                                                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -536,9 +531,8 @@ export function QuestionTableView({ searchQuery }: { searchQuery: string }) {
                                     onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                                 >
                                     <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img 
-                                            src={comp.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(comp.name)}&background=random`} 
+                                            src={comp.logoUrl || '/default company icon.png'} 
                                             alt={comp.name} 
                                             style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
                                             onError={(e) => { e.currentTarget.style.display = 'none'; }} 

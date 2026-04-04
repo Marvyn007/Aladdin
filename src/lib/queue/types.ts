@@ -13,6 +13,7 @@ export type SourceName =
   | 'arbeitnow'
   | 'himalayas'
   | 'workday'
+  | 'ashby'
 
 export interface QueueTask {
   id: string

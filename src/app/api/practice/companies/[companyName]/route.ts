@@ -3,22 +3,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const companyDomainOverrides: Record<string, string> = {
-    'google': 'google.com',
-    'amazon': 'amazon.com',
-    'meta': 'meta.com',
-    'facebook': 'facebook.com',
-    'uber-eats': 'ubereats.com',
-    'uber': 'uber.com',
-    'apple': 'apple.com',
-    'microsoft': 'microsoft.com',
-    'netflix': 'netflix.com',
-    'linkedin': 'linkedin.com',
-    'bloomberg': 'bloomberg.com',
-    'tiktok': 'tiktok.com',
-    'bytedance': 'bytedance.com'
-};
-
+ 
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ companyName: string }> }
@@ -76,11 +61,7 @@ export async function GET(
         domain = dbCompany?.domain || null;
         logoUrl = dbCompany?.logoUrl || null;
 
-        if (companyDomainOverrides[slug]) {
-            domain = companyDomainOverrides[slug];
-            const PUB_KEY = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN || 'pk_By0CIs75Tsy8K9CqV4sT7w';
-            logoUrl = `https://img.logo.dev/${domain}?token=${PUB_KEY}&size=128`;
-        }
+
 
         return NextResponse.json({
             questions: result,

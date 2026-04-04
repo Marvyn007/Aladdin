@@ -144,10 +144,10 @@ export async function getAllPublicJobs(
 
     // Mapping — 'preferences' falls back to time sort at DB level; API layer re-sorts by score
     const sortColumn = {
-        'time': 'created_at',
+        'time': 'posted_at',
         'imported': 'scraped_at',
-        'preferences': 'created_at'
-    }[sortBy] || 'created_at';
+        'preferences': 'posted_at'
+    }[sortBy] || 'posted_at';
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
@@ -270,11 +270,11 @@ export async function getJobs(
     const dbType = getDbType();
 
     // Mapping for sort columns
-    // We default to created_at for time
+    // We default to posted_at for time
     const sortColumn = {
-        'time': 'created_at',
+        'time': 'posted_at',
         'imported': 'scraped_at'
-    }[sortBy] || 'created_at';
+    }[sortBy] || 'posted_at';
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();

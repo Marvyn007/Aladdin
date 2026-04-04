@@ -332,6 +332,61 @@ function deriveSegment(input: {
   return 'Power'
 }
 
+function extractClerkEmail(source: unknown): string | null {
+  // Clerk SDK v6: primaryEmailAddress may be a getter, not a plain serializable property.
+  // Most reliable: find the email in emailAddresses[] whose id matches primaryEmailAddressId.
+  if (source !== null && typeof source === 'object') {
+    const obj = source as Record<string, unknown>
+
+    // Try primaryEmailAddressId → look up in emailAddresses array
+    const primaryId = typeof obj['primaryEmailAddressId'] === 'string'
+      ? obj['primaryEmailAddressId']
+      : typeof obj['primary_email_address_id'] === 'string'
+        ? obj['primary_email_address_id']
+        : null
+
+    const emailArr = Array.isArray(obj['emailAddresses'])
+      ? obj['emailAddresses']
+      : Array.isArray(obj['email_addresses'])
+        ? obj['email_addresses']
+        : []
+
+    if (primaryId && emailArr.length > 0) {
+      for (const entry of emailArr) {
+        if (entry !== null && typeof entry === 'object') {
+          const e = entry as Record<string, unknown>
+          if (e['id'] === primaryId) {
+            const addr = typeof e['emailAddress'] === 'string' ? e['emailAddress']
+              : typeof e['email_address'] === 'string' ? e['email_address']
+              : null
+            if (addr?.trim()) return addr.trim()
+          }
+        }
+      }
+    }
+
+    // Fall back to first email in list
+    if (emailArr.length > 0) {
+      const first = emailArr[0] as Record<string, unknown>
+      const addr = typeof first['emailAddress'] === 'string' ? first['emailAddress']
+        : typeof first['email_address'] === 'string' ? first['email_address']
+        : null
+      if (addr?.trim()) return addr.trim()
+    }
+  }
+
+  // Last resort: legacy flat paths
+  return pickString(source, [
+    'primaryEmailAddress.emailAddress',
+    'primaryEmailAddress.email_address',
+    'externalAccounts.0.emailAddress',
+    'externalAccounts.0.email_address',
+    'external_accounts.0.emailAddress',
+    'external_accounts.0.email_address',
+    'email',
+  ])
+}
+
 function normalizeClerkUser(source: unknown): NormalizedClerkUser | null {
   const id = pickString(source, ['id', 'userId', 'user_id'])
   if (!id) return null
@@ -352,30 +407,15 @@ function normalizeClerkUser(source: unknown): NormalizedClerkUser | null {
     'external_accounts.0.lastName',
     'external_accounts.0.last_name',
   ])
+  // Do NOT include username — random generated usernames (e.g. "FluffyFalcon") pollute the admin view.
+  // Only use fullName/name if it looks like a real name (handled downstream by isMeaningfulUserText).
   const fallbackName = pickString(source, [
     'fullName',
     'full_name',
     'name',
-    'username',
-    'externalAccounts.0.username',
-    'external_accounts.0.username',
   ])
-  const email =
-    pickString(source, [
-      'primaryEmailAddress.emailAddress',
-      'primaryEmailAddress.email_address',
-      'primary_email_address.emailAddress',
-      'primary_email_address.email_address',
-      'emailAddresses.0.emailAddress',
-      'emailAddresses.0.email_address',
-      'email_addresses.0.emailAddress',
-      'email_addresses.0.email_address',
-      'externalAccounts.0.emailAddress',
-      'externalAccounts.0.email_address',
-      'external_accounts.0.emailAddress',
-      'external_accounts.0.email_address',
-      'email',
-    ])
+
+  const email = extractClerkEmail(source)
 
   const name =
     buildFullName(firstName, lastName) ||
@@ -1574,6 +1614,8 @@ export async function getAdminJobs(): Promise<AdminJobSummary[]> {
         applyUrl: true,
         status: true,
         postedByUserId: true,
+        jobDescriptionPlain: true,
+        adminCurationStatus: true,
       },
     }),
     prisma.application.groupBy({
@@ -1644,6 +1686,8 @@ export async function getAdminJobs(): Promise<AdminJobSummary[]> {
       coverLetters: coverLetterCountMap.get(job.id) ?? 0,
       saves: savedCountMap.get(job.id) ?? 0,
       postedByName: job.postedByUserId ? displayMap.get(job.postedByUserId) ?? null : null,
+      descriptionLength: job.jobDescriptionPlain?.length ?? 0,
+      adminCurationStatus: job.adminCurationStatus ?? 'not_reviewed',
     }
   })
 }

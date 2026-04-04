@@ -34,13 +34,13 @@ export function getAladdinPosition(
 }
 
 export function isMirrored(aladdinSide: 'left' | 'right'): boolean {
-  return aladdinSide === 'right';
+  return aladdinSide === 'left';
 }
 
 export function getAladdinSize(viewportWidth: number): number {
-  if (viewportWidth >= 1600) return 300;
-  if (viewportWidth >= 1280) return 225;
-  return 180;
+  if (viewportWidth >= 1600) return 180;
+  if (viewportWidth >= 1280) return 150;
+  return 120;
 }
 
 export function getSpeechBubbleWidth(viewportWidth: number): number {

@@ -253,7 +253,7 @@ export function JobList({ onJobClick }: JobListProps) {
     const sorting = useStore(state => state.sorting);
     const jobStatus = useStore(state => state.jobStatus);
     const pagination = useStore(state => state.pagination);
-    const paginationLimit = pagination.limit || 50;
+    const paginationLimit = pagination.limit || 25;
     const selectedJob = useStore(state => state.selectedJob);
     const isLoadingJobs = useStore(state => state.isLoadingJobs);
 
@@ -285,8 +285,8 @@ export function JobList({ onJobClick }: JobListProps) {
         return baseJobs.filter(job => matchesStatusFilter(job, jobStatus));
     }, [searchMode, searchResults, filteredJobs, jobStatus]);
 
-    const statusAwareCount = statusFilteredJobs.length;
-    const statusTotalPages = Math.ceil(statusAwareCount / paginationLimit);
+    const statusAwareCount = searchMode ? statusFilteredJobs.length : (pagination.total || statusFilteredJobs.length);
+    const statusTotalPages = searchMode ? Math.ceil(statusAwareCount / paginationLimit) : (pagination.totalPages || 1);
 
     // Determine which jobs to display
     let displayedJobs = statusFilteredJobs;

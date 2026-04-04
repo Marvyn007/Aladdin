@@ -167,7 +167,7 @@ export function CompanyQuestionsTable({ companyName }: { companyName: string }) 
                     <div style={{ width: '80px', height: '80px', background: '#fff', borderRadius: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img 
-                            src={companyLogo || `https://img.logo.dev/${companyName.toLowerCase().replace(/\s+/g, '').replace(/-/g, '')}.com?token=pk_By0CIs75Tsy8K9CqV4sT7w&size=128`} 
+                            src={companyLogo || '/default company icon.png'} 
                             alt={companyName}
                             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                             onError={(e) => {

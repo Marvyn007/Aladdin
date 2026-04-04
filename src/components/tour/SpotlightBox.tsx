@@ -8,41 +8,25 @@ interface SpotlightBoxProps {
 }
 
 /**
- * Renders a glowing gold border over the active tour target element.
- * Positioned using fixed coordinates from getBoundingClientRect().
+ * Minimal border outline around the active tour target.
+ * No dimming, no blur — the page stays completely normal.
  */
 export function SpotlightBox({ rect, padding = 6 }: SpotlightBoxProps) {
   return (
-    <>
-      <style>{`
-        @keyframes spotlight-pulse {
-          0%, 100% {
-            box-shadow:
-              0 0 0 4px rgba(255, 200, 50, 0.25),
-              0 0 20px rgba(255, 200, 50, 0.4);
-          }
-          50% {
-            box-shadow:
-              0 0 0 6px rgba(255, 200, 50, 0.35),
-              0 0 32px rgba(255, 200, 50, 0.6);
-          }
-        }
-      `}</style>
-      <div
-        style={{
-          position: 'fixed',
-          top: rect.top - padding,
-          left: rect.left - padding,
-          width: rect.width + padding * 2,
-          height: rect.height + padding * 2,
-          border: '2px solid rgba(255, 200, 50, 0.9)',
-          borderRadius: 10,
-          animation: 'spotlight-pulse 1.5s ease-in-out infinite',
-          zIndex: 61,
-          pointerEvents: 'none',
-          transition: 'top 400ms ease, left 400ms ease, width 400ms ease, height 400ms ease',
-        }}
-      />
-    </>
+    <div
+      style={{
+        position: 'fixed',
+        top: rect.top - padding,
+        left: rect.left - padding,
+        width: rect.width + padding * 2,
+        height: rect.height + padding * 2,
+        border: '2px solid rgba(99,102,241,0.75)',
+        borderRadius: 8,
+        boxShadow: '0 0 0 3px rgba(99,102,241,0.12)',
+        zIndex: 110,
+        pointerEvents: 'none',
+        transition: 'top 600ms ease, left 600ms ease, width 600ms ease, height 600ms ease',
+      }}
+    />
   );
 }

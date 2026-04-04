@@ -265,15 +265,10 @@ export async function ensureCompanyProfile(input: EnsureCompanyProfileInput): Pr
         fetched: true,
     };
 
-    if (candidate.logoUrl && normalizedName) {
-        const existingConfidence = cachedResolution ? cachedResolution.confidence : 'none';
-        const shouldSave = input.forceRefresh || shouldPersistCandidate(existingConfidence, candidate.confidence);
-        if (shouldSave) {
-            await saveCompanyToDb(normalizedName, resolution.domain, resolution.logoUrl, {
-                forceUpdate: Boolean(input.forceRefresh),
-            });
-        }
-    }
+    // We no longer automatically persist logos in the company resolution library
+    // as it interferes with manual admin management. 
+    // Persistance is now handled exclusively by the admin dashboard 
+    // and the initial job ingestion worker (during corporate creation).
 
     return resolution;
 }

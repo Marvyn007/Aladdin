@@ -10,31 +10,35 @@ interface AladdinCharacterProps {
   phase: Phase;
   mirrored: boolean;
   size: number;
+  stepKey: number;
   onArrived: () => void;
 }
+
+const SPARKLES = [
+  { left: '82%', top: '20%', delay: '0s',    size: 5 },
+  { left: '94%', top: '48%', delay: '0.2s',  size: 4 },
+  { left: '76%', top: '68%', delay: '0.38s', size: 6 },
+  { left: '88%', top: '12%', delay: '0.14s', size: 3 },
+  { left: '96%', top: '58%', delay: '0.28s', size: 4 },
+];
 
 const IMG_FRAME_A = '/aladdin-logo-animation-1.png';
 const IMG_FRAME_B = '/aladdin-logo-animation-2.png';
 const IMG_POINTING = '/aladdin-logo-animation.png';
 const FRAME_INTERVAL_MS = 120;
 
-/**
- * Renders the Aladdin character at a fixed position with animation:
- * - Flying phase: alternates between frame A/B at 120ms to simulate motion.
- * - Pointing phase: shows the pointing image, held still.
- * Mirrored (scaleX(-1)) when the target is on the right side of the screen.
- */
+
 export function AladdinCharacter({
   position,
   phase,
   mirrored,
   size,
+  stepKey,
   onArrived,
 }: AladdinCharacterProps) {
   const [frame, setFrame] = useState<'a' | 'b'>('a');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Start/stop frame alternation based on phase
   useEffect(() => {
     if (phase === 'flying') {
       intervalRef.current = setInterval(() => {
@@ -59,31 +63,59 @@ export function AladdinCharacter({
       : IMG_FRAME_B;
 
   return (
-    <div
-      onTransitionEnd={(e) => {
-        if (phase === 'flying' && e.propertyName === 'left') {
-          onArrived();
+    <>
+      <style>{`
+        @keyframes sparkle-pop {
+          0%   { opacity: 0; transform: scale(0) rotate(0deg); }
+          35%  { opacity: 0.85; transform: scale(1) rotate(40deg); }
+          100% { opacity: 0; transform: scale(0.4) translateY(7px) rotate(80deg); }
         }
-      }}
-      style={{
-        position: 'fixed',
-        left: position.x,
-        top: position.y,
-        width: size,
-        zIndex: 62,
-        pointerEvents: 'none',
-        transform: mirrored ? 'scaleX(-1)' : 'scaleX(1)',
-        transition: 'left 700ms cubic-bezier(0.34, 1.56, 0.64, 1), top 700ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-        willChange: 'left, top',
-      }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt="Aladdin"
-        style={{ width: '100%', height: 'auto', display: 'block' }}
-        draggable={false}
-      />
-    </div>
+      `}</style>
+
+      <div
+        onTransitionEnd={(e) => {
+          if (phase === 'flying' && (e.propertyName === 'left' || e.propertyName === 'top')) {
+            onArrived();
+          }
+        }}
+        style={{
+          position: 'fixed',
+          left: position.x,
+          top: position.y,
+          width: size,
+          zIndex: 112,
+          pointerEvents: 'none',
+          transform: mirrored ? 'scaleX(-1)' : undefined,
+          transition: 'left 1300ms cubic-bezier(0.4, 0, 0.2, 1), top 1300ms cubic-bezier(0.4, 0, 0.2, 1)',
+          willChange: 'left, top',
+        }}
+      >
+        {phase === 'flying' && SPARKLES.map((s, i) => (
+          <div
+            key={`${stepKey}-${i}`}
+            style={{
+              position: 'absolute',
+              left: s.left,
+              top: s.top,
+              width: s.size,
+              height: s.size,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, #ffe066 0%, #fbbf24 60%, transparent 100%)',
+              boxShadow: '0 0 5px 2px rgba(251,191,36,0.55)',
+              animation: `sparkle-pop 1.1s ease-out ${s.delay} infinite`,
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
+
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="Aladdin"
+          style={{ width: '100%', height: 'auto', display: 'block' }}
+          draggable={false}
+        />
+      </div>
+    </>
   );
 }

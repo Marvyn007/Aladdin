@@ -11,6 +11,7 @@ import { TheMuseAdapter } from './adapters/themuse'
 import { ArbeitnowAdapter } from './adapters/arbeitnow'
 import { HimalayasAdapter } from './adapters/himalayas'
 import { WorkdayAdapter } from './adapters/workday'
+import { AshbyAdapter } from './adapters/ashby'
 
 // ── Adapter Registry ──
 
@@ -43,6 +44,9 @@ export function resolveAdapter(source: SourceName): SourceAdapter {
     case 'workday':
       adapter = new WorkdayAdapter()
       break
+    case 'ashby':
+      adapter = new AshbyAdapter()
+      break
     default:
       throw new Error(`Unknown source adapter: "${source}"`)
   }
@@ -68,6 +72,7 @@ function createFreshAdapter(source: SourceName): SourceAdapter {
     }
     case 'arbeitnow':  return new ArbeitnowAdapter()
     case 'himalayas':  return new HimalayasAdapter()
+    case 'ashby':      return new AshbyAdapter()
     default: throw new Error(`Unknown source: "${source}"`)
   }
 }
@@ -125,6 +130,14 @@ export async function processTask(
 
     // Call the source adapter
     const jobs = await adapter.poll(target)
+
+    // Ensure all jobs have a postedAt and strictly sort by newest prior to DB insertion
+    jobs.forEach(job => {
+      if (!job.postedAt) {
+        job.postedAt = new Date();
+      }
+    });
+    jobs.sort((a, b) => (b.postedAt?.getTime() || 0) - (a.postedAt?.getTime() || 0));
 
     // Upsert each job, track new vs duplicate
     let newJobs = 0
@@ -240,6 +253,14 @@ export async function processBatchTask(
         errors.push(`${companies[i].slug}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`)
       }
     }
+
+    // Ensure all jobs have a postedAt and strictly sort by newest prior to DB insertion
+    allJobs.forEach(job => {
+      if (!job.postedAt) {
+        job.postedAt = new Date();
+      }
+    });
+    allJobs.sort((a, b) => (b.postedAt?.getTime() || 0) - (a.postedAt?.getTime() || 0));
 
     // Upsert all collected jobs
     let newJobs = 0

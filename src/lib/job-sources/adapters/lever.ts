@@ -110,10 +110,10 @@ export class LeverAdapter implements SourceAdapter {
     const company = slug
 
     // Build full description HTML from description + lists
-    const listsHtml = posting.lists
+    const listsHtml = (posting.lists || [])
       .map((l) => `<h3>${l.text}</h3><ul>${l.content}</ul>`)
       .join('')
-    const fullHtml = posting.description + listsHtml + (posting.additional || '')
+    const fullHtml = (posting.description || '') + listsHtml + (posting.additional || '')
 
     const salary = this.parseSalary(posting.additionalPlain)
 
@@ -123,7 +123,7 @@ export class LeverAdapter implements SourceAdapter {
       location,
       sourceUrl,
       rawDescriptionHtml: fullHtml || null,
-      jobDescriptionPlain: posting.descriptionPlain || null,
+      jobDescriptionPlain: fullHtml ? stripHtmlToPlain(fullHtml) : null,
       postedAt: posting.createdAt ? new Date(posting.createdAt) : null,
       contentHash: generateContentHash(posting.text, company, location, sourceUrl),
       source: 'lever',
@@ -144,6 +144,7 @@ export class LeverAdapter implements SourceAdapter {
       applyUrl: posting.applyUrl || null,
       expiresAt: null,
     }
+
   }
 
   private detectRemote(posting: LeverPosting): boolean {

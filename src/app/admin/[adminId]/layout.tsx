@@ -8,6 +8,7 @@ import { Inter } from 'next/font/google';
 import {
   BarChart3,
   BriefcaseBusiness,
+  Building2,
   FolderOpen,
   House,
   PanelLeftClose,
@@ -26,6 +27,7 @@ const adminSans = Inter({
 const sidebarNav = [
   { href: '/', label: 'Home', icon: House },
   { href: '/admin', label: 'Dashboard', icon: BarChart3 },
+  { href: '/admin/companies', label: 'Companies', icon: Building2 },
   { href: '/admin/jobs', label: 'Jobs', icon: BriefcaseBusiness },
   { href: '/admin/users', label: 'Users', icon: Users2 },
   { href: '/admin/interviews', label: 'Interview Reviews', icon: FolderOpen },

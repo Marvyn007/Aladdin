@@ -42,6 +42,13 @@ export async function PATCH(
     const sourceUrl = normalizeOptionalText(body.sourceUrl)
     const applyUrl = normalizeOptionalText(body.applyUrl)
 
+    const VALID_CURATION_STATUSES = ['not_reviewed', 'reviewed', 'needs_review']
+    const adminCurationStatus =
+      typeof body.adminCurationStatus === 'string' &&
+      VALID_CURATION_STATUSES.includes(body.adminCurationStatus)
+        ? body.adminCurationStatus
+        : undefined
+
     if (
       title === undefined &&
       company === undefined &&
@@ -49,7 +56,8 @@ export async function PATCH(
       status === undefined &&
       source === undefined &&
       sourceUrl === undefined &&
-      applyUrl === undefined
+      applyUrl === undefined &&
+      adminCurationStatus === undefined
     ) {
       return NextResponse.json({ error: 'No valid job fields were provided' }, { status: 400 })
     }
@@ -64,6 +72,7 @@ export async function PATCH(
         source: source === undefined ? undefined : source?.toLowerCase() ?? 'imported',
         sourceUrl: sourceUrl === undefined ? undefined : sourceUrl ?? '',
         applyUrl: applyUrl === undefined ? undefined : applyUrl,
+        adminCurationStatus: adminCurationStatus,
       },
     })
 

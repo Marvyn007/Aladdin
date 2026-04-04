@@ -49,37 +49,15 @@ export async function GET() {
             logoMap.set(c.name.toLowerCase().replace(/\s+/g, '-'), { logoUrl: c.logoUrl, domain: c.domain });
         }
 
-        const companyDomainOverrides: Record<string, string> = {
-            'google': 'google.com',
-            'amazon': 'amazon.com',
-            'meta': 'meta.com',
-            'facebook': 'facebook.com',
-            'uber-eats': 'ubereats.com',
-            'uber': 'uber.com',
-            'apple': 'apple.com',
-            'microsoft': 'microsoft.com',
-            'netflix': 'netflix.com',
-            'linkedin': 'linkedin.com',
-            'bloomberg': 'bloomberg.com',
-            'tiktok': 'tiktok.com',
-            'bytedance': 'bytedance.com'
-        };
 
-        const PUB_KEY = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN || 'pk_By0CIs75Tsy8K9CqV4sT7w';
 
         // Map to a cleaner format with logo URL
         const companies = groups.map(group => {
             const slug = group.companyName.toLowerCase();
             const match = logoMap.get(slug);
             
-            // Apply Manual Override if known
             let domain = match?.domain || null;
             let logoUrl = match?.logoUrl || null;
-
-            if (companyDomainOverrides[slug]) {
-                domain = companyDomainOverrides[slug];
-                logoUrl = `https://img.logo.dev/${domain}?token=${PUB_KEY}&size=128`;
-            }
 
             return {
                 name: group.companyName,

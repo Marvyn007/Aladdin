@@ -1216,13 +1216,14 @@ function AppearanceTab({ theme, toggleTheme, currentThemeId, onSetTheme, onSave,
 // Security Tab Component
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function SecurityTab({ user, isMobile }: { user: any; isMobile?: boolean }) {
+    const isAdmin = user?.publicMetadata?.role === 'admin';
     const [tourResetting, setTourResetting] = useState(false);
 
     const handleRestartTour = async () => {
         setTourResetting(true);
         try {
             await fetch('/api/tour/reset', { method: 'PATCH' });
-            window.location.href = '/tour';
+            window.location.reload();
         } catch {
             setTourResetting(false);
         }
@@ -1234,40 +1235,39 @@ function SecurityTab({ user, isMobile }: { user: any; isMobile?: boolean }) {
                 Security
             </h3>
 
-            {/* Tour Testing — DEV ONLY */}
-            <div style={{
-                background: 'var(--background-secondary)',
-                borderRadius: '12px',
-                border: '1px dashed var(--border)',
-                padding: '20px',
-            }}>
-                <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 4px' }}>
-                    Restart Tour
-                </p>
-                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 14px' }}>
-                    Resets your tour status and launches the guided tour from the beginning.
-                </p>
-                <button
-                    onClick={handleRestartTour}
-                    disabled={tourResetting}
-                    style={{
-                        padding: '8px 18px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        background: tourResetting ? 'var(--background-tertiary)' : '#7c3aed',
-                        color: tourResetting ? 'var(--text-tertiary)' : '#fff',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        cursor: tourResetting ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'background 0.15s',
-                    }}
-                >
-                    {tourResetting ? 'Launching…' : '✨ Tour'}
-                </button>
-            </div>
+            {/* Restart Tour — Admin only */}
+            {isAdmin && (
+                <div style={{
+                    background: 'var(--background-secondary)',
+                    borderRadius: '12px',
+                    border: '1px dashed var(--border)',
+                    padding: '20px',
+                }}>
+                    <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 4px' }}>
+                        Restart Tour
+                    </p>
+                    <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '0 0 14px' }}>
+                        Resets tour status so the Tutorial button reappears in the sidebar.
+                    </p>
+                    <button
+                        onClick={handleRestartTour}
+                        disabled={tourResetting}
+                        style={{
+                            padding: '8px 18px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: tourResetting ? 'var(--background-tertiary)' : '#7c3aed',
+                            color: tourResetting ? 'var(--text-tertiary)' : '#fff',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: tourResetting ? 'not-allowed' : 'pointer',
+                            transition: 'background 0.15s',
+                        }}
+                    >
+                        {tourResetting ? 'Resetting…' : 'Reset Tour'}
+                    </button>
+                </div>
+            )}
 
             {/* Connected Accounts */}
             <div style={{

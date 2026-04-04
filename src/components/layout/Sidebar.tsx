@@ -90,10 +90,20 @@ export function Sidebar({
     const isCompactMode = useCompactMode();
     const shouldAutoCollapse = useAutoCollapse();
     const [isMounted, setIsMounted] = useState(false);
+    const [showTutorialBtn, setShowTutorialBtn] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    // Fetch tour status once user is loaded — show Tutorial button only if not yet toured
+    useEffect(() => {
+        if (!isLoaded || !isSignedIn) return;
+        fetch('/api/tour/status')
+            .then(r => r.json())
+            .then(data => { if (data.toured === false) setShowTutorialBtn(true); })
+            .catch(() => {});
+    }, [isLoaded, isSignedIn]);
 
     // Effective collapsed state: user choice OR auto-collapse at 900px
     const isEffectivelyCollapsed = !sidebarOpen || shouldAutoCollapse;
@@ -232,6 +242,7 @@ export function Sidebar({
                     onClick={toggleSidebar}
                 >
                     <div
+                        data-tour-id="aladdin-sidebar-logo"
                         suppressHydrationWarning
                         style={{
                             width: !isMounted ? '135px' : (isEffectivelyCollapsed ? '40px' : (isCompactMode ? '48px' : '135px')),
@@ -293,6 +304,7 @@ export function Sidebar({
                     </div>
 
                     {/* Resume Editor (Protected) */}
+                    <div data-tour-id="tour-resume-editor">
                     <NavItem
                         icon={<EditIcon />}
                         label="Resume Editor"
@@ -300,6 +312,7 @@ export function Sidebar({
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
                     />
+                    </div>
 
                     <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
 
@@ -322,6 +335,46 @@ export function Sidebar({
                         disabled={!isSignedIn}
                     />
                     </div>
+
+                    {/* Tutorial button — only for users who haven't taken the tour */}
+                    {showTutorialBtn && !isEffectivelyCollapsed && (
+                        <>
+                            <style>{`
+                                @keyframes tutorial-pulse {
+                                    0%, 100% { box-shadow: 0 0 0 0 rgba(201,150,12,0); }
+                                    50%       { box-shadow: 0 0 0 4px rgba(201,150,12,0.2); }
+                                }
+                            `}</style>
+                            <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
+                            <button
+                                onClick={() => { window.location.href = '/tour'; }}
+                                style={{
+                                    margin: '6px 8px 2px',
+                                    width: 'calc(100% - 16px)',
+                                    padding: '9px 16px',
+                                    borderRadius: 8,
+                                    border: 'none',
+                                    background: '#c9960c',
+                                    color: '#ffffff',
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    letterSpacing: '0.02em',
+                                    display: 'block',
+                                    transition: 'background 0.15s',
+                                    animation: 'tutorial-pulse 2.4s ease-in-out infinite',
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.background = '#b8860b';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = '#c9960c';
+                                }}
+                            >
+                                Tutorial
+                            </button>
+                        </>
+                    )}
                 </nav>
 
                 {/* Footer - User Account */}

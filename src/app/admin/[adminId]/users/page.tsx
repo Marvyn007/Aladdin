@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ExternalLink, Search } from 'lucide-react';
+import { ExternalLink, LoaderCircle, RefreshCcw, Search } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
 import { AdminIdentity, AdminPageIntro, AdminPanel, AdminStatCard } from '@/components/admin/admin-ui';
@@ -38,6 +38,8 @@ export default function UsersPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [pageMessage, setPageMessage] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadUsers() {
@@ -63,6 +65,25 @@ export default function UsersPage() {
 
     void loadUsers();
   }, []);
+
+  async function syncUsersFromClerk() {
+    setIsSyncing(true)
+    setSyncResult(null)
+    try {
+      const response = await fetch('/api/admin/sync-users', { method: 'POST' })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? 'Sync failed')
+      setSyncResult(payload.message)
+      // Reload the table so updated names appear
+      const res = await fetch('/api/admin/users', { cache: 'no-store' })
+      const data = await res.json()
+      if (res.ok) setUsers(data.users ?? [])
+    } catch (error) {
+      setSyncResult(error instanceof Error ? error.message : 'Sync failed')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   async function handleRowClick(userId: string) {
     setSelectedUserId(userId);
@@ -109,6 +130,34 @@ export default function UsersPage() {
         eyebrow="User management"
         title="Users"
         description="Live Clerk signups enriched with database-backed applications, resumes, cover letters, onboarding state, and default resume access."
+        actions={
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+            <button
+              onClick={() => void syncUsersFromClerk()}
+              disabled={isSyncing}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                backgroundColor: '#0f172a', color: '#ffffff',
+                fontWeight: 600, fontSize: '14px', padding: '9px 18px',
+                borderRadius: '10px', border: 'none',
+                cursor: isSyncing ? 'not-allowed' : 'pointer',
+                opacity: isSyncing ? 0.6 : 1,
+                fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(15,23,42,0.18)',
+              }}
+            >
+              {isSyncing
+                ? <><LoaderCircle size={15} style={{ animation: 'spin 1s linear infinite' }} /> Syncing from Clerk...</>
+                : <><RefreshCcw size={15} /> Sync Names from Clerk</>
+              }
+            </button>
+            {syncResult && (
+              <span style={{ fontSize: '12px', color: '#64748b', maxWidth: '340px', textAlign: 'right' }}>
+                {syncResult}
+              </span>
+            )}
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          </div>
+        }
       />
 
       <section className="admin-card-grid">
@@ -149,21 +198,21 @@ export default function UsersPage() {
         }
       >
         <div className="admin-table-wrap">
-          <Table className="admin-user-table">
+          <Table className="admin-wide-table">
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead className="hidden md:table-cell">Joined</TableHead>
-                <TableHead>Pipeline</TableHead>
-                <TableHead className="hidden lg:table-cell">Generated assets</TableHead>
-                <TableHead>Default resume</TableHead>
-                <TableHead>Activity</TableHead>
+                <TableHead style={{ width: '28%' }}>User</TableHead>
+                <TableHead className="hidden md:table-cell" style={{ width: '12%' }}>Joined</TableHead>
+                <TableHead style={{ width: '18%' }}>Pipeline</TableHead>
+                <TableHead className="hidden lg:table-cell" style={{ width: '16%' }}>Generated assets</TableHead>
+                <TableHead style={{ width: '14%' }}>Default resume</TableHead>
+                <TableHead style={{ width: '12%' }}>Activity</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsers.map((user) => (
                 <TableRow key={user.id} className="cursor-pointer" onClick={() => void handleRowClick(user.id)}>
-                  <TableCell className="max-w-[14rem] align-top whitespace-normal">
+                  <TableCell className="align-top whitespace-normal">
                     <div className="space-y-2">
                       <AdminIdentity
                         name={user.name}
@@ -189,7 +238,7 @@ export default function UsersPage() {
                       <p className="text-sm text-muted-foreground">{user.dbProfileExists ? 'Database linked' : 'Waiting for product profile'}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="max-w-[11rem] align-top whitespace-normal">
+                  <TableCell className="align-top whitespace-normal">
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">{user.applications} jobs applied</p>
                       <div className="admin-table-cell-meta">
@@ -199,7 +248,7 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden lg:table-cell max-w-[11rem] align-top whitespace-normal">
+                  <TableCell className="hidden lg:table-cell align-top whitespace-normal">
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">{user.resumes} resume uploads</p>
                       <div className="admin-table-cell-meta">
@@ -208,7 +257,7 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="align-top w-[1%]" onClick={(event) => event.stopPropagation()}>
+                  <TableCell className="align-top" onClick={(event) => event.stopPropagation()}>
                     {user.defaultResume ? (
                       <div className="space-y-2">
                         <a
@@ -226,7 +275,7 @@ export default function UsersPage() {
                       <span className="text-sm text-muted-foreground">No default resume</span>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-[11rem] align-top whitespace-normal">
+                  <TableCell className="align-top whitespace-normal">
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">{user.lastActiveLabel}</p>
                       <div className="admin-table-cell-meta">

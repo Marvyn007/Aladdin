@@ -146,6 +146,8 @@ export interface AdminJobSummary {
   coverLetters: number
   saves: number
   postedByName: string | null
+  descriptionLength: number
+  adminCurationStatus: string
 }
 
 export interface AdminJobsResponse {
@@ -171,4 +173,27 @@ export interface AdminInterviewSummary {
 
 export interface AdminInterviewsResponse {
   interviews: AdminInterviewSummary[]
+}
+
+export interface AdminCompanySummary {
+  id: string
+  name: string
+  domain: string | null
+  logoUrl: string | null
+  logoFetched: boolean
+  jobCount: number
+  updatedAt: string | null
+}
+
+export interface AdminCompanyDetail extends AdminCompanySummary {
+  hasPracticeQuestions: boolean
+  createdAt: string | null
+}
+
+export interface AdminCompaniesResponse {
+  companies: AdminCompanySummary[]
+}
+
+export interface AdminCompanyResponse {
+  company: AdminCompanyDetail
 }

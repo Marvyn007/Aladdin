@@ -19,6 +19,12 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         return { isNew: false, stale: true }
       }
 
+      // Priority 1b: description quality check — drop jobs with empty or broken descriptions (< 100 chars)
+      // Now that extraction is fixed across adapters, we only drop entries that are likely errors.
+      if (!job.jobDescriptionPlain || job.jobDescriptionPlain.length < 100) {
+        return { isNew: false, stale: true }
+      }
+
       // Primary dedupe: source + externalId
       // For now source/externalId are nullable in the schema (Phase 6 makes them non-nullable).
       // Use raw SQL with ON CONFLICT to handle atomically.
@@ -72,16 +78,13 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
       if (isNew && job.company) {
         try {
           const companyExists = await prisma.company.findUnique({ where: { name: job.company } })
-          // Skip if we already have a high-quality (non-provider) logo
-          const hasHighQualityLogo = companyExists?.logoFetched && companyExists.logoUrl &&
-            !companyExists.logoUrl.includes('logo.dev') &&
-            !companyExists.logoUrl.includes('logo.clearbit.com') &&
-            !companyExists.logoUrl.includes('googleusercontent.com')
-
-          if (!hasHighQualityLogo) {
+          
+          // ONLY auto-fetch the VERY FIRST TIME the company is added to the database.
+          // If the company already exists, we do NOT touch its logo/domain here.
+          if (!companyExists) {
             // 1. Try scraping logo directly from the provider job page (highest quality)
             let logoUrl: string | null = null
-            let domain: string | null = companyExists?.domain ?? null
+            let domain: string | null = null
 
             const providerLogo = await scrapeLogoFromProviderPage(job.sourceUrl, job.source)
             if (providerLogo?.logoUrl) {
@@ -90,20 +93,14 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
               // 2. Fall back to logo.dev
               const result = await getCompanyLogo(job.company)
               logoUrl = result.logoUrl
-              domain = result.domain ?? domain
+              domain = result.domain ?? null
             }
 
             if (logoUrl) {
-              await prisma.company.upsert({
-                where: { name: job.company },
-                create: {
+              await prisma.company.create({
+                data: {
                   name: job.company,
                   domain: domain,
-                  logoUrl: logoUrl,
-                  logoFetched: true,
-                },
-                update: {
-                  domain: domain || undefined,
                   logoUrl: logoUrl,
                   logoFetched: true,
                 }

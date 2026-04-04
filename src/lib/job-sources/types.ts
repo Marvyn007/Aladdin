@@ -7,7 +7,7 @@
 
 // ── Source Adapter Interface ──
 
-export type SourceType = 'greenhouse' | 'lever' | 'themuse' | 'arbeitnow' | 'himalayas' | 'workday' | 'imported'
+export type SourceType = 'greenhouse' | 'lever' | 'ashby' | 'themuse' | 'arbeitnow' | 'himalayas' | 'workday' | 'imported'
 
 export type PollTarget =
   | { type: 'company'; slug: string }

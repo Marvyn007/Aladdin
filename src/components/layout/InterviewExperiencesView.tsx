@@ -11,8 +11,7 @@ const LOGO_DEV_TOKEN = 'pk_By0CIs75Tsy8K9CqV4sT7w';
 
 function getLogoUrl(company: { name: string; logoUrl?: string | null; domain?: string | null }): string {
     if (company.logoUrl) return company.logoUrl;
-    const domain = company.domain || `${company.name.toLowerCase().replace(/-/g, '')}.com`;
-    return `https://img.logo.dev/${domain}?token=${LOGO_DEV_TOKEN}&size=128`;
+    return '/default company icon.png';
 }
 
 const formatCompanyName = (name: string) => {

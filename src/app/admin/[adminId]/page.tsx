@@ -1,23 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { LoaderCircle, Plus, RefreshCcw } from 'lucide-react';
+import { Building2, LoaderCircle, Plus, RefreshCcw, X } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 import { AdminPageIntro, AdminPanel, AdminStatCard } from '@/components/admin/admin-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -316,56 +306,15 @@ export default function AdminDashboardPage() {
                 </button>
               ))}
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger render={<Button />}>
-                <Plus className="size-4" />
-                Track company
-              </DialogTrigger>
-              <DialogContent className="admin-dialog max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Add a tracked company</DialogTitle>
-                  <DialogDescription>Create a new ATS watch target without leaving the dashboard.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Company name</label>
-                    <Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Slug</label>
-                    <Input value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">ATS</label>
-                    <Select value={form.ats} onValueChange={(value) => setForm((current) => ({ ...current, ats: value ?? current.ats }))}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="greenhouse">Greenhouse</SelectItem>
-                        <SelectItem value="lever">Lever</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Country</label>
-                    <Input value={form.country} onChange={(event) => setForm((current) => ({ ...current, country: event.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Industry</label>
-                    <Input value={form.industry} onChange={(event) => setForm((current) => ({ ...current, industry: event.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Website</label>
-                    <Input value={form.websiteUrl} onChange={(event) => setForm((current) => ({ ...current, websiteUrl: event.target.value }))} />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={() => void createCompany()} disabled={!form.name || !form.slug || !form.ats || isActing}>Create tracked source</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <button
+              onClick={() => setIsDialogOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#0f172a', color: '#ffffff', fontWeight: 600, fontSize: '14px', padding: '9px 18px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(15,23,42,0.18)' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1e293b')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0f172a')}
+            >
+              <Plus size={16} />
+              Track company
+            </button>
           </div>
         }
       >
@@ -497,6 +446,104 @@ export default function AdminDashboardPage() {
           ) : null}
         </div>
       </AdminPanel>
+      {isDialogOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 55, backgroundColor: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setIsDialogOpen(false)}
+          />
+          {/* Centered Modal */}
+          <div
+            style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 60, width: '100%', maxWidth: '640px', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 25px 60px -12px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: 'Inter, sans-serif', maxHeight: '90vh' }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', flexShrink: 0 }}>
+                  <Building2 size={20} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.2 }}>Add Tracked Company</div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', marginTop: '2px' }}>ATS Watch Target</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDialogOpen(false)}
+                style={{ width: '36px', height: '36px', borderRadius: '50%', border: 'none', backgroundColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#94a3b8' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                {[
+                  { label: 'Company Name', key: 'name', placeholder: 'e.g. OpenAI', required: true },
+                  { label: 'Slug', key: 'slug', placeholder: 'e.g. openai', required: true },
+                  { label: 'Country', key: 'country', placeholder: 'e.g. US' },
+                  { label: 'Industry', key: 'industry', placeholder: 'e.g. AI / Machine Learning' },
+                  { label: 'Website URL', key: 'websiteUrl', placeholder: 'https://openai.com' },
+                ].map(({ label, key, placeholder, required }) => (
+                  <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', marginLeft: '2px' }}>
+                      {label}{required && <span style={{ color: '#f43f5e', marginLeft: '3px' }}>*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      value={form[key as keyof typeof form]}
+                      onChange={(e) => setForm((c) => ({ ...c, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      style={{ width: '100%', padding: '11px 14px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: 500, color: '#0f172a', outline: 'none', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif' }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.12)'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
+                    />
+                  </div>
+                ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', marginLeft: '2px' }}>
+                    ATS <span style={{ color: '#f43f5e', marginLeft: '3px' }}>*</span>
+                  </label>
+                  <select
+                    value={form.ats}
+                    onChange={(e) => setForm((c) => ({ ...c, ats: e.target.value }))}
+                    style={{ width: '100%', padding: '11px 14px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: 500, color: '#0f172a', outline: 'none', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif', appearance: 'none', cursor: 'pointer' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.12)'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <option value="greenhouse">Greenhouse</option>
+                    <option value="lever">Lever</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ flexShrink: 0, borderTop: '1px solid #f1f5f9', backgroundColor: '#ffffff', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button
+                onClick={() => setIsDialogOpen(false)}
+                style={{ fontSize: '14px', fontWeight: 600, color: '#475569', padding: '10px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void createCompany()}
+                disabled={!form.name || !form.slug || !form.ats || isActing}
+                style={{ backgroundColor: '#0f172a', color: '#ffffff', fontWeight: 700, fontSize: '14px', padding: '11px 28px', borderRadius: '10px', border: 'none', cursor: (!form.name || !form.slug || !form.ats || isActing) ? 'not-allowed' : 'pointer', opacity: (!form.name || !form.slug || !form.ats || isActing) ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'Inter, sans-serif', boxShadow: '0 4px 14px rgba(15,23,42,0.2)' }}
+              >
+                {isActing ? <><LoaderCircle size={15} style={{ animation: 'spin 1s linear infinite' }} /> Creating...</> : 'Create Tracked Source'}
+              </button>
+            </div>
+          </div>
+
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        </>
+      )}
     </div>
   );
 }
