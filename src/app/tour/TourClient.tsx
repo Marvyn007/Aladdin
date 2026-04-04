@@ -27,6 +27,7 @@ export function TourClient() {
     handleMobile();
   }, [router]);
 
+  // TourOverlay calls router.push('/onboarding') after invoking this callback.
   const handleComplete = async () => {
     await fetch('/api/tour/complete', { method: 'PATCH' }).catch(() => {});
   };
@@ -36,7 +37,7 @@ export function TourClient() {
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       {/* Real dashboard in background — pointer-events disabled so user can't interact */}
-      <div style={{ pointerEvents: 'none', width: '100%', height: '100%' }}>
+      <div style={{ pointerEvents: 'none', width: '100%', height: '100%' }} aria-hidden="true">
         <Dashboard />
       </div>
 
