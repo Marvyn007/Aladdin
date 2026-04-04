@@ -20,7 +20,14 @@ try {
     execSync('npx prisma generate', { stdio: 'inherit' });
 
     console.log('\n--- 3. Deploying Migrations ---');
-    execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+    // Neon's connection pooler doesn't support advisory locks required by migrate deploy.
+    // Override DATABASE_URL with DIRECT_URL (non-pooled) for this step only.
+    const migrateEnv = { ...process.env };
+    if (process.env.DIRECT_URL) {
+        migrateEnv.DATABASE_URL = process.env.DIRECT_URL;
+        console.log('ℹ️  Using DIRECT_URL for migration (bypasses pooler advisory lock issue)');
+    }
+    execSync('npx prisma migrate deploy', { stdio: 'inherit', env: migrateEnv });
 
     console.log('\n--- 4. Building Next.js App ---');
     // Use npx to ensure we use the local next binary
