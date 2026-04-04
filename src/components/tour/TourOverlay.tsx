@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TOUR_STEPS } from './tourSteps';
 import { AladdinCharacter } from './AladdinCharacter';
