@@ -1,3 +1,4 @@
+// Trigger Vercel Build (TS Fix & Script Cleanup v1.1)
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -19,18 +20,6 @@ try {
     execSync('npx prisma generate', { stdio: 'inherit' });
 
     console.log('\n--- 3. Deploying Migrations ---');
-    // Resolve any previously-failed migrations before deploying.
-    // This is needed when a migration failed in a prior deploy (e.g. "column already exists")
-    // and Prisma blocked subsequent deploys with P3009. Safe to run even if no failures exist.
-    try {
-        execSync(
-            'npx prisma migrate resolve --applied 20260401000000_add_user_last_active_at',
-            { stdio: 'inherit' }
-        );
-        console.log('✅ Resolved failed migration state');
-    } catch (_) {
-        // Migration was not in a failed state — nothing to resolve, continue.
-    }
     execSync('npx prisma migrate deploy', { stdio: 'inherit' });
 
     console.log('\n--- 4. Building Next.js App ---');

@@ -154,7 +154,7 @@ export default function CompaniesPage() {
             
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider ml-2">Sort by:</span>
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select value={sortBy} onValueChange={(val) => val && setSortBy(val)}>
                 <SelectTrigger className="w-[180px] h-10 border-muted-foreground/20">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
