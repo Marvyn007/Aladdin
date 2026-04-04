@@ -122,6 +122,7 @@ model Job {
   searchBoostScore       Float?                   @default(1.0) @map("search_boost_score")
   commonTitleCategory    String?                  @map("common_title_category")
   postedByUserId         String?                  @map("posted_by_user_id")
+  adminCurationStatus    String?                  @default("not_reviewed") @map("admin_curation_status")
 
   // ── Aggregation: Source identity (Phase 6: non-nullable after backfill) ──
   source                 String                   @default("imported")     // 'greenhouse' | 'lever' | 'themuse' | 'arbeitnow' | 'himalayas' | 'imported'
@@ -281,6 +282,7 @@ model AppSettings {
   lastUpdated      DateTime? @map("last_updated") @db.Timestamptz(6)
   createdAt        DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   excludedKeywords Json?     @map("excluded_keywords")
+  toured           Boolean   @default(false) @map("toured")
   userId           String    @unique @map("user_id")
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_app_settings_user")
 
