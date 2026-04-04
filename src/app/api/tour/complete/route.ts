@@ -10,11 +10,15 @@ export async function PATCH(_req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  await prisma.appSettings.upsert({
-    where: { userId },
-    update: { toured: true },
-    create: { userId, toured: true },
-  });
+  try {
+    await prisma.appSettings.upsert({
+      where: { userId },
+      update: { toured: true },
+      create: { userId, toured: true },
+    });
+  } catch {
+    return NextResponse.json({ error: 'Failed to save tour status' }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true });
 }

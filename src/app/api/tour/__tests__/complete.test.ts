@@ -47,4 +47,17 @@ describe('PATCH /api/tour/complete', () => {
       create: { userId: 'user_123', toured: true },
     });
   });
+
+  it('returns 500 when upsert throws', async () => {
+    vi.mocked(auth).mockResolvedValue({ userId: 'user_123' } as never);
+    vi.mocked(prisma.appSettings.upsert).mockRejectedValue(new Error('DB error'));
+
+    const { PATCH } = await import('../complete/route');
+    const req = new Request('http://localhost/api/tour/complete', { method: 'PATCH' });
+    const res = await PATCH(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body).toEqual({ error: 'Failed to save tour status' });
+  });
 });
