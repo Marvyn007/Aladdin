@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TOUR_STEPS } from './tourSteps';
 import { AladdinCharacter } from './AladdinCharacter';
@@ -36,6 +36,8 @@ export function TourOverlay({ onComplete }: TourOverlayProps) {
     typeof window !== 'undefined' ? window.innerWidth : 1440,
   );
 
+  const completingRef = useRef(false);
+
   const step = TOUR_STEPS[stepIndex];
   const aladdinSize = getAladdinSize(viewportWidth);
   const bubbleWidth = getSpeechBubbleWidth(viewportWidth);
@@ -69,6 +71,8 @@ export function TourOverlay({ onComplete }: TourOverlayProps) {
     setBubbleVisible(false);
 
     if (stepIndex === TOUR_STEPS.length - 1) {
+      if (completingRef.current) return;
+      completingRef.current = true;
       // Finish
       setFinishing(true);
       await onComplete();
@@ -85,6 +89,8 @@ export function TourOverlay({ onComplete }: TourOverlayProps) {
 
   // Called when user clicks Skip Tour
   const handleSkip = useCallback(async () => {
+    if (completingRef.current) return;
+    completingRef.current = true;
     await onComplete();
     router.push('/onboarding');
   }, [onComplete, router]);
@@ -166,36 +172,38 @@ export function TourOverlay({ onComplete }: TourOverlayProps) {
         </div>
       )}
 
-      {/* Skip Tour button — always visible */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 28,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 70,
-        }}
-      >
-        <button
-          onClick={handleSkip}
+      {/* Skip Tour button — hidden once finishing */}
+      {!finishing && (
+        <div
           style={{
-            padding: '8px 24px',
-            borderRadius: 20,
-            border: '1px solid rgba(255,255,255,0.4)',
-            background: 'rgba(0,0,0,0.45)',
-            color: 'rgba(255,255,255,0.85)',
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: 'pointer',
-            backdropFilter: 'blur(8px)',
-            transition: 'background 0.15s',
+            position: 'fixed',
+            bottom: 28,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 70,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.65)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.45)'; }}
         >
-          Skip Tour
-        </button>
-      </div>
+          <button
+            onClick={handleSkip}
+            style={{
+              padding: '8px 24px',
+              borderRadius: 20,
+              border: '1px solid rgba(255,255,255,0.4)',
+              background: 'rgba(0,0,0,0.45)',
+              color: 'rgba(255,255,255,0.85)',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              backdropFilter: 'blur(8px)',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.65)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.45)'; }}
+          >
+            Skip Tour
+          </button>
+        </div>
+      )}
 
       {/* Finish overlay */}
       {finishing && (
