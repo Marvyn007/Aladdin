@@ -489,7 +489,7 @@ export function Dashboard({
         if (!isAuthLoaded) return;
 
         const page = parseInt(searchParams.get('page') || '1', 10);
-        const limit = parseInt(searchParams.get('limit') || '1000', 10);
+        const limit = parseInt(searchParams.get('limit') || '25', 10);
         const sortBy = searchParams.get('sort_by') as any || 'time';
         const sortDir = searchParams.get('sort_dir') as any || 'desc';
 
@@ -599,7 +599,18 @@ export function Dashboard({
             const res = await fetch(`/api/jobs?${params.toString()}`);
             if (res.ok) {
                 const data = await res.json();
-                setJobs(data.jobs || []);
+                let loadedJobs = data.jobs || [];
+                
+                // Defensive client-side check to guarantee strictly sorted listing on the frontend
+                if (by === 'time') {
+                    loadedJobs.sort((a: Job, b: Job) => {
+                        const timeA = new Date(a.posted_at || 0).getTime();
+                        const timeB = new Date(b.posted_at || 0).getTime();
+                        return dir === 'desc' ? timeB - timeA : timeA - timeB;
+                    });
+                }
+                
+                setJobs(loadedJobs);
                 setPagination({ total: data.total, totalPages: data.totalPages });
                 setLastUpdated(data.lastUpdated);
             } else {
@@ -614,6 +625,64 @@ export function Dashboard({
 
     // Keep ref updated
     loadJobsRef.current = loadJobs;
+
+    // Background Smart-Polling (Every 20 minutes)
+    useEffect(() => {
+        const POLLING_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes
+        const interval = setInterval(async () => {
+            const state = useStore.getState();
+            
+            // Only poll if on first page, sorting by time desc, fresh status, and not searching
+            if (
+                state.pagination.page === 1 && 
+                state.sorting.by === 'time' && 
+                state.sorting.dir === 'desc' && 
+                state.jobStatus === 'fresh' && 
+                !state.searchMode
+            ) {
+                try {
+                    const params = new URLSearchParams({
+                        page: '1',
+                        limit: '50',
+                        sort_by: 'time',
+                        sort_dir: 'desc',
+                        status: 'fresh'
+                    });
+                    
+                    const res = await fetch(`/api/jobs?${params.toString()}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const newJobsList = data.jobs || [];
+                        
+                        if (newJobsList.length > 0) {
+                            const existingJobs = useStore.getState().jobs;
+                            const existingHash = new Set(existingJobs.map((j: Job) => j.id));
+                            const freshAdditions = newJobsList.filter((j: Job) => !existingHash.has(j.id));
+                            
+                            if (freshAdditions.length > 0) {
+                                // Add to top of list seamlessly without reloading
+                                const combined = [...freshAdditions, ...existingJobs];
+                                
+                                // Strict Final Check to guarantee sorting on the frontend
+                                combined.sort((a: Job, b: Job) => {
+                                    const timeA = new Date(a.posted_at || 0).getTime();
+                                    const timeB = new Date(b.posted_at || 0).getTime();
+                                    return timeB - timeA;
+                                });
+                                
+                                useStore.getState().setJobs(combined);
+                                useStore.getState().setLastUpdated(data.lastUpdated);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Background polling failed:', error);
+                }
+            }
+        }, POLLING_INTERVAL_MS);
+
+        return () => clearInterval(interval);
+    }, []);
 
     const loadApplications = async () => {
         if (!isSignedIn) return;
@@ -1188,6 +1257,7 @@ export function Dashboard({
                     <Link
                         href="/"
                         className={`view-tab ${isJobBoard && !isMapMode ? 'active' : ''}`}
+                        data-tour-id="tour-job-listings"
                     >
                         Job Listings
                     </Link>
@@ -1195,6 +1265,7 @@ export function Dashboard({
                         href="/application-tracker"
                         className={`view-tab ${isTracker ? 'active' : ''}`}
                         style={{ position: 'relative', opacity: !isSignedIn ? 0.65 : 1 }}
+                        data-tour-id="tour-tracker-tab"
                     >
                         Application Tracker {isSignedIn && `(${applications.length})`}
                         {!isSignedIn && <span style={{ marginLeft: 6, opacity: 0.5 }}>🔒</span>}
@@ -1203,6 +1274,7 @@ export function Dashboard({
                         href="/jobs-map"
                         className={`view-tab ${isJobBoard && isMapMode ? 'active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: !isSignedIn ? 0.65 : 1 }}
+                        data-tour-id="tour-map-tab"
                     >
                         <MapIcon size={14} />
                         Jobs Map
@@ -1212,6 +1284,7 @@ export function Dashboard({
                         href="/interview-experiences"
                         className={`view-tab ${isInterviewExperiences ? 'active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        data-tour-id="tour-interviews-tab"
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg>
                         Interview Experiences
@@ -1220,6 +1293,7 @@ export function Dashboard({
                         href="/practice"
                         className={`view-tab ${isPracticeView ? 'active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        data-tour-id="tour-practice-tab"
                     >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img 

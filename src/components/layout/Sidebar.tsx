@@ -89,6 +89,11 @@ export function Sidebar({
     const [resumeEditorWarning, setResumeEditorWarning] = useState<'no-resume' | 'no-default' | null>(null);
     const isCompactMode = useCompactMode();
     const shouldAutoCollapse = useAutoCollapse();
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     // Effective collapsed state: user choice OR auto-collapse at 900px
     const isEffectivelyCollapsed = !sidebarOpen || shouldAutoCollapse;
@@ -214,6 +219,7 @@ export function Sidebar({
             >
                 {/* Logo/Brand */}
                 <div
+                    suppressHydrationWarning
                     style={{
                         padding: (isCompactMode || isEffectivelyCollapsed) ? '16px 12px' : '24px 12px',
                         display: 'flex',
@@ -226,9 +232,10 @@ export function Sidebar({
                     onClick={toggleSidebar}
                 >
                     <div
+                        suppressHydrationWarning
                         style={{
-                            width: isEffectivelyCollapsed ? '40px' : (isCompactMode ? '48px' : '135px'),
-                            height: isEffectivelyCollapsed ? '40px' : (isCompactMode ? '48px' : '135px'),
+                            width: !isMounted ? '135px' : (isEffectivelyCollapsed ? '40px' : (isCompactMode ? '48px' : '135px')),
+                            height: !isMounted ? '135px' : (isEffectivelyCollapsed ? '40px' : (isCompactMode ? '48px' : '135px')),
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -237,13 +244,14 @@ export function Sidebar({
                     >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                            src={(isCompactMode || isEffectivelyCollapsed) ? '/aladdin-icon.png' : '/favicon.png'}
+                            suppressHydrationWarning
+                            src={(!isMounted) ? '/favicon.png' : ((isCompactMode || isEffectivelyCollapsed) ? '/aladdin-icon.png' : '/favicon.png')}
                             alt="Aladdin Logo"
                             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                         />
                     </div>
-                    {!isEffectivelyCollapsed && !isCompactMode && (
-                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '14px', fontFamily: 'var(--font-inter)' }}>
+                    {(!isMounted || (!isEffectivelyCollapsed && !isCompactMode)) && (
+                        <span suppressHydrationWarning style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '14px', fontFamily: 'var(--font-inter)' }}>
                             The Job Finder
                         </span>
                     )}
@@ -262,6 +270,7 @@ export function Sidebar({
                     )}
 
                     {/* Search/Filter */}
+                    <div data-tour-id="tour-search">
                     <NavItem
                         icon={<SearchIcon />}
                         label="Search"
@@ -270,8 +279,10 @@ export function Sidebar({
                         collapsed={isEffectivelyCollapsed}
                         style={{ minHeight: '48px' }}
                     />
+                    </div>
 
                     {/* Import Job (Protected) */}
+                    <div data-tour-id="tour-import-job">
                     <NavItem
                         icon={<img src="/icons/import-job.png" alt="Import" style={{ width: 22, height: 22, objectFit: 'contain' }} />}
                         label="Import Job"
@@ -279,6 +290,7 @@ export function Sidebar({
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
                     />
+                    </div>
 
                     {/* Resume Editor (Protected) */}
                     <NavItem
@@ -291,7 +303,8 @@ export function Sidebar({
 
                     <div style={{ height: '1px', background: 'var(--text-muted)', margin: '10px 8px', opacity: 0.5 }} />
 
-                    {/* My Resumes (Protected) */}
+                    {/* My Resumes + LinkedIn (Protected) */}
+                    <div data-tour-id="tour-resume-section">
                     <NavItem
                         icon={<ResumeIcon />}
                         label="My Resumes"
@@ -308,6 +321,7 @@ export function Sidebar({
                         collapsed={isEffectivelyCollapsed}
                         disabled={!isSignedIn}
                     />
+                    </div>
                 </nav>
 
                 {/* Footer - User Account */}
