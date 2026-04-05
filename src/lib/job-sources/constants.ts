@@ -2,6 +2,11 @@
  *  Valid range: 24–72 hours. */
 export const FRESHNESS_WINDOW_HOURS = 48
 
+/** Extended freshness window for entry-level and internship roles (7 days).
+ *  Jobs tagged entry/internship remain visible longer since these postings
+ *  stay open longer and students check less frequently. */
+export const ENTRY_LEVEL_FRESHNESS_WINDOW_HOURS = 168
+
 /** Number of consecutive all-stale pages before bulk adapters stop paging. */
 export const STALE_PAGE_THRESHOLD = 2
 
