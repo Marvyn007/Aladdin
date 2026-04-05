@@ -1,17 +1,23 @@
 import { prisma } from '@/lib/prisma'
 import { NeonQueueAdapter } from './neon-adapter'
+import { InngestQueueAdapter } from './inngest-adapter'
 import type { QueueAdapter } from './types'
 
 /**
  * Queue adapter singleton.
  *
  * Default: NeonQueueAdapter (Postgres-backed).
- * Set QUEUE_BACKEND=redis + REDIS_URL to switch to BullMQ.
- * The BullMQ adapter implements the same QueueAdapter interface —
- * zero changes needed in scheduler or workers.
+ * Set QUEUE_BACKEND=inngest to switch to the Inngest durable-execution adapter.
+ *   - Tasks become events dispatched to Inngest instead of rows in job_queue.
+ *   - Retries, concurrency limits, and scheduling are managed by Inngest Cloud.
+ *   - Requires INNGEST_EVENT_KEY and INNGEST_SIGNING_KEY in the environment.
  */
 export function createQueueAdapter(): QueueAdapter {
   const backend = process.env.QUEUE_BACKEND ?? 'neon'
+
+  if (backend === 'inngest') {
+    return new InngestQueueAdapter()
+  }
 
   if (backend === 'redis') {
     // Future: return new BullMQAdapter(process.env.REDIS_URL!)
