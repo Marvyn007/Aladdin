@@ -4,6 +4,8 @@ import {
   generateFallbackId,
   normalizeForHash,
   stripHtmlToPlain,
+  categorizeExperienceLevel,
+  categorizeJobType,
 } from '../helpers'
 import { isValidLogoUrl, scrapeLogoFromWebsite, resolveProviderLogo } from '@/lib/company'
 
@@ -205,5 +207,137 @@ describe('company logo resolver heuristics', () => {
     const url = 'https://logo.dev/example/logo.png'
     expect(isValidLogoUrl(url, { allowProviderFallback: false })).toBe(false)
     expect(isValidLogoUrl(url, { allowProviderFallback: true })).toBe(true)
+  })
+})
+
+describe('categorizeExperienceLevel', () => {
+  // Entry-level signals
+  it('detects intern', () => {
+    expect(categorizeExperienceLevel('Software Engineer Intern')).toBe('entry')
+  })
+  it('detects internship', () => {
+    expect(categorizeExperienceLevel('Data Science Internship')).toBe('entry')
+  })
+  it('detects new grad', () => {
+    expect(categorizeExperienceLevel('New Grad SWE')).toBe('entry')
+  })
+  it('detects new-grad (hyphenated)', () => {
+    expect(categorizeExperienceLevel('New-Grad Software Engineer')).toBe('entry')
+  })
+  it('detects entry level (spaced)', () => {
+    expect(categorizeExperienceLevel('Entry Level Analyst')).toBe('entry')
+  })
+  it('detects entry-level (hyphenated)', () => {
+    expect(categorizeExperienceLevel('Entry-Level Product Manager')).toBe('entry')
+  })
+  it('detects early career', () => {
+    expect(categorizeExperienceLevel('Early Career Engineer')).toBe('entry')
+  })
+  it('detects junior', () => {
+    expect(categorizeExperienceLevel('Junior Frontend Developer')).toBe('entry')
+  })
+  it('detects jr. (abbreviated)', () => {
+    expect(categorizeExperienceLevel('Jr. Software Engineer')).toBe('entry')
+  })
+  it('detects associate (finance entry-level pattern)', () => {
+    expect(categorizeExperienceLevel('Investment Banking Associate')).toBe('entry')
+  })
+  it('detects grad', () => {
+    expect(categorizeExperienceLevel('Grad Software Engineer')).toBe('entry')
+  })
+  it('detects university hire', () => {
+    expect(categorizeExperienceLevel('University Hire - Engineering')).toBe('entry')
+  })
+
+  // Senior signals
+  it('detects senior', () => {
+    expect(categorizeExperienceLevel('Senior Software Engineer')).toBe('senior')
+  })
+  it('detects sr. (abbreviated)', () => {
+    expect(categorizeExperienceLevel('Sr. Data Scientist')).toBe('senior')
+  })
+  it('detects staff', () => {
+    expect(categorizeExperienceLevel('Staff Engineer')).toBe('senior')
+  })
+  it('detects principal', () => {
+    expect(categorizeExperienceLevel('Principal Product Manager')).toBe('senior')
+  })
+
+  // Lead signals
+  it('detects lead', () => {
+    expect(categorizeExperienceLevel('Tech Lead')).toBe('lead')
+  })
+  it('detects manager', () => {
+    expect(categorizeExperienceLevel('Engineering Manager')).toBe('lead')
+  })
+  it('detects director', () => {
+    expect(categorizeExperienceLevel('Director of Engineering')).toBe('lead')
+  })
+  it('detects head of', () => {
+    expect(categorizeExperienceLevel('Head of Product')).toBe('lead')
+  })
+  it('detects vp', () => {
+    expect(categorizeExperienceLevel('VP of Engineering')).toBe('lead')
+  })
+
+  // Evaluation order: lead → senior → entry
+  it('lead wins over entry: "Engineering Lead, University Recruiting"', () => {
+    expect(categorizeExperienceLevel('Engineering Lead, University Recruiting')).toBe('lead')
+  })
+  it('senior wins over entry: "Senior Manager, New Grad Programs"', () => {
+    expect(categorizeExperienceLevel('Senior Manager, New Grad Programs')).toBe('senior')
+  })
+  it('lead wins over entry: "Associate Director of Engineering"', () => {
+    expect(categorizeExperienceLevel('Associate Director of Engineering')).toBe('lead')
+  })
+
+  // Null for ambiguous/unknown
+  it('returns null for plain title with no signal', () => {
+    expect(categorizeExperienceLevel('Software Engineer')).toBeNull()
+  })
+  it('returns null for location containing "New York" (false positive guard)', () => {
+    expect(categorizeExperienceLevel('Software Engineer - New York')).toBeNull()
+  })
+  it('is case-insensitive', () => {
+    expect(categorizeExperienceLevel('SENIOR ENGINEER')).toBe('senior')
+  })
+})
+
+describe('categorizeJobType', () => {
+  it('detects intern', () => {
+    expect(categorizeJobType('Software Engineer Intern')).toBe('internship')
+  })
+  it('detects internship', () => {
+    expect(categorizeJobType('Data Science Internship')).toBe('internship')
+  })
+  it('detects co-op (hyphenated)', () => {
+    expect(categorizeJobType('Software Co-op')).toBe('internship')
+  })
+  it('detects coop (no hyphen)', () => {
+    expect(categorizeJobType('Engineering Coop')).toBe('internship')
+  })
+  it('detects contract', () => {
+    expect(categorizeJobType('Backend Engineer - Contract')).toBe('contract')
+  })
+  it('detects contractor', () => {
+    expect(categorizeJobType('Data Analyst Contractor')).toBe('contract')
+  })
+  it('detects freelance', () => {
+    expect(categorizeJobType('Freelance Designer')).toBe('contract')
+  })
+  it('detects part time (spaced)', () => {
+    expect(categorizeJobType('Customer Support Part Time')).toBe('parttime')
+  })
+  it('detects part-time (hyphenated)', () => {
+    expect(categorizeJobType('Part-Time Sales Associate')).toBe('parttime')
+  })
+  it('returns null for full-time title (no signal)', () => {
+    expect(categorizeJobType('Senior Software Engineer')).toBeNull()
+  })
+  it('returns null for ambiguous title', () => {
+    expect(categorizeJobType('Product Manager')).toBeNull()
+  })
+  it('is case-insensitive', () => {
+    expect(categorizeJobType('SOFTWARE ENGINEER INTERN')).toBe('internship')
   })
 })
