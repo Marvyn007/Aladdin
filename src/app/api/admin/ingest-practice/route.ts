@@ -40,30 +40,6 @@ function formatCompanyName(slug: string): string {
         .join(' ');
 }
 
-/**
- * Calls logo.dev's search API (requires secret key) to find the canonical
- * domain and logo for a company by name. Returns null if not found.
- */
-async function searchLogoDevByName(companyName: string): Promise<{ domain: string; logoUrl: string } | null> {
-    const secretKey = process.env.LOGO_DEV_SECRET_KEY || 'sk_aP0oW-2xSAK76O3o_z2Uuw';
-    if (!secretKey) return null;
-    try {
-        const res = await fetch(
-            `https://api.logo.dev/search?q=${encodeURIComponent(companyName)}`,
-            { headers: { Authorization: `Bearer ${secretKey}` } }
-        );
-        if (!res.ok) return null;
-        const data = (await res.json()) as Array<{ name: string; domain: string; logo_url?: string }>;
-        if (!Array.isArray(data) || data.length === 0) return null;
-        const hit = data[0];
-        if (!hit.domain) return null;
-        const pubKey = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN || 'pk_By0CIs75Tsy8K9CqV4sT7w';
-        const logoUrl = hit.logo_url || `https://img.logo.dev/${hit.domain}?token=${pubKey}&size=128`;
-        return { domain: hit.domain, logoUrl };
-    } catch {
-        return null;
-    }
-}
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -179,28 +155,20 @@ export async function GET(request: Request) {
                     totalQuestions++;
                 }
 
-                // 3. Obtain domain & logoUrl
+                // 3. Create or update company record link
                 const formattedName = formatCompanyName(company);
-                let domain = `${company.replace(/-/g, '')}.com`;
-                const pubKey = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN || 'pk_By0CIs75Tsy8K9CqV4sT7w';
-                let logoUrl = `https://img.logo.dev/${domain}?token=${pubKey}&size=128`;
-
-                const logoDevResult = await searchLogoDevByName(formattedName);
-                if (logoDevResult) {
-                     domain = logoDevResult.domain;
-                     logoUrl = logoDevResult.logoUrl;
-                }
+                const domain = `${company.replace(/-/g, '')}.com`;
                 
                 try {
                     // Use raw SQL via Prisma for upsert into companies table
+                    // We DO NOT fetch or update logo fields here.
                     await prisma.$executeRawUnsafe(`
-                        INSERT INTO companies (id, name, domain, logo_url, logo_fetched, has_practice_questions, created_at, updated_at)
-                        VALUES (gen_random_uuid(), $1, $2, $3, true, true, NOW(), NOW())
+                        INSERT INTO companies (id, name, domain, logo_fetched, has_practice_questions, created_at, updated_at)
+                        VALUES (gen_random_uuid(), $1, $2, false, true, NOW(), NOW())
                         ON CONFLICT (name) DO UPDATE SET
-                            logo_url = COALESCE(companies.logo_url, EXCLUDED.logo_url),
                             has_practice_questions = true,
                             updated_at = NOW()
-                    `, formattedName, domain, logoUrl);
+                    `, formattedName, domain);
                 } catch (companyErr) {
                     console.warn(`Could not save company "${company}" to companies table:`, companyErr);
                 }

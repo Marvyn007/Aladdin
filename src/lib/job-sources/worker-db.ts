@@ -3,8 +3,6 @@ import type { WorkerDb } from './worker'
 import type { NormalizedJob } from './types'
 import type { DiscoveryDb } from './discovery'
 import type { DiscoveryCandidate } from './discovery-candidates'
-import { getCompanyLogo } from '../logo-dev'
-import { scrapeLogoFromProviderPage } from '../company'
 
 /**
  * Prisma-backed WorkerDb implementation.
@@ -78,47 +76,21 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
 
       const isNew = result[0]?.is_new === true
 
-      // Only resolve logos for brand-new jobs — avoids expensive external HTTP calls on duplicates
+      // Only create company record if it doesn't exist — keeps basic company list up to date
       if (isNew && job.company) {
         try {
           const companyExists = await prisma.company.findUnique({ where: { name: job.company } })
-          
-          // ONLY auto-fetch the VERY FIRST TIME the company is added to the database.
-          // If the company already exists, we do NOT touch its logo/domain here.
           if (!companyExists) {
-            // 1. Try scraping logo directly from the provider job page (highest quality)
-            let logoUrl: string | null = null
-            let domain: string | null = null
-
-            const providerLogo = await scrapeLogoFromProviderPage(job.sourceUrl, job.source)
-            if (providerLogo?.logoUrl) {
-              logoUrl = providerLogo.logoUrl
-            } else {
-              // 2. Fall back to logo.dev
-              const result = await getCompanyLogo(job.company)
-              logoUrl = result.logoUrl
-              domain = result.domain ?? null
-            }
-
-            if (logoUrl) {
-              await prisma.company.create({
-                data: {
-                  name: job.company,
-                  domain: domain,
-                  logoUrl: logoUrl,
-                  logoFetched: true,
-                }
-              })
-
-              // Also update TrackedCompany if it exists and is missing a logo
-              await prisma.trackedCompany.updateMany({
-                where: { name: job.company, logoUrl: null },
-                data: { logoUrl: logoUrl }
-              })
-            }
+            await prisma.company.create({
+              data: {
+                name: job.company,
+                logoUrl: null,
+                logoFetched: false,
+              }
+            })
           }
         } catch (e) {
-          console.error(`[worker-db] Failed to resolve logo for ${job.company}`, e)
+          console.error(`[worker-db] Failed to ensure company record for ${job.company}`, e)
         }
       }
 

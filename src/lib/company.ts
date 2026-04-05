@@ -58,6 +58,7 @@ interface LogoCandidate {
 interface SaveCompanyOptions {
     forceUpdate?: boolean;
     allowProviderFallback?: boolean;
+    isAdmin?: boolean;
 }
 
 /**
@@ -308,13 +309,6 @@ async function resolveLogoCandidate(companyName: string | null, targetDomain: st
     return null;
 }
 
-// Known high-quality logo overrides for common brands that often fail or return poor quality
-const BRAND_OVERRIDES: Record<string, string> = {
-    'visa': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Visa_2021.svg/1200px-Visa_2021.svg.png',
-    'mastercard': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png',
-    'american express': 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/American_Express_logo_%282018%29.svg/1200px-American_Express_logo_%282018%29.svg.png',
-    'amazon': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Amazon_logo.svg/1024px-Amazon_logo.svg.png',
-};
 
 /**
  * Calls logo.dev's search API (requires secret key) to find the canonical
@@ -349,19 +343,6 @@ export async function resolveProviderLogo(companyName: string | null, targetDoma
 
     const normalizedDomain = normalizeDomainInput(targetDomain) || guessDomain(companyName);
     const lowerName = companyName?.toLowerCase().trim() || null;
-
-    if (lowerName) {
-        for (const [brand, url] of Object.entries(BRAND_OVERRIDES)) {
-            if (lowerName === brand || lowerName.includes(brand)) {
-                return {
-                    domain: normalizedDomain,
-                    logoUrl: url,
-                    source: 'brand-override',
-                    confidence: 'metadata',
-                };
-            }
-        }
-    }
 
     // logo.dev: try search API first (finds canonical domain by name, most accurate)
     if (provider === 'logo.dev' && companyName) {
@@ -756,19 +737,33 @@ export async function saveCompanyToDb(name: string, domain: string | null, logoU
     try {
         if (dbType === 'postgres') {
             const pool = getPostgresPool();
+            const shouldUpdateLogo = options?.isAdmin === true;
             const updateCondition = shouldForceUpdate ? '' : 'WHERE companies.logo_fetched = false';
-            await pool.query(`
-                INSERT INTO companies (id, name, domain, logo_url, logo_fetched, created_at, updated_at)
-                VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())
-                ON CONFLICT (name) DO UPDATE SET
-                    domain = EXCLUDED.domain,
-                    logo_url = EXCLUDED.logo_url,
-                    logo_fetched = EXCLUDED.logo_fetched,
-                    updated_at = NOW()
-                ${updateCondition}
-            `, [name, domain, finalLogo, isFetched]);
+            
+            if (shouldUpdateLogo) {
+                await pool.query(`
+                    INSERT INTO companies (id, name, domain, logo_url, logo_fetched, created_at, updated_at)
+                    VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())
+                    ON CONFLICT (name) DO UPDATE SET
+                        domain = EXCLUDED.domain,
+                        logo_url = EXCLUDED.logo_url,
+                        logo_fetched = EXCLUDED.logo_fetched,
+                        updated_at = NOW()
+                    ${updateCondition}
+                `, [name, domain, finalLogo, isFetched]);
+            } else {
+                // Non-admin: Only insert if new, never update logo fields
+                await pool.query(`
+                    INSERT INTO companies (id, name, domain, created_at, updated_at)
+                    VALUES (gen_random_uuid(), $1, $2, NOW(), NOW())
+                    ON CONFLICT (name) DO UPDATE SET
+                        domain = EXCLUDED.domain,
+                        updated_at = NOW()
+                `, [name, domain]);
+            }
         } else if (dbType === 'supabase') {
             const client = getSupabaseClient();
+            const shouldUpdateLogo = options?.isAdmin === true;
 
             // Check first to simulate ON CONFLICT WHERE update logic securely via REST
             const { data: existing } = await client.from('companies').select('id, logo_fetched').eq('name', name).maybeSingle();
@@ -777,30 +772,49 @@ export async function saveCompanyToDb(name: string, domain: string | null, logoU
                 await client.from('companies').insert({
                     name,
                     domain,
-                    logo_url: finalLogo,
-                    logo_fetched: isFetched
+                    logo_url: shouldUpdateLogo ? finalLogo : null,
+                    logo_fetched: shouldUpdateLogo ? isFetched : false
                 });
-            } else if (shouldForceUpdate || (!existing.logo_fetched && isFetched)) {
+            } else if (shouldUpdateLogo && (shouldForceUpdate || (!existing.logo_fetched && isFetched))) {
                 await client.from('companies').update({
                     domain,
                     logo_url: finalLogo,
                     logo_fetched: true,
                     updated_at: new Date().toISOString()
                 }).eq('id', existing.id);
+            } else {
+                // Non-admin update: Update domain only
+                await client.from('companies').update({
+                    domain,
+                    updated_at: new Date().toISOString()
+                }).eq('id', existing.id);
             }
         } else {
             const db = getSQLiteDB();
+            const shouldUpdateLogo = options?.isAdmin === true;
             const whereClause = shouldForceUpdate ? '' : 'WHERE companies.logo_fetched = 0';
-            db.prepare(`
-                INSERT INTO companies (id, name, domain, logo_url, logo_fetched, created_at, updated_at)
-                VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, datetime('now'), datetime('now'))
-                ON CONFLICT(name) DO UPDATE SET
-                    domain = excluded.domain,
-                    logo_url = excluded.logo_url,
-                    logo_fetched = excluded.logo_fetched,
-                    updated_at = datetime('now')
-                ${whereClause}
-            `).run(name, domain, finalLogo, isFetched ? 1 : 0);
+
+            if (shouldUpdateLogo) {
+                db.prepare(`
+                    INSERT INTO companies (id, name, domain, logo_url, logo_fetched, created_at, updated_at)
+                    VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, datetime('now'), datetime('now'))
+                    ON CONFLICT(name) DO UPDATE SET
+                        domain = excluded.domain,
+                        logo_url = excluded.logo_url,
+                        logo_fetched = excluded.logo_fetched,
+                        updated_at = datetime('now')
+                    ${whereClause}
+                `).run(name, domain, finalLogo, isFetched ? 1 : 0);
+            } else {
+                db.prepare(`
+                    INSERT INTO companies (id, name, domain, created_at, updated_at)
+                    VALUES (lower(hex(randomblob(16))), ?, ?, datetime('now'), datetime('now'))
+                    ON CONFLICT(name) DO UPDATE SET
+                        domain = excluded.domain,
+                        updated_at = datetime('now')
+                `).run(name, domain);
+            }
+        }
         }
     } catch (e) {
         console.error('[Company] Error saving company to DB:', e);

@@ -687,11 +687,6 @@ export async function insertJob(
             }
         });
 
-        // Sync company logo globally if provided
-        if ((job as any).company_logo_url && job.company) {
-            const { saveCompanyToDb } = await import('./company');
-            await saveCompanyToDb(job.company, null, (job as any).company_logo_url);
-        }
 
         return { ...job, id: jobId!, status: 'fresh', content_hash: contentHash, fetched_at: new Date().toISOString() };
     } else if (dbType === 'supabase') {
@@ -935,11 +930,6 @@ export async function updateJobById(
 
         if (res.rows.length === 0) return null;
 
-        // Sync company logo globally if provided
-        if (fields.company_logo_url) {
-            const { saveCompanyToDb } = await import('./company');
-            await saveCompanyToDb(fields.company, null, fields.company_logo_url);
-        }
 
         const row = res.rows[0];
         return {
@@ -971,11 +961,6 @@ export async function updateJobById(
 
         if (error || !data) return null;
 
-        // Sync company logo globally if provided
-        if (fields.company_logo_url) {
-            const { saveCompanyToDb } = await import('./company');
-            await saveCompanyToDb(fields.company, null, fields.company_logo_url);
-        }
 
         return {
             ...data,
@@ -1000,11 +985,6 @@ export async function updateJobById(
 
         if ((result as any).changes === 0) return null;
 
-        // Sync company logo globally if provided
-        if (fields.company_logo_url) {
-            const { saveCompanyToDb } = await import('./company');
-            await saveCompanyToDb(fields.company, null, fields.company_logo_url);
-        }
 
         const row = db.prepare('SELECT * FROM jobs WHERE id = ?').get(jobId) as any;
         if (!row) return null;

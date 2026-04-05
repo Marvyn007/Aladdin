@@ -68,8 +68,6 @@ export const SOURCE_SCHEDULES: SourceScheduleConfig[] = [
   { source: 'lever', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
   { source: 'workday', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
   { source: 'themuse', type: 'bulk', intervalMs: 60 * 60 * 1000, priority: 2 },
-  { source: 'arbeitnow', type: 'bulk', intervalMs: 60 * 60 * 1000, priority: 2 },
-  { source: 'himalayas', type: 'bulk', intervalMs: 24 * 60 * 60 * 1000, priority: 3 },
 ]
 
 export type DiscoveryTier = 1 | 2 | 3

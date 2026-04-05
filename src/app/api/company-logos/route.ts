@@ -66,17 +66,6 @@ export async function GET(req: Request) {
                         const name = item.name || item.domain || normalizedQuery;
                         const domainGuess = item.domain || `${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
 
-                        // Kick off background resolution
-                        // Capture the promise but don't await it to keep response instant
-                        (async () => {
-                            try {
-                                const final_logo = await getCompanyLogoUrl(name, domainGuess);
-                                await saveCompanyToDb(name, domainGuess, final_logo);
-                            } catch (e) {
-                                console.error('[Background Logo Resolution] failed:', e);
-                            }
-                        })();
-
                         return {
                             id: item.brandId || Math.random().toString(36).substring(7),
                             name,
