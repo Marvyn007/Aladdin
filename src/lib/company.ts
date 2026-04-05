@@ -815,7 +815,6 @@ export async function saveCompanyToDb(name: string, domain: string | null, logoU
                 `).run(name, domain);
             }
         }
-        }
     } catch (e) {
         console.error('[Company] Error saving company to DB:', e);
     }

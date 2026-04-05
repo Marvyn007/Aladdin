@@ -1372,7 +1372,6 @@ export function Dashboard({
                                             <JobDetail
                                                 job={selectedMapJob}
                                                 onApply={handleApply}
-                                                onDelete={handleDeleteJob}
                                                 onGenerateCoverLetter={handleGenerateCoverLetter}
                                                 onGenerateTailoredResume={handleGenerateTailoredResume}
                                                 applicationStatus={applicationStatus[selectedMapJob.id] || 'none'}
@@ -1445,7 +1444,6 @@ export function Dashboard({
                                     <JobDetail
                                         job={selectedJob}
                                         onApply={handleApply}
-                                        onDelete={handleDeleteJob}
                                         onGenerateCoverLetter={handleGenerateCoverLetter}
                                         onGenerateTailoredResume={handleGenerateTailoredResume}
                                         applicationStatus={selectedJob ? (applicationStatus[selectedJob.id] || 'none') : 'none'}
