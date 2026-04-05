@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
 
 const HIMALAYAS_API_BASE = 'https://himalayas.app/jobs/api'
 const PAGE_SIZE = 50
@@ -132,6 +132,7 @@ export class HimalayasAdapter implements SourceAdapter {
       jobDescriptionPlain: stripHtmlToPlain(job.description),
       postedAt: job.pubDate ? new Date(job.pubDate * 1000) : null,
       contentHash: generateContentHash(job.title, company, location, sourceUrl),
+      isReposted: detectReposted(job.title),
       source: 'himalayas',
       externalId: job.guid,
       metadata: {

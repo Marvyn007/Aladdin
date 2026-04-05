@@ -19,9 +19,9 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         return { isNew: false, stale: true }
       }
 
-      // Priority 1b: description quality check — drop jobs with empty or broken descriptions (< 100 chars)
+      // Priority 1b: description quality check — drop jobs with empty or broken descriptions (< 50 chars)
       // Now that extraction is fixed across adapters, we only drop entries that are likely errors.
-      if (!job.jobDescriptionPlain || job.jobDescriptionPlain.length < 100) {
+      if (!job.jobDescriptionPlain || job.jobDescriptionPlain.length < 50) {
         return { isNew: false, stale: true }
       }
 
@@ -48,8 +48,12 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         )
         ON CONFLICT (source, external_id)
           WHERE source IS NOT NULL AND external_id IS NOT NULL
-          DO NOTHING
-        RETURNING true as is_new
+          DO UPDATE SET
+            posted_at = EXCLUDED.posted_at,
+            raw_description_html = EXCLUDED.raw_description_html,
+            job_description_plain = EXCLUDED.job_description_plain,
+            updated_at = NOW()
+        RETURNING (xmax = 0) AS is_new
         `,
         job.title,
         job.company,
@@ -72,7 +76,7 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         job.expiresAt
       )
 
-      const isNew = result.length > 0
+      const isNew = result[0]?.is_new === true
 
       // Only resolve logos for brand-new jobs — avoids expensive external HTTP calls on duplicates
       if (isNew && job.company) {

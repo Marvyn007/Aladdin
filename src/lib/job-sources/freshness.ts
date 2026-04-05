@@ -8,9 +8,10 @@ import { FRESHNESS_WINDOW_HOURS, STALE_PAGE_THRESHOLD } from './constants'
  * @param now   - current time (injectable for testing; defaults to Date.now())
  */
 export function isFresh(
-  job: { postedAt: Date | null },
+  job: { postedAt: Date | null; isReposted?: boolean },
   now: Date = new Date()
 ): boolean {
+  if (job.isReposted) return true // Bypass window for "NEW" or manually bumped tags
   if (!job.postedAt) return false
   const ageMs = now.getTime() - job.postedAt.getTime()
   return ageMs <= FRESHNESS_WINDOW_HOURS * 3_600_000
@@ -28,7 +29,7 @@ export function isFresh(
  * @param now              - current time (injectable for testing)
  */
 export function shouldStopPaging(
-  page: { postedAt: Date | null }[],
+  page: { postedAt: Date | null; isReposted?: boolean }[],
   stalePagesInARow: number,
   now: Date = new Date()
 ): { stop: boolean; newCounter: number } {

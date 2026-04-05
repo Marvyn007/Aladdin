@@ -76,3 +76,29 @@ export function stripHtmlToPlain(html: string | null): string | null {
 
   return text
 }
+
+/**
+ * Detect if a job is "New" or "Reposted" based on its title.
+ *
+ * Conservative: only fires on high-confidence explicit signals.
+ * Mixed-case "New" and standalone "NEW" are excluded — they produce
+ * too many false positives ("Brand New", "NEW GRAD", "New York").
+ */
+export function detectReposted(title: string | null): boolean {
+  if (!title) return false
+
+  // 1. Explicit bracket tags — unambiguous operator-added markers
+  //    e.g. "[NEW]", "[REPOSTED]", "[URGENT]"
+  if (/\[(NEW|URGENT|REPOSTED)\]/i.test(title)) return true
+
+  // 2. All-caps REPOSTED or URGENT as a standalone word — high confidence
+  //    e.g. "REPOSTED: Senior Engineer", "Data Analyst URGENT"
+  if (/\b(REPOSTED|URGENT)\b/.test(title)) return true
+
+  // 3. "NEW" only as a leading prefix tag followed immediately by a separator.
+  //    This catches "NEW - Senior Engineer", "NEW: PM", "NEW | Analyst"
+  //    but NOT "NEW GRAD", "NEW YORK", or mid-title uses of "NEW".
+  if (/^NEW\s*[:\-–—|]/.test(title)) return true
+
+  return false
+}

@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
 
 const ARBEITNOW_API_BASE = 'https://www.arbeitnow.com/api/job-board-api'
 const FETCH_TIMEOUT_MS = 8000
@@ -120,6 +120,7 @@ export class ArbeitnowAdapter implements SourceAdapter {
       jobDescriptionPlain: stripHtmlToPlain(job.description),
       postedAt: job.created_at ? new Date(job.created_at * 1000) : null,
       contentHash: generateContentHash(job.title, company, location, sourceUrl),
+      isReposted: detectReposted(job.title) || job.tags?.some(t => ['new', 'reposted', 'urgent'].includes(t.toLowerCase())) || false,
       source: 'arbeitnow',
       externalId: job.slug,
       metadata: {

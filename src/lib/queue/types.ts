@@ -64,7 +64,7 @@ export interface QueueAdapter {
 }
 
 // Soft cap: pause enqueueing if pending > this value (system safety)
-export const QUEUE_PENDING_SOFT_CAP = 1000
+export const QUEUE_PENDING_SOFT_CAP = 3000
 
 // Max tasks enqueued per scheduler tick
 export const ENQUEUE_CAP_PER_TICK = 50
@@ -74,7 +74,7 @@ export const POLL_BATCH_SIZE = 5
 
 // Burst mode threshold and cap
 export const BURST_THRESHOLD = 10
-export const BURST_MAX_WORKERS = 6
+export const BURST_MAX_WORKERS = 10
 
 // Stale lock recovery: tasks processing longer than this get reset
 export const STALE_LOCK_MAX_AGE_MS = 60_000

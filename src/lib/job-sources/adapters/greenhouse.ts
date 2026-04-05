@@ -110,6 +110,9 @@ export class GreenhouseAdapter implements SourceAdapter {
     const sourceUrl = job.absolute_url
     const company = job.company_name ?? slug
 
+    const updatedDate = job.updated_at ? new Date(job.updated_at) : null
+    const isReposted = updatedDate ? (Date.now() - updatedDate.getTime() < 48 * 3600000) : false
+
     return {
       title: job.title,
       company,
@@ -119,6 +122,7 @@ export class GreenhouseAdapter implements SourceAdapter {
       jobDescriptionPlain: job.content ? stripHtmlToPlain(job.content) : null,
       postedAt: job.first_published ? new Date(job.first_published) : (job.updated_at ? new Date(job.updated_at) : null),
       contentHash: generateContentHash(job.title, company, location, sourceUrl),
+      isReposted,
       source: 'greenhouse',
       externalId: String(job.id),
       metadata: {

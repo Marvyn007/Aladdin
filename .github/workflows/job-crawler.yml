@@ -29,7 +29,7 @@ jobs:
       # Number of parallel workers to fire after the tick
       # Each worker dequeues 5 tasks; each task polls 5 companies in parallel
       # → 5 workers × 5 tasks × 5 companies = up to 125 company polls per tick
-      WORKER_COUNT: 5
+      WORKER_COUNT: 12 # Higher throughput to clear queue backlogs faster
 
     steps:
       - name: "① Enqueue — POST /api/cron/tick"

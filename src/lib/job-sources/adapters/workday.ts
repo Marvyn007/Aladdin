@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
 
 const FETCH_TIMEOUT_MS = 10000
 
@@ -111,6 +111,7 @@ export class WorkdayAdapter implements SourceAdapter {
             jobDescriptionPlain: stripHtmlToPlain(info.jobDescription),
             postedAt: info.postedOn ? new Date(info.postedOn) : (posting.postedOn ? new Date(posting.postedOn) : null),
             contentHash: generateContentHash(info.title || posting.title, company, location, applyUrl),
+            isReposted: detectReposted(info.title || posting.title),
             source: 'workday',
             externalId: posting.bulletinId || posting.externalPath,
             metadata: {

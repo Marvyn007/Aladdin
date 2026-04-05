@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
 
 const LEVER_API_BASE = 'https://api.lever.co/v0/postings'
 const FETCH_TIMEOUT_MS = 8000
@@ -117,6 +117,8 @@ export class LeverAdapter implements SourceAdapter {
 
     const salary = this.parseSalary(posting.additionalPlain)
 
+    const isReposted = detectReposted(posting.text)
+
     return {
       title: posting.text,
       company,
@@ -126,6 +128,7 @@ export class LeverAdapter implements SourceAdapter {
       jobDescriptionPlain: fullHtml ? stripHtmlToPlain(fullHtml) : null,
       postedAt: posting.createdAt ? new Date(posting.createdAt) : null,
       contentHash: generateContentHash(posting.text, company, location, sourceUrl),
+      isReposted,
       source: 'lever',
       externalId: posting.id,
       metadata: {

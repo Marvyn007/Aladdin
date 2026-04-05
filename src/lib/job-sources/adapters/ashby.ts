@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
 
 const ASHBY_API_BASE = 'https://api.ashbyhq.com/posting-api/job-board'
 const FETCH_TIMEOUT_MS = 8000
@@ -114,6 +114,8 @@ export class AshbyAdapter implements SourceAdapter {
 
     const salary = this.parseSalary(job.compensation)
 
+    const isReposted = detectReposted(job.title)
+
     return {
       title: job.title,
       company,
@@ -123,6 +125,7 @@ export class AshbyAdapter implements SourceAdapter {
       jobDescriptionPlain: job.jobHtml ? stripHtmlToPlain(job.jobHtml) : null,
       postedAt: job.publishedAt ? new Date(job.publishedAt) : null,
       contentHash: generateContentHash(job.title, company, location, sourceUrl),
+      isReposted,
       source: 'ashby',
       externalId: job.id,
       metadata: {

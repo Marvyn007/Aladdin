@@ -39,6 +39,7 @@ export interface NormalizedJob {
   jobDescriptionPlain: string | null
   postedAt: Date | null
   contentHash: string
+  isReposted: boolean
   source: SourceType
   externalId: string
   metadata: Record<string, unknown>

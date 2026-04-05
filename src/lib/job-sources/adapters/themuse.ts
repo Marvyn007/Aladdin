@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
 
 const MUSE_API_BASE = 'https://www.themuse.com/api/public/jobs'
 const FETCH_TIMEOUT_MS = 8000
@@ -128,6 +128,7 @@ export class TheMuseAdapter implements SourceAdapter {
       jobDescriptionPlain: stripHtmlToPlain(job.contents),
       postedAt: job.publication_date ? new Date(job.publication_date) : null,
       contentHash: generateContentHash(job.name, company, location, sourceUrl),
+      isReposted: detectReposted(job.name) || job.tags?.some(t => ['new', 'reposted', 'urgent'].includes(t.toLowerCase())) || false,
       source: 'themuse',
       externalId: String(job.id),
       metadata: {
