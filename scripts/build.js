@@ -20,29 +20,27 @@ try {
     execSync('npx prisma generate', { stdio: 'inherit' });
 
     console.log('\n--- 3. Deploying Migrations ---');
-    // Neon's connection pooler doesn't support advisory locks required by migrate deploy.
-    // Override DATABASE_URL with DIRECT_URL (non-pooled) for this step only.
+    // Migrations are skipped by default during Vercel builds.
     //
-    // Safety checks:
-    //   • SKIP_MIGRATIONS=true  → skip unconditionally (useful for re-deploys where
-    //                             schema is already up to date)
-    //   • DIRECT_URL contains "-pooler" → DIRECT_URL is misconfigured; skip and warn
-    //     rather than hanging for 10s and failing the entire build.
+    // Reason: prisma migrate deploy requires an advisory lock on a direct
+    // (non-pooled) connection. On Neon's free tier the database suspends when
+    // idle; the cold-start wake-up exceeds Prisma's 10-second lock timeout and
+    // kills the build even when DIRECT_URL is correctly configured.
+    //
+    // Migrations should be run as a one-off command when you actually have
+    // pending schema changes:
+    //
+    //   DIRECT_URL=<non-pooled-neon-url> npx prisma migrate deploy
+    //
+    // To opt-in to running migrations during the build set RUN_MIGRATIONS=true
+    // in your Vercel environment variables.
 
-    const skipMigrations = process.env.SKIP_MIGRATIONS === 'true';
-    const directUrl = process.env.DIRECT_URL || '';
-    const directUrlIsPooler = directUrl.includes('-pooler') || directUrl.includes('pgbouncer=true');
+    const runMigrations = process.env.RUN_MIGRATIONS === 'true';
 
-    if (skipMigrations) {
-        console.log('⏭️  SKIP_MIGRATIONS=true — skipping prisma migrate deploy.');
-    } else if (directUrlIsPooler) {
-        console.warn('⚠️  DIRECT_URL appears to be a pooler URL (contains "-pooler" or "pgbouncer=true").');
-        console.warn('    prisma migrate deploy requires a non-pooled direct connection.');
-        console.warn('    Fix: set DIRECT_URL in Vercel to the non-pooled Neon URL');
-        console.warn('    (remove "-pooler" from the hostname and "?pgbouncer=true" from the query string).');
-        console.warn('    Skipping migrations to prevent build failure — run them manually via:');
-        console.warn('    DIRECT_URL=<non-pooled-url> npx prisma migrate deploy');
+    if (!runMigrations) {
+        console.log('⏭️  Skipping prisma migrate deploy (default). Set RUN_MIGRATIONS=true to enable.');
     } else {
+        const directUrl = process.env.DIRECT_URL || '';
         const migrateEnv = { ...process.env };
         if (directUrl) {
             migrateEnv.DATABASE_URL = directUrl;
