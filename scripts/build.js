@@ -22,12 +22,34 @@ try {
     console.log('\n--- 3. Deploying Migrations ---');
     // Neon's connection pooler doesn't support advisory locks required by migrate deploy.
     // Override DATABASE_URL with DIRECT_URL (non-pooled) for this step only.
-    const migrateEnv = { ...process.env };
-    if (process.env.DIRECT_URL) {
-        migrateEnv.DATABASE_URL = process.env.DIRECT_URL;
-        console.log('ℹ️  Using DIRECT_URL for migration (bypasses pooler advisory lock issue)');
+    //
+    // Safety checks:
+    //   • SKIP_MIGRATIONS=true  → skip unconditionally (useful for re-deploys where
+    //                             schema is already up to date)
+    //   • DIRECT_URL contains "-pooler" → DIRECT_URL is misconfigured; skip and warn
+    //     rather than hanging for 10s and failing the entire build.
+
+    const skipMigrations = process.env.SKIP_MIGRATIONS === 'true';
+    const directUrl = process.env.DIRECT_URL || '';
+    const directUrlIsPooler = directUrl.includes('-pooler') || directUrl.includes('pgbouncer=true');
+
+    if (skipMigrations) {
+        console.log('⏭️  SKIP_MIGRATIONS=true — skipping prisma migrate deploy.');
+    } else if (directUrlIsPooler) {
+        console.warn('⚠️  DIRECT_URL appears to be a pooler URL (contains "-pooler" or "pgbouncer=true").');
+        console.warn('    prisma migrate deploy requires a non-pooled direct connection.');
+        console.warn('    Fix: set DIRECT_URL in Vercel to the non-pooled Neon URL');
+        console.warn('    (remove "-pooler" from the hostname and "?pgbouncer=true" from the query string).');
+        console.warn('    Skipping migrations to prevent build failure — run them manually via:');
+        console.warn('    DIRECT_URL=<non-pooled-url> npx prisma migrate deploy');
+    } else {
+        const migrateEnv = { ...process.env };
+        if (directUrl) {
+            migrateEnv.DATABASE_URL = directUrl;
+            console.log('ℹ️  Using DIRECT_URL for migration (bypasses pooler advisory lock issue)');
+        }
+        execSync('npx prisma migrate deploy', { stdio: 'inherit', env: migrateEnv });
     }
-    execSync('npx prisma migrate deploy', { stdio: 'inherit', env: migrateEnv });
 
     console.log('\n--- 4. Building Next.js App ---');
     // Use npx to ensure we use the local next binary
