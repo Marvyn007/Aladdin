@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted, categorizeExperienceLevel, categorizeJobType } from '../helpers'
 
 const ASHBY_API_BASE = 'https://api.ashbyhq.com/posting-api/job-board'
 const FETCH_TIMEOUT_MS = 8000
@@ -22,7 +22,7 @@ interface AshbyJob {
     maxValue: number | null
   }[]
   publishedAt: string
-  jobHtml: string
+  descriptionHtml: string
 }
 
 interface AshbyResponse {
@@ -121,8 +121,8 @@ export class AshbyAdapter implements SourceAdapter {
       company,
       location,
       sourceUrl,
-      rawDescriptionHtml: job.jobHtml || null,
-      jobDescriptionPlain: job.jobHtml ? stripHtmlToPlain(job.jobHtml) : null,
+      rawDescriptionHtml: job.descriptionHtml || null,
+      jobDescriptionPlain: job.descriptionHtml ? stripHtmlToPlain(job.descriptionHtml) : null,
       postedAt: job.publishedAt ? new Date(job.publishedAt) : null,
       contentHash: generateContentHash(job.title, company, location, sourceUrl),
       isReposted,
@@ -136,9 +136,9 @@ export class AshbyAdapter implements SourceAdapter {
       salaryMin: salary.min,
       salaryMax: salary.max,
       salaryCurrency: salary.currency,
-      jobType: this.mapJobType(job.employmentType),
+      jobType: categorizeJobType(job.title) ?? this.mapJobType(job.employmentType),
       isRemote: job.workplaceType === 'Remote' || location.toLowerCase().includes('remote'),
-      experienceLevel: null,
+      experienceLevel: categorizeExperienceLevel(job.title),
       skills: [],
       applyUrl: sourceUrl, // Ashby usually uses the same page for application
       expiresAt: null,

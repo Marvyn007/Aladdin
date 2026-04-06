@@ -1,0 +1,45 @@
+{
+  "apiVersion": "1",
+  "jobs": [
+    {
+      "id": "abc123-def456-ghi789",
+      "title": "Software Engineer Intern",
+      "location": "San Francisco, CA",
+      "secondaryLocations": [],
+      "workplaceType": "OnSite",
+      "employmentType": "Intern",
+      "compensation": [
+        {
+          "summary": "$50/hr",
+          "compensationType": "Salary",
+          "interval": "Hourly",
+          "currencyCode": "USD",
+          "minValue": 45,
+          "maxValue": 55
+        }
+      ],
+      "publishedAt": "2030-01-01T00:00:00.000Z",
+      "descriptionHtml": "<div><h2>About the Role</h2><p>Join our team as a software intern.</p><h2>Requirements</h2><ul><li>Enrolled in CS degree</li><li>Python or JavaScript experience</li></ul><h2>What You'll Do</h2><ul><li>Build features on our core platform</li><li>Work with senior engineers</li></ul></div>"
+    },
+    {
+      "id": "xyz999-uvw888-rst777",
+      "title": "Senior Machine Learning Engineer",
+      "location": "Remote",
+      "secondaryLocations": ["New York, NY"],
+      "workplaceType": "Remote",
+      "employmentType": "FullTime",
+      "compensation": [
+        {
+          "summary": "$200k - $280k",
+          "compensationType": "Salary",
+          "interval": "Yearly",
+          "currencyCode": "USD",
+          "minValue": 200000,
+          "maxValue": 280000
+        }
+      ],
+      "publishedAt": "2030-01-01T00:00:00.000Z",
+      "descriptionHtml": "<div><h2>About the Role</h2><p>Lead ML infrastructure at OpenAI.</p><h2>Requirements</h2><ul><li>5+ years ML experience</li><li>PhD preferred</li></ul></div>"
+    }
+  ]
+}
