@@ -265,18 +265,16 @@ body {
   background: var(--accent);
   color: white;
   border: none;
-  box-shadow: 0 2px 8px rgba(35, 131, 226, 0.25);
 }
 
 .btn-primary:hover {
   background: var(--accent-hover);
-  box-shadow: 0 4px 12px rgba(35, 131, 226, 0.35);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .btn-secondary {
   background: var(--surface);
-  color: var(--text-secondary);
+  color: #111111;
   border: 1px solid var(--border);
 }
 
@@ -315,12 +313,17 @@ body {
 
 .btn-primary:hover {
   background: var(--accent-hover);
+  transform: none;
 }
 
 .btn-secondary {
   background: transparent;
-  color: var(--text-secondary);
+  color: #111111;
   border: 1px solid var(--border);
+}
+
+.dark .btn-secondary {
+  color: #ffffff;
 }
 
 .btn-secondary:hover {
@@ -1268,6 +1271,26 @@ body {
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.practice-icon {
+  mix-blend-mode: multiply;
+  filter: contrast(1.1);
+}
+
+.dark .practice-icon {
+  filter: invert(1);
+  mix-blend-mode: screen;
+}
+
+/* Dark mode overrides for hardcoded text colors */
+.dark .job-description-html {
+  color: #ffffff !important;
+}
+
+.dark .job-description-content p,
+.dark .job-description-content li {
+  color: #ffffff !important;
 }
 
 @layer base {

@@ -305,26 +305,85 @@ function normalizeCurrencyCode(code: string | null): string | null {
     return code.toUpperCase();
 }
 
-function detectLocationTag(rawLocation: string | null): JobCardTag | null {
-    if (!rawLocation) return null;
+const US_STATES = new Set([
+    'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut',
+    'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa',
+    'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan',
+    'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire',
+    'new jersey', 'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio',
+    'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota',
+    'tennessee', 'texas', 'utah', 'vermont', 'virginia', 'washington', 'west virginia',
+    'wisconsin', 'wyoming', 'district of columbia', 'dc',
+    // abbreviations
+    'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'de', 'fl', 'ga', 'hi', 'id', 'il', 'in',
+    'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv',
+    'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn',
+    'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy',
+]);
 
-    const cleaned = normalizeWhitespace(
-        rawLocation
+function isUSLocation(loc: string): boolean {
+    const parts = loc.split(',').map(p => p.trim().toLowerCase());
+    const last = parts[parts.length - 1];
+    return US_STATES.has(last);
+}
+
+function cleanSingleLocation(loc: string): string {
+    return normalizeWhitespace(
+        loc
             .replace(/^location:\s*/i, '')
             .replace(/\((?:remote|hybrid|in[-\s]?person|on[-\s]?site|onsite)[^)]*\)/gi, '')
             .replace(/\b(?:remote|hybrid|in[-\s]?person|on[-\s]?site|onsite)\b/gi, '')
             .replace(/\boffice\b$/i, '')
             .replace(/[()]/g, ' ')
             .replace(/\s+,/g, ',')
-            .replace(/[;|]+/g, ', ')
             .replace(/\s{2,}/g, ' ')
             .replace(/^[,\s-]+|[,\s-]+$/g, '')
     );
+}
 
-    if (!cleaned) return null;
-    if (/^(remote|hybrid|in person|on-site|onsite)$/i.test(cleaned)) return null;
+function getCountryFromLocation(loc: string): string | null {
+    const parts = loc.split(',').map(p => p.trim());
+    if (parts.length < 2) return null;
+    return parts[parts.length - 1];
+}
 
-    return makeTag('location', 'location', cleaned);
+function detectLocationTag(rawLocation: string | null): JobCardTag | null {
+    if (!rawLocation) return null;
+
+    // Split into individual location entries by semicolons or pipes before cleaning
+    const rawParts = rawLocation.split(/[;|]/).map(p => p.trim()).filter(Boolean);
+
+    if (rawParts.length <= 1) {
+        // Single location: clean and display as-is
+        const cleaned = cleanSingleLocation(rawLocation);
+        if (!cleaned) return null;
+        if (/^(remote|hybrid|in person|on-site|onsite)$/i.test(cleaned)) return null;
+        return makeTag('location', 'location', cleaned);
+    }
+
+    // Multiple locations
+    const cleanedParts = rawParts.map(cleanSingleLocation).filter(p => p && !/^(remote|hybrid|in person|on-site|onsite)$/i.test(p));
+    if (cleanedParts.length <= 1) {
+        // After cleaning, only one meaningful location remains
+        if (cleanedParts.length === 0) return null;
+        return makeTag('location', 'location', cleanedParts[0]);
+    }
+
+    const allUS = cleanedParts.every(isUSLocation);
+    if (allUS) {
+        return makeTag('location', 'location', 'Multiple locations in US');
+    }
+
+    // Check if all in the same non-US country
+    const countries = cleanedParts.map(getCountryFromLocation).filter(Boolean);
+    const uniqueCountries = new Set(countries.map(c => c!.toLowerCase()));
+    if (uniqueCountries.size === 1) {
+        const country = countries[0]!;
+        return makeTag('location', 'location', `Multiple locations in ${country}`);
+    }
+
+    // Multiple countries — show nothing
+    return null;
 }
 
 function detectWorkplaceTag(job: JobCardTagInput, text: string): JobCardTag | null {

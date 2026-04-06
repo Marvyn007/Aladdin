@@ -6,6 +6,8 @@
 
 /* ===== LIGHT THEME (Default) - Soft blue-gray palette ===== */
 :root {
+  --job-desc-color: #111111;
+
   /* Background colors */
   --background: oklch(0.9581 0 0);
   --background-secondary: #f5f8fa;
@@ -111,6 +113,8 @@
 
 /* ===== DARK THEME ===== */
 .dark {
+  --job-desc-color: #ffffff;
+
   --background: oklch(0.1776 0 0);
   --background-secondary: #202020;
   --background-tertiary: #2f2f2f;
@@ -266,18 +270,16 @@ body {
   background: var(--accent);
   color: white;
   border: none;
-  box-shadow: 0 2px 8px rgba(35, 131, 226, 0.25);
 }
 
 .btn-primary:hover {
   background: var(--accent-hover);
-  box-shadow: 0 4px 12px rgba(35, 131, 226, 0.35);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .btn-secondary {
   background: var(--surface);
-  color: var(--text-secondary);
+  color: var(--job-desc-color);
   border: 1px solid var(--border);
 }
 
@@ -316,11 +318,12 @@ body {
 
 .btn-primary:hover {
   background: var(--accent-hover);
+  transform: none;
 }
 
 .btn-secondary {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--job-desc-color);
   border: 1px solid var(--border);
 }
 
@@ -1209,8 +1212,8 @@ body {
 }
 
 .dark .practice-icon {
-  filter: invert(1) brightness(1.5);
-  mix-blend-mode: screen;
+  filter: invert(1);
+  mix-blend-mode: normal;
 }
 
 .no-scrollbar {

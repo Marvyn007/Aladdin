@@ -302,7 +302,7 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
             <>
                 <style dangerouslySetInnerHTML={{ __html: `
                     .job-description-html {
-                        color: var(--text-secondary);
+                        color: var(--job-desc-color);
                         line-height: 1.65;
                         font-size: 14px;
                         font-family: var(--font-inter), "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -428,7 +428,7 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
                         marginBottom: '16px',
                         lineHeight: '1.7',
                         fontSize: '15px',
-                        color: 'var(--text-secondary)',
+                        color: 'var(--job-desc-color)',
                         whiteSpace: 'pre-wrap',
                         fontFamily: 'var(--font-inter), "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
                     }}
@@ -450,7 +450,7 @@ function JobDescriptionRenderer({ text, html }: { text: string; html?: string | 
                         marginBottom: '16px',
                         paddingLeft: '24px',
                         listStyleType: 'disc',
-                        color: 'var(--text-secondary)'
+                        color: 'var(--job-desc-color)'
                     }}
                 >
                     {currentListBuffer.map((item, i) => (
