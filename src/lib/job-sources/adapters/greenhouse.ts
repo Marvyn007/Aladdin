@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, categorizeExperienceLevel, categorizeJobType } from '../helpers'
 
 const GREENHOUSE_API_BASE = 'https://boards-api.greenhouse.io/v1/boards'
 const FETCH_TIMEOUT_MS = 8000
@@ -134,9 +134,9 @@ export class GreenhouseAdapter implements SourceAdapter {
       salaryMin: null,
       salaryMax: null,
       salaryCurrency: null,
-      jobType: null,
+      jobType: categorizeJobType(job.title),
       isRemote: this.detectRemote(location, job.title),
-      experienceLevel: null,
+      experienceLevel: categorizeExperienceLevel(job.title),
       skills: [],
       applyUrl: sourceUrl,
       expiresAt: null,

@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted, categorizeExperienceLevel, categorizeJobType } from '../helpers'
 
 const FETCH_TIMEOUT_MS = 10000
 
@@ -121,9 +121,9 @@ export class WorkdayAdapter implements SourceAdapter {
             salaryMin: null,
             salaryMax: null,
             salaryCurrency: null,
-            jobType: info.timeType?.toLowerCase().includes('part') ? 'parttime' : 'fulltime',
+            jobType: categorizeJobType(info.title || posting.title) ?? (info.timeType?.toLowerCase().includes('part') ? 'parttime' : 'fulltime'),
             isRemote: location.toLowerCase().includes('remote'),
-            experienceLevel: null,
+            experienceLevel: categorizeExperienceLevel(info.title || posting.title),
             skills: [],
             applyUrl,
             expiresAt: null

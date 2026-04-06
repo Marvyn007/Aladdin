@@ -1,6 +1,6 @@
 import type { SourceAdapter, NormalizedJob, PollTarget, SourceHealth } from '../types'
 import { RATE_LIMIT_INTERVAL_MS } from '../types'
-import { generateContentHash, stripHtmlToPlain, detectReposted } from '../helpers'
+import { generateContentHash, stripHtmlToPlain, detectReposted, categorizeExperienceLevel, categorizeJobType } from '../helpers'
 
 const LEVER_API_BASE = 'https://api.lever.co/v0/postings'
 const FETCH_TIMEOUT_MS = 8000
@@ -22,6 +22,7 @@ interface LeverPosting {
     department: string
     location: string
     team: string
+    level?: string
     allLocations?: string[]
   }
   workplaceType?: string
@@ -140,9 +141,9 @@ export class LeverAdapter implements SourceAdapter {
       salaryMin: salary.min,
       salaryMax: salary.max,
       salaryCurrency: salary.currency,
-      jobType: null,
+      jobType: categorizeJobType(posting.text) ?? this.mapLeverCommitment(posting.categories?.commitment),
       isRemote: this.detectRemote(posting),
-      experienceLevel: null,
+      experienceLevel: categorizeExperienceLevel(posting.text) ?? this.mapLeverLevel(posting.categories?.level),
       skills: [],
       applyUrl: posting.applyUrl || null,
       expiresAt: null,
@@ -160,6 +161,29 @@ export class LeverAdapter implements SourceAdapter {
 
     const location = posting.categories?.location ?? ''
     return location.toLowerCase().includes('remote')
+  }
+
+  private mapLeverCommitment(
+    commitment: string | undefined
+  ): 'fulltime' | 'parttime' | 'contract' | 'internship' | null {
+    if (!commitment) return null
+    const c = commitment.toLowerCase()
+    if (c.includes('intern')) return 'internship'
+    if (c.includes('contract')) return 'contract'
+    if (c.includes('part')) return 'parttime'
+    if (c.includes('full') || c.includes('permanent')) return 'fulltime'
+    return null
+  }
+
+  private mapLeverLevel(
+    level: string | undefined
+  ): 'entry' | 'mid' | 'senior' | 'lead' | null {
+    if (!level) return null
+    const l = level.toLowerCase()
+    if (l.includes('junior') || l.includes('entry') || l.includes('intern')) return 'entry'
+    if (l.includes('senior') || l.includes('staff') || l.includes('principal')) return 'senior'
+    if (l.includes('lead') || l.includes('manager') || l.includes('director')) return 'lead'
+    return null
   }
 
   private parseSalary(additionalPlain: string): {
