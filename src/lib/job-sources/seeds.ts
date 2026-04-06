@@ -9,7 +9,7 @@
 export interface SeedCompany {
   slug: string
   name: string
-  ats: 'greenhouse' | 'lever'
+  ats: 'greenhouse' | 'lever' | 'ashby'
   industry: string
   country: string
 }
@@ -139,4 +139,41 @@ export const SEED_COMPANIES: SeedCompany[] = [
   { slug: 'netflix', name: 'Netflix', ats: 'lever', industry: 'Tech', country: 'US' },
   { slug: 'tailscale', name: 'Tailscale', ats: 'lever', industry: 'Tech', country: 'CA' },
   { slug: 'pave', name: 'Pave', ats: 'lever', industry: 'Finance', country: 'US' },
+  { slug: 'mistral', name: 'Mistral AI', ats: 'lever', industry: 'AI/ML', country: 'FR' },
+
+  // ── Greenhouse expansion — high-growth startups ──
+  // AI/ML
+  { slug: 'togetherai', name: 'Together AI', ats: 'greenhouse', industry: 'AI/ML', country: 'US' },
+  // Fintech/Business
+  { slug: 'carta', name: 'Carta', ats: 'greenhouse', industry: 'Finance', country: 'US' },
+  // SaaS/Infra
+  { slug: 'intercom', name: 'Intercom', ats: 'greenhouse', industry: 'Tech', country: 'US' },
+  { slug: 'klaviyo', name: 'Klaviyo', ats: 'greenhouse', industry: 'Tech', country: 'US' },
+  { slug: 'amplitude', name: 'Amplitude', ats: 'greenhouse', industry: 'Tech', country: 'US' },
+  { slug: 'mixpanel', name: 'Mixpanel', ats: 'greenhouse', industry: 'Tech', country: 'US' },
+  // Climate
+  { slug: 'watershed', name: 'Watershed', ats: 'greenhouse', industry: 'Climate', country: 'US' },
+
+  // ── Ashby companies — YC/high-growth startups ──
+  // AI/ML
+  { slug: 'openai', name: 'OpenAI', ats: 'ashby', industry: 'AI/ML', country: 'US' },
+  { slug: 'cohere', name: 'Cohere', ats: 'ashby', industry: 'AI/ML', country: 'CA' },
+  { slug: 'harvey', name: 'Harvey', ats: 'ashby', industry: 'AI/ML', country: 'US' },
+  { slug: 'elevenlabs', name: 'ElevenLabs', ats: 'ashby', industry: 'AI/ML', country: 'US' },
+  { slug: 'modal', name: 'Modal', ats: 'ashby', industry: 'AI/ML', country: 'US' },
+  { slug: 'perplexity', name: 'Perplexity AI', ats: 'ashby', industry: 'AI/ML', country: 'US' },
+  { slug: 'cursor', name: 'Cursor', ats: 'ashby', industry: 'AI/ML', country: 'US' },
+  { slug: 'pika', name: 'Pika', ats: 'ashby', industry: 'AI/ML', country: 'US' },
+  { slug: 'synthesia', name: 'Synthesia', ats: 'ashby', industry: 'AI/ML', country: 'UK' },
+  // Fintech/Business
+  { slug: 'deel', name: 'Deel', ats: 'ashby', industry: 'Finance', country: 'US' },
+  { slug: 'middesk', name: 'Middesk', ats: 'ashby', industry: 'Finance', country: 'US' },
+  { slug: 'persona', name: 'Persona', ats: 'ashby', industry: 'Finance', country: 'US' },
+  { slug: 'ironcladhq', name: 'Ironclad', ats: 'ashby', industry: 'Finance', country: 'US' },
+  // Security/Infra/SaaS
+  { slug: 'vanta', name: 'Vanta', ats: 'ashby', industry: 'Tech', country: 'US' },
+  { slug: 'stytch', name: 'Stytch', ats: 'ashby', industry: 'Tech', country: 'US' },
+  { slug: 'workos', name: 'WorkOS', ats: 'ashby', industry: 'Tech', country: 'US' },
+  { slug: 'drata', name: 'Drata', ats: 'ashby', industry: 'Tech', country: 'US' },
+  { slug: 'braintrust', name: 'Braintrust', ats: 'ashby', industry: 'Tech', country: 'US' },
 ]

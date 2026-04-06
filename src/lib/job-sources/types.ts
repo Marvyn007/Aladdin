@@ -66,6 +66,7 @@ export interface SourceScheduleConfig {
 export const SOURCE_SCHEDULES: SourceScheduleConfig[] = [
   { source: 'greenhouse', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
   { source: 'lever', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
+  { source: 'ashby', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
   { source: 'workday', type: 'per-company', intervalMs: 15 * 60 * 1000, priority: 1 },
   { source: 'themuse', type: 'bulk', intervalMs: 60 * 60 * 1000, priority: 2 },
 ]
