@@ -530,6 +530,7 @@ model JobScore {
   job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@unique([userId, jobId], map: "uniq_job_score_user_job")
+  @@index([userId, score(sort: Desc)], map: "idx_job_scores_user_score_desc")
   @@index([userId], map: "idx_job_score_user_id")
   @@index([jobId], map: "idx_job_score_job_id")
   @@map("job_scores")
