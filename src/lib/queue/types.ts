@@ -3,6 +3,7 @@
 // Designed for Neon Postgres now, swappable to BullMQ/Redis via config.
 
 export type TaskType = 'poll' | 'poll-bulk' | 'poll-batch' | 'discover'
+  | 'score-user-preferences' | 'score-new-job' | 'score-refresh'
 
 export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'dead'
 
