@@ -157,6 +157,11 @@ function normalizeValue(question: OnboardingQuestion, value: unknown): unknown {
     return normalizeFileValue(value);
   }
 
+  if (question.type === 'job_function') {
+    // Pass structured JobFunctionValue through; default to empty selection
+    return value ?? { industries: [], subcategories: [], roles: [] };
+  }
+
   return value;
 }
 
