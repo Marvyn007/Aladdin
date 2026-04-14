@@ -4,6 +4,7 @@ import {
   getOnboardingSnapshot,
   saveOnboardingAnswers,
 } from '@/lib/onboarding-db';
+import { getQueue } from '@/lib/queue';
 
 export const runtime = 'nodejs';
 
@@ -42,11 +43,15 @@ export async function POST(request: NextRequest) {
     if (complete) {
       // Save answers and mark complete in one call
       const snapshot = await saveOnboardingAnswers(userId, answers, { currentStep, complete: true });
+      // Fire-and-forget: enqueue background scoring for this user
+      getQueue().enqueue({ type: 'score-user-preferences', payload: { userId }, priority: 2 }).catch(() => undefined);
       return NextResponse.json({ success: true, ...snapshot });
     }
 
     // Save answers and update current step
     const snapshot = await saveOnboardingAnswers(userId, answers, { currentStep });
+    // Fire-and-forget: enqueue re-scoring on every preference save
+    getQueue().enqueue({ type: 'score-user-preferences', payload: { userId }, priority: 2 }).catch(() => undefined);
     return NextResponse.json({ success: true, ...snapshot });
   } catch (error) {
     console.error('[/api/onboarding POST]', error);
