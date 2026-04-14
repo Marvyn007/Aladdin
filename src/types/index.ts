@@ -1,7 +1,7 @@
 // TypeScript types for job-hunt-vibe application
 
 // Job-related types
-export type JobStatus = 'fresh' | 'archived' | 'saved';
+export type JobStatus = 'fresh' | 'archived' | 'saved' | 'recommended';
 
 export interface Job {
   id: string;
