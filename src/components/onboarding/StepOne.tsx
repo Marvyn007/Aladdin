@@ -1,6 +1,8 @@
 import { QuestionMultiSelect } from '@/components/onboarding/QuestionMultiSelect';
 import { QuestionSingleSelect } from '@/components/onboarding/QuestionSingleSelect';
-import type { OnboardingQuestion } from '@/lib/onboarding';
+import { QuestionJobFunction } from '@/components/onboarding/QuestionJobFunction';
+import type { OnboardingQuestion, JobFunctionValue } from '@/lib/onboarding';
+import { JOB_FUNCTION_TAXONOMY } from '@/lib/onboarding';
 
 interface StepOneProps {
   questions: OnboardingQuestion[];
@@ -38,6 +40,13 @@ export function StepOne({ questions, answers, setAnswers }: StepOneProps) {
         <div key={question.key} style={cardStyle}>
           <div style={titleStyle}>{question.title}</div>
           <div style={descStyle}>{question.description}</div>
+          {question.type === 'job_function' && (
+            <QuestionJobFunction
+              taxonomy={JOB_FUNCTION_TAXONOMY}
+              value={(answers[question.key] as JobFunctionValue) ?? { industries: [], subcategories: [], roles: [] }}
+              onChange={(val) => setAnswers((prev) => ({ ...prev, [question.key]: val }))}
+            />
+          )}
           {question.type === 'multi_select' && (
             <QuestionMultiSelect
               question={question}
