@@ -10,23 +10,23 @@ import type { DiscoveryCandidate } from './discovery-candidates'
  */
 export function createWorkerDb(prisma: PrismaClient): WorkerDb {
   return {
-    async upsertJob(job: NormalizedJob): Promise<{ isNew: boolean; stale: boolean }> {
+    async upsertJob(job: NormalizedJob): Promise<{ isNew: boolean; stale: boolean; jobId: string | null }> {
       // Priority 1 (authoritative): freshness gate — drop stale jobs before touching the DB
       const { isFresh } = await import('./freshness')
       if (!isFresh(job)) {
-        return { isNew: false, stale: true }
+        return { isNew: false, stale: true, jobId: null }
       }
 
       // Priority 1b: description quality check — drop jobs with empty or broken descriptions (< 50 chars)
       // Now that extraction is fixed across adapters, we only drop entries that are likely errors.
       if (!job.jobDescriptionPlain || job.jobDescriptionPlain.length < 50) {
-        return { isNew: false, stale: true }
+        return { isNew: false, stale: true, jobId: null }
       }
 
       // Primary dedupe: source + externalId
       // For now source/externalId are nullable in the schema (Phase 6 makes them non-nullable).
       // Use raw SQL with ON CONFLICT to handle atomically.
-      const result = await prisma.$queryRawUnsafe<{ is_new: boolean }[]>(
+      const result = await prisma.$queryRawUnsafe<{ id: string; is_new: boolean }[]>(
         `
         INSERT INTO jobs (
           id, title, company, location, source_url, posted_at,
@@ -51,7 +51,7 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
             raw_description_html = EXCLUDED.raw_description_html,
             job_description_plain = EXCLUDED.job_description_plain,
             updated_at = NOW()
-        RETURNING (xmax = 0) AS is_new
+        RETURNING id, (xmax = 0) AS is_new
         `,
         job.title,
         job.company,
@@ -75,6 +75,7 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
       )
 
       const isNew = result[0]?.is_new === true
+      const jobId = result[0]?.id ?? null
 
       // Only create company record if it doesn't exist — keeps basic company list up to date
       if (isNew && job.company) {
@@ -94,7 +95,7 @@ export function createWorkerDb(prisma: PrismaClient): WorkerDb {
         }
       }
 
-      return { isNew, stale: false }
+      return { isNew, stale: false, jobId }
     },
 
     async updateTrackedCompany(

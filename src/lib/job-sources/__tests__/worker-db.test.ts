@@ -55,7 +55,7 @@ describe('upsertJob freshness gate', () => {
   it('inserts a fresh job and returns isNew:true, stale:false', async () => {
     const db = createWorkerDb(prisma)
     const result = await db.upsertJob(makeJob({ postedAt: new Date() }))
-    expect(result).toEqual({ isNew: true, stale: false })
+    expect(result).toMatchObject({ isNew: true, stale: false })
     expect(prisma.$queryRawUnsafe).toHaveBeenCalled()
   })
 
@@ -63,7 +63,7 @@ describe('upsertJob freshness gate', () => {
     prisma.$queryRawUnsafe.mockResolvedValue([])
     const db = createWorkerDb(prisma)
     const result = await db.upsertJob(makeJob({ postedAt: new Date() }))
-    expect(result).toEqual({ isNew: false, stale: false })
+    expect(result).toMatchObject({ isNew: false, stale: false })
     expect(prisma.$queryRawUnsafe).toHaveBeenCalled()
   })
 
@@ -71,14 +71,14 @@ describe('upsertJob freshness gate', () => {
     const db = createWorkerDb(prisma)
     const stalePostedAt = new Date(Date.now() - 49 * 3600 * 1000)
     const result = await db.upsertJob(makeJob({ postedAt: stalePostedAt }))
-    expect(result).toEqual({ isNew: false, stale: true })
+    expect(result).toMatchObject({ isNew: false, stale: true })
     expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled()
   })
 
   it('drops a null-postedAt job (unknown age), returns isNew:false, stale:true', async () => {
     const db = createWorkerDb(prisma)
     const result = await db.upsertJob(makeJob({ postedAt: null }))
-    expect(result).toEqual({ isNew: false, stale: true })
+    expect(result).toMatchObject({ isNew: false, stale: true })
     expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled()
   })
 

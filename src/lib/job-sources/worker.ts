@@ -81,7 +81,7 @@ function createFreshAdapter(source: SourceName): SourceAdapter {
 // Keeps worker logic testable without coupling to Prisma directly.
 
 export interface WorkerDb {
-  upsertJob(job: NormalizedJob): Promise<{ isNew: boolean; stale: boolean }>
+  upsertJob(job: NormalizedJob): Promise<{ isNew: boolean; stale: boolean; jobId: string | null }>
   updateTrackedCompany(
     slug: string,
     ats: string,
