@@ -55,13 +55,14 @@ describe('computePreferenceScore', () => {
     expect(score).toBe(0);
   });
 
-  it('returns 30 when only work_areas match (job title contains role family keyword)', () => {
+  it('returns 15 when only job_function matches (role found in job title, no industries selected)', () => {
     const job = makeJob({ title: 'Software Engineer II', location: 'Mars', jobType: null, isRemote: false });
     const answers: Record<string, OnboardingAnswerRecord> = {
-      work_areas: makeAnswer('work_areas', ['software_engineer']),
+      // omit industries so no industry mismatch penalty is applied
+      job_function: makeAnswer('job_function', { industries: [], subcategories: ['Software Engineering'], roles: ['Software Engineer'] }),
     };
     const score = computePreferenceScore(job, answers);
-    expect(score).toBe(30);
+    expect(score).toBe(15);
   });
 
   it('returns 25 when only regions match (job location contains region)', () => {
@@ -100,7 +101,7 @@ describe('computePreferenceScore', () => {
     expect(score).toBe(10);
   });
 
-  it('returns 100 (capped) when all signals match', () => {
+  it('returns 85 when all signals match', () => {
     const job = makeJob({
       title: 'Senior Software Engineer',
       location: 'United States, Remote',
@@ -108,15 +109,16 @@ describe('computePreferenceScore', () => {
       isRemote: true,
     });
     const answers: Record<string, OnboardingAnswerRecord> = {
-      work_areas: makeAnswer('work_areas', ['software_engineer']),
+      job_function: makeAnswer('job_function', { industries: ['Technology'], subcategories: ['Software Engineering'], roles: ['Software Engineer'] }),
       career_levels: makeAnswer('career_levels', ['senior_manager'], 1, 2),
       role_types: makeAnswer('role_types', ['full_time'], 1, 3),
       regions: makeAnswer('regions', ['united_states'], 1, 4),
       work_style: makeAnswer('work_style', 'remote', 1, 5),
     };
-    // 30 + 25 + 20 + 15 + 10 = 100
+    // job_function: 15 (role in title) − 5 (Technology industry not matched in title) = 10
+    // + regions: 25 + role_types: 20 + work_style: 15 + career_levels: 10 = 80
     const score = computePreferenceScore(job, answers);
-    expect(score).toBe(100);
+    expect(score).toBe(80);
   });
 
   it('returns value between 0-100 inclusive for any input', () => {
