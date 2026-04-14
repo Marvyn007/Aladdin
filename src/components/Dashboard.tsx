@@ -385,6 +385,11 @@ export function Dashboard({
     const [activeId, setActiveId] = useState<string | null>(null);
     const [selectedMapJob, setSelectedMapJob] = useState<Job | null>(null); // State for Map Overlay
 
+    // For You tab state
+    const [recommendedJobs, setRecommendedJobs] = useState<Job[]>([]);
+    const [recommendedStatus, setRecommendedStatus] = useState<'idle' | 'loading' | 'ready' | 'pending'>('idle');
+    const [recommendedMessage, setRecommendedMessage] = useState<string | null>(null);
+
     // Mobile responsive state
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isMobileJobDetailVisible, setIsMobileJobDetailVisible] = useState(false);
@@ -558,7 +563,9 @@ export function Dashboard({
             }
 
             // Perform fetch unless in search mode
-            if (!useStore.getState().searchMode) {
+            if (jobStatus === 'recommended') {
+                loadRecommendedJobs();
+            } else if (!useStore.getState().searchMode) {
                 loadJobsRef.current?.(false);
             } else {
                 // If in search mode, do we need to trigger anything?
@@ -625,6 +632,22 @@ export function Dashboard({
 
     // Keep ref updated
     loadJobsRef.current = loadJobs;
+
+    const loadRecommendedJobs = async () => {
+        setRecommendedStatus('loading');
+        try {
+            const res = await fetch('/api/jobs/recommended');
+            if (res.ok) {
+                const data = await res.json();
+                setRecommendedJobs(data.jobs ?? []);
+                setRecommendedStatus(data.status === 'pending' ? 'pending' : 'ready');
+                setRecommendedMessage(data.message ?? null);
+            }
+        } catch (err) {
+            console.error('Error loading recommended jobs:', err);
+            setRecommendedStatus('idle');
+        }
+    };
 
     // Background Smart-Polling (Every 20 minutes)
     useEffect(() => {
@@ -1432,7 +1455,12 @@ export function Dashboard({
                                     width: isNarrowLayout ? '100%' : undefined,
                                     height: '100%'
                                 }}>
-                                    <JobList onJobClick={handleJobClick} />
+                                    <JobList
+                                        onJobClick={handleJobClick}
+                                        recommendedJobs={recommendedJobs}
+                                        recommendedStatus={recommendedStatus}
+                                        recommendedMessage={recommendedMessage}
+                                    />
                                 </div>
 
                                 <div style={{
