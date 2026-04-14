@@ -12,6 +12,7 @@ import { ArbeitnowAdapter } from './adapters/arbeitnow'
 import { HimalayasAdapter } from './adapters/himalayas'
 import { WorkdayAdapter } from './adapters/workday'
 import { AshbyAdapter } from './adapters/ashby'
+import { handleScoreUserPreferences, handleScoreNewJob } from './scoring-worker'
 
 // ── Adapter Registry ──
 
@@ -143,12 +144,20 @@ export async function processTask(
     let newJobs = 0
     let duplicates = 0
     let stale = 0
+    const newJobIds: string[] = []
 
     for (const job of jobs) {
       const result = await db.upsertJob(job)
       if (result.stale) stale++
-      else if (result.isNew) newJobs++
-      else duplicates++
+      else if (result.isNew) {
+        newJobs++
+        if (result.jobId) newJobIds.push(result.jobId)
+      } else duplicates++
+    }
+
+    // Enqueue background scoring for each newly inserted job
+    for (const jobId of newJobIds) {
+      await queue.enqueue({ type: 'score-new-job', payload: { jobId }, priority: 3 }).catch(() => undefined)
     }
 
     // Update TrackedCompany for per-company tasks
@@ -456,6 +465,29 @@ export async function processTaskBatch(
         )
         break
       }
+      continue
+    }
+
+    // Scoring tasks — dispatch to scoring-worker
+    if (task.type === 'score-user-preferences') {
+      try {
+        await handleScoreUserPreferences(task, queue)
+        await queue.complete(task.id)
+      } catch (err) {
+        await queue.fail(task.id, err instanceof Error ? err.message : String(err))
+      }
+      results.push({ taskId: task.id, source: 'scoring', slug: null, jobsFetched: 0, newJobs: 0, duplicates: 0, stale: 0, durationMs: 0, error: null })
+      continue
+    }
+
+    if (task.type === 'score-new-job') {
+      try {
+        await handleScoreNewJob(task, queue)
+        await queue.complete(task.id)
+      } catch (err) {
+        await queue.fail(task.id, err instanceof Error ? err.message : String(err))
+      }
+      results.push({ taskId: task.id, source: 'scoring', slug: null, jobsFetched: 0, newJobs: 0, duplicates: 0, stale: 0, durationMs: 0, error: null })
       continue
     }
 
