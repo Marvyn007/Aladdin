@@ -51,7 +51,7 @@ try {
 
     console.log('\n--- 4. Building Next.js App ---');
     // Use npx to ensure we use the local next binary
-    execSync('npx next build', { stdio: 'inherit' });
+    execSync('npx next build --webpack', { stdio: 'inherit' });
 
     console.log('\n✅ Build completed successfully!');
 } catch (error) {

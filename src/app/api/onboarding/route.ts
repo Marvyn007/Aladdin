@@ -8,6 +8,8 @@ import { getQueue } from '@/lib/queue';
 
 export const runtime = 'nodejs';
 
+const ONBOARDING_ENTRY_COOKIE = 'aladdin_onboarding_entry';
+
 // GET /api/onboarding -> OnboardingSnapshot
 export async function GET() {
   try {
@@ -45,7 +47,10 @@ export async function POST(request: NextRequest) {
       const snapshot = await saveOnboardingAnswers(userId, answers, { currentStep, complete: true });
       // Fire-and-forget: enqueue background scoring for this user
       getQueue().enqueue({ type: 'score-user-preferences', payload: { userId }, priority: 2 }).catch(() => undefined);
-      return NextResponse.json({ success: true, ...snapshot });
+      const res = NextResponse.json({ success: true, ...snapshot });
+      // Once onboarding is complete, revoke direct access to /onboarding.
+      res.cookies.set(ONBOARDING_ENTRY_COOKIE, '', { path: '/', maxAge: 0 });
+      return res;
     }
 
     // Save answers and update current step

@@ -61,6 +61,14 @@ describe('getOnboardingQuestionsByStep', () => {
     expect(last.key).toBe('linkedin_pdf');
     expect(last.order).toBe(11);
   });
+
+  it('excludeKeys removes listed questions from step 2', () => {
+    const step2 = getOnboardingQuestionsByStep(2, { excludeKeys: ['resume_upload', 'linkedin_pdf'] });
+    const keys = step2.map((q) => q.key);
+    expect(keys).not.toContain('resume_upload');
+    expect(keys).not.toContain('linkedin_pdf');
+    expect(keys[keys.length - 1]).toBe('extra_notes');
+  });
 });
 
 describe('D-14: normalizeFileValue handles linkedin_pdf identically to resume_upload', () => {

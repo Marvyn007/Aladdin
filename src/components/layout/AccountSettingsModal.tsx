@@ -15,8 +15,9 @@ import { InterviewExperienceModal } from '@/components/modals/InterviewExperienc
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { Pencil, Trash2, ExternalLink, AlertCircle, Clock as ClockIcon, CheckCircle2, Plus, Loader2 } from 'lucide-react';
 import { ONBOARDING_QUESTIONS } from '@/lib/onboarding';
+import { ApplyPilotSettingsTab } from '@/components/settings/ApplyPilotSettingsTab';
 
-type TabType = 'profile' | 'preferences' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
+type TabType = 'profile' | 'preferences' | 'apply-pilot' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
 
 interface AccountSettingsModalProps {
     isOpen: boolean;
@@ -119,6 +120,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
     const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
         { id: 'profile', label: 'Profile', icon: <ProfileIcon /> },
         { id: 'preferences', label: 'Preferences', icon: <PreferencesIcon /> },
+        { id: 'apply-pilot', label: 'Apply Pilot', icon: <ApplyPilotIcon /> },
         { id: 'touch-grass', label: 'Touch the grass', icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.5-3.3.3-1.09.88-2.16 1.7-3.2.3 2.5.8 4 1.3 5.2z"></path></svg> },
         { id: 'documents', label: 'My Documents', icon: <DocumentsIcon /> },
         { id: 'reviews', label: 'Interview Experiences', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg> },
@@ -444,6 +446,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                             />
                         )}
                         {activeTab === 'preferences' && <PreferencesTab />}
+                        {activeTab === 'apply-pilot' && <ApplyPilotSettingsTab />}
                         {activeTab === 'touch-grass' && <TouchGrassTab />}
                         {activeTab === 'documents' && <DocumentsTab isMobile={isMobile} />}
                         {activeTab === 'appearance' && (
@@ -1399,6 +1402,15 @@ function SecurityIcon() {
     return (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+    );
+}
+
+function ApplyPilotIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 2L11 13" />
+            <path d="M22 2l-7 20-4-9-9-4 20-7z" />
         </svg>
     );
 }

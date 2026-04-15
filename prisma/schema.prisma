@@ -41,9 +41,22 @@ model User {
 
   lastActiveAt        DateTime?              @map("last_active_at") @db.Timestamptz(6)
   autoApplySessions   AutoApplySession[]
+  applyPilotProfile   ApplyPilotProfile?
 
   @@index([email], map: "idx_users_email")
   @@map("users")
+}
+
+/// Per-user Apply Pilot context: one row per `users.id` (`user_id` PK). `payload` holds every field from the
+/// Account Settings → Apply Pilot tab. Updated on each save via PUT `/api/user/apply-pilot-profile`.
+/// Read by `buildProfileContext` for Browserbase / Stagehand together with resume and job description.
+model ApplyPilotProfile {
+  userId    String   @id @map("user_id")
+  payload   Json     @default("{}")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("apply_pilot_profiles")
 }
 
 model UserReputationVote {

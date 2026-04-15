@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { inngest } from '@/lib/inngest';
+import { shouldUseInlineAutoApply } from '@/lib/auto-apply/auto-apply-mode';
+import { executeAutoApplySession } from '@/lib/auto-apply/execute-session';
+import { triggerAutoApplyEvent } from '@/lib/auto-apply/pusher-events';
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
@@ -25,10 +28,35 @@ export async function POST(request: NextRequest) {
     data: { userId, jobId, status: 'queued' },
   });
 
-  await inngest.send({
-    name: 'autoapply/session.start',
-    data: { sessionId: session.id, userId, jobId },
-  });
+  const payload = { sessionId: session.id, userId, jobId };
+
+  if (shouldUseInlineAutoApply(process.env)) {
+    after(async () => {
+      try {
+        await executeAutoApplySession(payload);
+      } catch (err) {
+        console.error('[auto-apply inline]', err);
+        const reason = err instanceof Error ? err.message : String(err);
+        try {
+          await prisma.autoApplySession.updateMany({
+            where: {
+              id:     session.id,
+              status: { in: ['queued', 'running', 'stalled'] },
+            },
+            data: { status: 'failed', errorMessage: reason },
+          });
+          await triggerAutoApplyEvent(session.id, 'failed', { reason });
+        } catch {
+          // best-effort
+        }
+      }
+    });
+  } else {
+    await inngest.send({
+      name: 'autoapply/session.start',
+      data: payload,
+    });
+  }
 
   return NextResponse.json({ sessionId: session.id });
 }

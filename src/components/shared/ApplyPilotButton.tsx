@@ -16,7 +16,8 @@ type SessionStatus =
   | 'awaiting_review'
   | 'taken_over'
   | 'completed'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 const ACTIVE_STATUSES: SessionStatus[] = ['queued', 'running', 'stalled', 'awaiting_review', 'taken_over'];
 
@@ -29,6 +30,7 @@ const STATUS_LABELS: Record<SessionStatus, string> = {
   taken_over:      'In Your Control',
   completed:       'Submitted ✓',
   failed:          'Failed',
+  cancelled:       'Cancelled',
 };
 
 export function ApplyPilotButton({ jobId, onSessionStart }: ApplyPilotButtonProps) {
@@ -52,6 +54,54 @@ export function ApplyPilotButton({ jobId, onSessionStart }: ApplyPilotButtonProp
     }
     checkExisting();
   }, [jobId]);
+
+  // While a session is active, poll for status changes so the UI can recover
+  // from cancellations, failures, or tab refreshes.
+  useEffect(() => {
+    if (!sessionId || status === 'none') return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/auto-apply/session/${sessionId}`);
+        if (!res.ok) {
+          // If session was deleted (e.g. cancel during queued), clear state.
+          if (!cancelled) {
+            setSessionId(null);
+            setStatus('none');
+          }
+          return;
+        }
+        const data = await res.json() as { status: SessionStatus };
+        if (!cancelled) setStatus(data.status);
+      } catch {
+        // ignore transient network failures
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 2500);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [sessionId, status]);
+
+  async function handleCancel() {
+    if (!sessionId) return;
+    setLoading(true);
+    try {
+      await fetch('/api/auto-apply/cancel', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ sessionId }),
+      });
+      // The cancel endpoint may delete the session if it never started.
+      setSessionId(null);
+      setStatus('none');
+    } catch (err) {
+      console.error('Failed to cancel Apply Pilot session', err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleClick() {
     // Re-open modal if active session already exists
@@ -85,21 +135,36 @@ export function ApplyPilotButton({ jobId, onSessionStart }: ApplyPilotButtonProp
 
   const isDisabled = loading || ACTIVE_STATUSES.includes(status);
   const badge = status !== 'none' ? STATUS_LABELS[status] : null;
+  const canCancel = Boolean(sessionId && (status === 'queued' || status === 'running' || status === 'stalled'));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-      <button
-        onClick={handleClick}
-        disabled={isDisabled}
-        className="btn btn-secondary"
-        style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
-      >
-        {loading
-          ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-          : <Plane size={14} />
-        }
-        Apply Pilot
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button
+          onClick={handleClick}
+          disabled={isDisabled}
+          className="btn btn-secondary"
+          style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          {loading
+            ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+            : <Plane size={14} />
+          }
+          Apply Pilot
+        </button>
+
+        {canCancel && (
+          <button
+            onClick={handleCancel}
+            disabled={loading}
+            className="btn btn-ghost"
+            style={{ fontSize: '12px', padding: '6px 10px', opacity: 0.9 }}
+            title="Remove from queue"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
       {badge && (
         <span
           style={{

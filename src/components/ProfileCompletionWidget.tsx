@@ -743,7 +743,10 @@ export function ProfileCompletionWidget() {
             >
               <PreferencesStep
                 done={stepDone.prefs}
-                onNavigate={() => router.push('/onboarding')}
+                onNavigate={async () => {
+                  await fetch('/api/onboarding/enter', { method: 'POST' }).catch(() => {});
+                  router.push('/onboarding');
+                }}
               />
             </AccordionItem>
           </div>

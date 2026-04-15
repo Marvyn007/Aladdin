@@ -17,6 +17,13 @@ export interface StallRecoveryResult {
  * @param page    - Stagehand/Playwright page
  * @param attempt - Current attempt number (1-based)
  */
+function stallWaitMs(): { jsRender: number; afterScroll: number } {
+  if (process.env.AUTO_APPLY_FAST_STALL === 'false') {
+    return { jsRender: 1500, afterScroll: 800 };
+  }
+  return { jsRender: 600, afterScroll: 350 };
+}
+
 export async function attemptStallRecovery(
   page: PageLike,
   attempt: number
@@ -25,8 +32,10 @@ export async function attemptStallRecovery(
     return { recovered: false, reason: `Stall unresolved after ${attempt - 1} attempts` };
   }
 
+  const { jsRender, afterScroll } = stallWaitMs();
+
   // Strategy 1: Wait for JS render — fields may still be hydrating
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(jsRender);
   const fieldCount = await page.evaluate<number>(
     () => document.querySelectorAll('input:not([type=hidden]), select, textarea').length
   );
@@ -36,7 +45,7 @@ export async function attemptStallRecovery(
 
   // Strategy 2: Scroll down — lazy-loaded fields may be off-screen
   await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(afterScroll);
   const fieldCountAfterScroll = await page.evaluate<number>(
     () => document.querySelectorAll('input:not([type=hidden]), select, textarea').length
   );

@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { shouldSkipLocalHostCanonicalRedirect } from '@/lib/proxy-dev-redirect';
 
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
 
@@ -18,7 +19,11 @@ const isProtectedRoute = createRouteMatcher([
 
 export default clerkMiddleware(async (auth, req) => {
     console.log(`[Proxy] Request hitting: ${req.nextUrl.pathname}`);
-    if (process.env.NODE_ENV !== 'production' && req.nextUrl.hostname === '127.0.0.1') {
+    if (
+        process.env.NODE_ENV !== 'production' &&
+        req.nextUrl.hostname === '127.0.0.1' &&
+        !shouldSkipLocalHostCanonicalRedirect(req.nextUrl.pathname)
+    ) {
         const canonicalUrl = req.nextUrl.clone();
         canonicalUrl.hostname = 'localhost';
         return NextResponse.redirect(canonicalUrl);

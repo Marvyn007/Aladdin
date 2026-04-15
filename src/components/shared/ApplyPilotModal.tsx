@@ -37,6 +37,7 @@ export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: Apply
   const [pageNum, setPageNum]       = useState(0);
   const [stalled, setStalled]       = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [closing, setClosing]       = useState(false);
   const pusherRef                   = useRef<PusherClient | null>(null);
 
   // Fetch initial session state on mount (handles tab-close/reopen reconnect)
@@ -130,6 +131,27 @@ export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: Apply
 
   const status = session?.status ?? 'queued';
 
+  async function handleClose() {
+    if (closing) return;
+    setClosing(true);
+
+    // If the user closes the modal while the agent is queued/running, cancel it
+    // so we don't leave stray work in the system.
+    if (status === 'queued' || status === 'running' || status === 'stalled') {
+      try {
+        await fetch('/api/auto-apply/cancel', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ sessionId }),
+        });
+      } catch {
+        // Best-effort cancellation — closing the UI should never be blocked.
+      }
+    }
+
+    onClose();
+  }
+
   return (
     <div
       style={{
@@ -137,7 +159,7 @@ export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: Apply
         background: 'rgba(0,0,0,0.75)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
       <div
         style={{
@@ -167,7 +189,7 @@ export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: Apply
             </span>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '16px' }}
           >
             ✕

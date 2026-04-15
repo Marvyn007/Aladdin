@@ -14,6 +14,10 @@ import { runAutoApplySession } from '@/inngest/auto-apply'
  * maxDuration: 300 seconds (Vercel Pro/Enterprise max).
  * Each step.run() call is independently billed against Vercel's function
  * timeout — steps exceeding 60s on Hobby will fail, but Inngest retries them.
+ *
+ * Local dev: POST step execution fails with 401 if `INNGEST_SIGNING_KEY` here
+ * does not match the key used by `inngest dev` (set the same value in your
+ * shell before starting the CLI, or restart the CLI after updating .env.local).
  */
 export const maxDuration = 300
 

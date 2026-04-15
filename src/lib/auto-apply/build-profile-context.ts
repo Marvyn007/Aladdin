@@ -1,13 +1,25 @@
 // src/lib/auto-apply/build-profile-context.ts
 import { prisma } from '@/lib/prisma';
 import type { ProfileContext } from './match-field';
+import { applyPilotPayloadToUserContext } from '@/lib/apply-pilot-profile/flatten';
+import { parseApplyPilotPayload } from '@/lib/apply-pilot-profile/types';
+import { formatApplyPilotNarrative } from '@/lib/apply-pilot-profile/narrative';
+import { parsedResumeJsonToAgentText } from '@/lib/auto-apply/parsed-resume-for-agent';
+
+export interface BuildProfileContextOptions {
+  /** When provided (e.g. from execute-session), avoids a second Job query. */
+  jobPack?: NonNullable<ProfileContext['jobPack']>;
+}
 
 /**
  * Fetch all data needed by the auto-apply agent from Neon and return
  * a ProfileContext ready for matchFieldToProfile.
  */
-export async function buildProfileContext(userId: string): Promise<ProfileContext> {
-  const [user, onboardingAnswers, resume] = await Promise.all([
+export async function buildProfileContext(
+  userId: string,
+  opts?: BuildProfileContextOptions
+): Promise<ProfileContext> {
+  const [user, onboardingAnswers, resume, applyPilot] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: { firstName: true, lastName: true, email: true },
@@ -21,17 +33,23 @@ export async function buildProfileContext(userId: string): Promise<ProfileContex
       orderBy: { uploadAt: 'desc' },
       select: { parsedJson: true, filename: true },
     }),
+    prisma.applyPilotProfile.findUnique({
+      where: { userId },
+      select: { payload: true },
+    }),
   ]);
 
   let resumeSummary = '';
   if (resume?.parsedJson && typeof resume.parsedJson === 'object') {
-    const json = resume.parsedJson as Record<string, unknown>;
-    if (typeof json.summary === 'string') {
-      resumeSummary = json.summary;
-    } else {
-      resumeSummary = JSON.stringify(json).slice(0, 1000);
+    resumeSummary = parsedResumeJsonToAgentText(resume.parsedJson);
+    if (!resumeSummary.trim()) {
+      resumeSummary = JSON.stringify(resume.parsedJson).slice(0, 4000);
     }
   }
+
+  const payload = parseApplyPilotPayload(applyPilot?.payload);
+  const userContext = applyPilotPayloadToUserContext(payload);
+  const applyPilotAnswersJson = JSON.stringify(payload);
 
   return {
     user: {
@@ -43,7 +61,10 @@ export async function buildProfileContext(userId: string): Promise<ProfileContex
       questionKey: a.questionKey,
       answerText:  a.answerText,
     })),
-    userContext:   {},
+    userContext,
     resumeSummary,
+    jobPack:               opts?.jobPack,
+    applyPilotNarrative:   formatApplyPilotNarrative(payload, user ?? {}),
+    applyPilotAnswersJson,
   };
 }
