@@ -15,35 +15,44 @@ interface StepTwoProps {
   setAnswers: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
 }
 
-const cardStyle: React.CSSProperties = {
-  borderRadius: 16,
-  border: '1px solid var(--ot-card-border)',
-  background: 'var(--ot-card-bg)',
-  backdropFilter: 'blur(8px)',
-  padding: '24px 28px',
-  marginBottom: 18,
+const sectionStyle: React.CSSProperties = {
+  marginBottom: 28,
+};
+
+const titleRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 4,
+  marginBottom: 4,
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: 18,
+  fontSize: 13,
   fontWeight: 600,
   color: 'var(--ot-text)',
-  marginBottom: 6,
+  letterSpacing: '-0.01em',
 };
 
 const descStyle: React.CSSProperties = {
-  fontSize: 14,
+  fontSize: 12,
   color: 'var(--ot-text-muted)',
-  marginBottom: 18,
-  lineHeight: 1.5,
+  marginBottom: 10,
+  lineHeight: 1.45,
 };
 
 export function StepTwo({ questions, answers, setAnswers }: StepTwoProps) {
   return (
     <div>
       {questions.map((question) => (
-        <div key={question.key} style={cardStyle}>
-          <div style={titleStyle}>{question.title}</div>
+        <div key={question.key} style={sectionStyle}>
+          <div style={titleRowStyle}>
+            {question.required && (
+              <span style={{ color: 'var(--color-destructive)', fontSize: 13, lineHeight: 1 }} aria-hidden>
+                *
+              </span>
+            )}
+            <div style={titleStyle}>{question.title}</div>
+          </div>
           <div style={descStyle}>{question.description}</div>
           {question.type === 'single_select' && (
             <QuestionSingleSelect

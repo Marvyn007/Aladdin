@@ -1,4 +1,4 @@
-export type OnboardingStepId = 1 | 2;
+export type OnboardingStepId = 1 | 2 | 3;
 
 export type OnboardingQuestionType = 'multi_select' | 'single_select' | 'file' | 'text' | 'job_function';
 
@@ -279,55 +279,51 @@ export const ONBOARDING_QUESTIONS: readonly OnboardingQuestion[] = [
     key: 'job_function',
     step: 1,
     order: 1,
-    title: 'What kinds of jobs are you looking for?',
-    description: 'Select the industries, role families, and specific titles you want to target.',
+    title: 'Job function',
+    description: '',
     type: 'job_function',
     required: true,
     rationale: 'Structured taxonomy selection gives precise scoring signals across industry, subcategory, and role title.',
-    helperText: 'You can select roles across multiple industries.'
   },
   {
     key: 'career_levels',
     step: 1,
     order: 2,
-    title: 'What career levels are you open to?',
-    description: 'We will surface jobs that match your current level and any nearby stretch roles.',
+    title: 'Career level',
+    description: '',
     type: 'multi_select',
     required: true,
     rationale: 'Level fit affects which job descriptions, comp bands, and interview loops we recommend.',
     options: CAREER_LEVELS,
-    helperText: 'Select all levels that feel realistic.'
   },
   {
     key: 'role_types',
     step: 1,
     order: 3,
-    title: 'What kind of role are you open to?',
-    description: 'Tell us which employment types should stay in the pool.',
+    title: 'Open for',
+    description: '',
     type: 'multi_select',
     required: true,
     rationale: 'Employment type is a hard filter for many candidates and a common source of dead-end alerts.',
     options: ROLE_TYPES,
-    helperText: 'Mix full-time with internship or contract if that is part of your search.'
   },
   {
     key: 'regions',
     step: 1,
     order: 4,
-    title: 'Which regions should we prioritize?',
-    description: 'Choose the countries or regions where you can realistically interview and work.',
+    title: 'Regions',
+    description: '',
     type: 'multi_select',
     required: true,
     rationale: 'Geography is one of the strongest filters for job relevance and legal eligibility.',
     options: REGIONS,
-    helperText: 'Add remote worldwide if you are open to global roles.'
   },
   {
     key: 'work_style',
     step: 1,
     order: 5,
-    title: 'How do you want to work?',
-    description: 'We will favor the work setting that best matches your day-to-day preference.',
+    title: 'Work setting',
+    description: '',
     type: 'single_select',
     required: true,
     rationale: 'Onsite, hybrid, and remote searches behave very differently, so this should be explicit.',
@@ -335,71 +331,34 @@ export const ONBOARDING_QUESTIONS: readonly OnboardingQuestion[] = [
   },
   {
     key: 'visa_sponsorship',
-    step: 2,
+    step: 1,
     order: 6,
-    title: 'Do you need visa sponsorship in any chosen region?',
-    description: 'This keeps us from recommending jobs that cannot realistically move forward.',
+    title: 'Visa sponsorship / H1B',
+    description: '',
     type: 'single_select',
     required: true,
     rationale: 'Work authorization is a high-signal constraint and should be treated as a hard filter.',
     options: VISA_SUPPORT,
   },
   {
-    key: 'alert_frequency',
-    step: 2,
-    order: 7,
-    title: 'How often should we send job alerts?',
-    description: 'Pick the cadence that matches how closely you want to track new opportunities.',
-    type: 'single_select',
-    required: true,
-    rationale: 'Notification cadence influences both engagement and how aggressively we batch new matches.',
-    options: ALERT_FREQUENCY,
-  },
-  {
-    key: 'job_search_challenges',
-    step: 2,
-    order: 8,
-    title: 'What is slowing your job search down?',
-    description: 'Use this to personalize coaching, ranking, and help content.',
-    type: 'multi_select',
-    required: true,
-    rationale: 'Pain points shape the support layer, not just the matching layer.',
-    options: CHALLENGES,
-    helperText: 'Select every challenge that feels true.'
-  },
-  {
     key: 'resume_upload',
     step: 2,
     order: 9,
     title: 'Upload your resume',
-    description: 'We will use it to prefill your profile and sharpen recommendations.',
+    description: '',
     type: 'file',
     required: false,
     rationale: 'A resume import gives us the fastest path to relevant skills, seniority, and history.',
-    helperText: 'PDF files work best.'
-  },
-  {
-    key: 'extra_notes',
-    step: 2,
-    order: 10,
-    title: 'Anything else we should know?',
-    description: 'Salary floor, notice period, commute radius, target companies, time zone, or anything unusual.',
-    type: 'text',
-    required: false,
-    rationale: 'A catch-all note helps capture context that does not belong in a rigid option set.',
-    placeholder: 'Example: Open to startup or enterprise, need Eastern Time overlap, want at least 2 weeks PTO.',
-    helperText: 'This is optional, but it helps a lot.'
   },
   {
     key: 'linkedin_pdf',
     step: 2,
     order: 11,
     title: 'Upload your LinkedIn profile PDF',
-    description: 'Optional: upload your LinkedIn profile as a PDF so we can enrich your matches.',
+    description: '',
     type: 'file',
     required: false,
     rationale: 'Supplements resume data with LinkedIn work history for better skill inference.',
-    helperText: 'PDF only. Click the info icon for download instructions.',
   },
 ];
 
@@ -409,15 +368,25 @@ export const ONBOARDING_STEP_META: Record<OnboardingStepId, { title: string; sub
     subtitle: 'The core profile that shapes your job matches.'
   },
   2: {
+    title: 'Uploads',
+    subtitle: 'Resume + optional LinkedIn for sharper matching.'
+  },
+  3: {
     title: 'Additional preferences',
     subtitle: 'Constraints, alerting, and a few high-signal extras.'
-  }
+  },
 };
 
 export function getOnboardingQuestion(key: string): OnboardingQuestion | undefined {
   return ONBOARDING_QUESTIONS.find((question) => question.key === key);
 }
 
-export function getOnboardingQuestionsByStep(step: OnboardingStepId): OnboardingQuestion[] {
-  return ONBOARDING_QUESTIONS.filter((question) => question.step === step).sort((a, b) => a.order - b.order);
+export function getOnboardingQuestionsByStep(
+  step: OnboardingStepId,
+  opts?: { excludeKeys?: readonly string[] }
+): OnboardingQuestion[] {
+  const exclude = new Set(opts?.excludeKeys ?? []);
+  return ONBOARDING_QUESTIONS
+    .filter((question) => question.step === step && !exclude.has(question.key))
+    .sort((a, b) => a.order - b.order);
 }

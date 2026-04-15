@@ -40,9 +40,23 @@ model User {
   userLeetCodeProgress UserLeetCodeProgress[]
 
   lastActiveAt        DateTime?              @map("last_active_at") @db.Timestamptz(6)
+  autoApplySessions   AutoApplySession[]
+  applyPilotProfile   ApplyPilotProfile?
 
   @@index([email], map: "idx_users_email")
   @@map("users")
+}
+
+/// Per-user Apply Pilot context: one row per `users.id` (`user_id` PK). `payload` holds every field from the
+/// Account Settings → Apply Pilot tab. Updated on each save via PUT `/api/user/apply-pilot-profile`.
+/// Read by `buildProfileContext` for Browserbase / Stagehand together with resume and job description.
+model ApplyPilotProfile {
+  userId    String   @id @map("user_id")
+  payload   Json     @default("{}")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("apply_pilot_profiles")
 }
 
 model UserReputationVote {
@@ -150,6 +164,7 @@ model Job {
   tailoredResumes         TailoredResume[]
   jobScores               JobScore[]
   jobVotes                JobVote[]
+  autoApplySessions       AutoApplySession[]
 
   @@index([fetchedAt(sort: Desc)], map: "idx_jobs_fetched_at")
   @@index([contentHash], map: "idx_jobs_content_hash")
@@ -649,4 +664,29 @@ model UserLeetCodeProgress {
   @@unique([userId, questionId], map: "uniq_user_leetcode_progress")
   @@index([userId], map: "idx_user_progress_user")
   @@map("user_leetcode_progress")
+}
+
+model AutoApplySession {
+  id                   String    @id @default(uuid()) @db.Uuid
+  userId               String    @map("user_id")
+  jobId                String    @map("job_id") @db.Uuid
+  status               String    @default("queued")
+
+  browserbaseSessionId String?   @map("browserbase_session_id")
+  liveViewUrl          String?   @map("live_view_url")
+
+  pagesVisited         Int       @default(0) @map("pages_visited")
+  fieldsFilledCount    Int       @default(0) @map("fields_filled_count")
+  lastEventAt          DateTime? @map("last_event_at") @db.Timestamptz(6)
+  errorMessage         String?   @map("error_message")
+
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job                  Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_auto_apply_sessions_user")
+  @@index([status],  map: "idx_auto_apply_sessions_status")
+  @@map("auto_apply_sessions")
 }

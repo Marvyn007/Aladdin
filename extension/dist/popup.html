@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Aladdin Auto Apply</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 200px;
+      height: 100px;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #fafafa;
+      color: #374151;
+    }
+    .loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #0d7fe2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 
+      to { transform: rotate(360deg); } 
+    }
+  </style>
+  <script type="module" crossorigin src="/popup.js"></script>
+</head>
+<body>
+  <div class="loader">
+    <div class="spinner"></div>
+    <div style="font-size: 13px; font-weight: 500;">Opening panel...</div>
+  </div>
+</body>
+</html>

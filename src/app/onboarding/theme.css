@@ -209,6 +209,65 @@
   --font-sans:              'Open Sans', sans-serif;
 }
 
+/* ============================================================
+ * Split layout — image left, content right
+ * ============================================================ */
+.onboarding-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100vh;
+  width: 100vw;
+}
+
+.onboarding-image-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.onboarding-content-panel {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Below lg (1024px): collapse to single column, hide image panel */
+@media (max-width: 1023px) {
+  .onboarding-split {
+    grid-template-columns: 1fr;
+  }
+  .onboarding-image-panel {
+    display: none;
+  }
+}
+
+/* Desktop: hide the mobile-only branding in the wizard */
+@media (min-width: 1024px) {
+  .onboarding-mobile-branding {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+ * Uploads page — phase transition (resume → LinkedIn)
+ * ============================================================ */
+@keyframes onboarding-upload-phase-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.onboarding-upload-phase-enter {
+  animation: onboarding-upload-phase-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ============================================================
+ * Animations
+ * ============================================================ */
 @keyframes ot-toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(12px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }

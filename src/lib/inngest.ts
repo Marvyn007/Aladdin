@@ -1,9 +1,16 @@
 import { Inngest } from 'inngest'
 
-// ── Inngest client ──
-// All crawler functions share this single client instance.
-// Event types are inferred from the functions that use this client.
+const DEV_SERVER_URL = 'http://localhost:8288';
 
-export const inngest = new Inngest({
-  id: 'aladdin-job-crawler',
-})
+export function getInngestConfig() {
+  const isDev = process.env.NODE_ENV !== 'production';
+  const explicitUrl = process.env.INNGEST_BASE_URL;
+  return {
+    id: 'aladdin-job-crawler',
+    eventKey: process.env.INNGEST_EVENT_KEY,
+    signingKey: process.env.INNGEST_SIGNING_KEY,
+    baseUrl: explicitUrl ?? (isDev ? DEV_SERVER_URL : undefined),
+  };
+}
+
+export const inngest = new Inngest(getInngestConfig())

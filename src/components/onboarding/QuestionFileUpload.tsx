@@ -82,8 +82,8 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           type="button"
           disabled={uploading}
@@ -91,22 +91,22 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '10px 20px',
-            borderRadius: 10,
-            fontSize: 15,
+            gap: 6,
+            padding: '7px 14px',
+            borderRadius: 8,
+            fontSize: 12,
             fontWeight: 500,
             cursor: uploading ? 'not-allowed' : 'pointer',
-            border: '1.5px solid var(--ot-ghost-border)',
-            background: 'var(--ot-ghost-bg)',
-            color: 'var(--ot-ghost-color)',
+            border: '1px solid var(--ot-card-border)',
+            background: 'var(--ot-row-bg)',
+            color: 'var(--ot-text)',
             outline: 'none',
             opacity: uploading ? 0.6 : 1,
-            transition: 'all 0.15s ease',
+            transition: 'background 0.15s ease',
           }}
         >
-          <Upload style={{ width: 16, height: 16 }} />
-          {uploading ? 'Uploading...' : value ? 'Replace file' : 'Upload PDF'}
+          <Upload style={{ width: 14, height: 14 }} />
+          {uploading ? 'Uploading…' : value ? 'Replace file' : 'Upload PDF'}
         </button>
 
         {showInfoTooltip && (
@@ -115,7 +115,7 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
               <TooltipTrigger
                 style={{
                   borderRadius: '50%',
-                  padding: 6,
+                  padding: 4,
                   color: 'var(--ot-text-muted)',
                   background: 'transparent',
                   border: 'none',
@@ -126,12 +126,12 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
                   justifyContent: 'center',
                 }}
               >
-                <Info style={{ width: 16, height: 16 }} />
+                <Info style={{ width: 14, height: 14 }} />
                 <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
                   How to download LinkedIn PDF
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-xs whitespace-pre-line">
+              <TooltipContent side="right" className="max-w-xs whitespace-pre-line text-xs">
                 {LINKEDIN_INSTRUCTIONS}
               </TooltipContent>
             </Tooltip>
@@ -152,27 +152,27 @@ export function QuestionFileUpload({ question, value, onChange, showInfoTooltip 
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
+            gap: 5,
+            padding: '4px 10px',
             borderRadius: 9999,
-            fontSize: 13,
+            fontSize: 11,
             fontWeight: 500,
-            border: '1px solid var(--ot-pill-border)',
-            background: 'var(--ot-pill-bg)',
-            color: 'var(--ot-pill-color)',
+            border: '1px solid var(--ot-card-border)',
+            background: 'var(--ot-row-bg)',
+            color: 'var(--ot-text)',
           }}
         >
-          <Upload style={{ width: 12, height: 12 }} />
+          <Upload style={{ width: 11, height: 11 }} />
           {value.filename}
         </div>
       )}
 
       {error && (
-        <p style={{ fontSize: 13, color: 'var(--color-destructive)' }}>{error}</p>
+        <p style={{ fontSize: 11, color: 'var(--color-destructive)' }}>{error}</p>
       )}
 
       {question.helperText && !error && (
-        <p style={{ fontSize: 13, color: 'var(--ot-text-muted)' }}>{question.helperText}</p>
+        <p style={{ fontSize: 11, color: 'var(--ot-text-muted)' }}>{question.helperText}</p>
       )}
     </div>
   );
