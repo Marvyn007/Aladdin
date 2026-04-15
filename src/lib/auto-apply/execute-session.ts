@@ -2,28 +2,122 @@ import { prisma } from '@/lib/prisma';
 import Browserbase from '@browserbasehq/sdk';
 import { Stagehand } from '@browserbasehq/stagehand';
 import { buildProfileContext } from '@/lib/auto-apply/build-profile-context';
-import { matchFieldToProfile } from '@/lib/auto-apply/match-field';
+import { matchFieldToProfile, type ProfileContext } from '@/lib/auto-apply/match-field';
 import { buildApplyPilotAgentSystemPrompt } from '@/lib/apply-pilot-profile/agent-system-prompt';
 import { triggerAutoApplyEvent } from '@/lib/auto-apply/pusher-events';
 import { attemptStallRecovery } from '@/lib/auto-apply/stall-recovery';
 import { tryFastFillObservation } from '@/lib/auto-apply/deterministic-fill';
+import { fillSmartDropdown, fuzzyMatchOption } from '@/lib/auto-apply/smart-dropdown';
+import { fillNativeSelect, inferAnswerFromContext } from '@/lib/auto-apply/native-select-fill';
+import { runPreFlightAudit, type FilledFieldEntry } from '@/lib/auto-apply/preflight-audit';
 import { getAutoApplyStagehandEnv } from '@/lib/auto-apply/stagehand-tuning';
+import { domSniffRadioGroup, domClickRadioOption } from '@/lib/auto-apply/dom-interaction';
+import { z } from 'zod';
 
 const MAX_PAGES = 30;
 
 const REVIEW_PAGE_PATTERNS = /review|submit application|confirm your|verify your/i;
+
+// ── Radio / Checkbox Group Handler ───────────────────────────────────────────
+
+/**
+ * Fill a radio or checkbox group using DOM-first sniffing.
+ * Priority: profile match → inferred default → fuzzy match → LLM pick → sh.act fallback.
+ */
+async function fillRadioOrCheckboxGroup(
+  sh: Stagehand,
+  page: unknown,
+  obs: { description?: string; method?: string; selector?: string },
+  profileContext: ProfileContext,
+): Promise<boolean> {
+  const label = obs.description ?? obs.method ?? '';
+  const selector = obs.selector ?? '';
+
+  const profileVal = matchFieldToProfile({ label, name: selector }, profileContext);
+  const inferred = inferAnswerFromContext(label, profileContext);
+  const answerHint = profileVal ?? inferred;
+
+  // Sniff radio options from DOM (try radio first, then checkbox)
+  let allOptions = await domSniffRadioGroup(page, selector || 'body', 'radio');
+  if (allOptions.length === 0) {
+    allOptions = await domSniffRadioGroup(page, selector || 'body', 'checkbox');
+  }
+  const optionTexts = allOptions.map(o => o.text);
+
+  if (optionTexts.length === 0) {
+    // Can't find options — fall to sh.act with hint
+    const hint = answerHint ? `The answer should be "${answerHint}". ` : '';
+    await sh.act(
+      `${hint}Select the appropriate option for "${label}"`,
+      { timeout: 15_000 },
+    );
+    return true;
+  }
+
+  // Fuzzy match against profile/inferred answer
+  let chosenText: string | null = null;
+  if (answerHint) {
+    chosenText = fuzzyMatchOption(answerHint, optionTexts);
+  }
+
+  // LLM pick from concrete list (if no fuzzy match)
+  if (!chosenText) {
+    const optionsList = optionTexts.map((o, i) => `${i + 1}. ${o}`).join('\n');
+    const prompt = [
+      `The question "${label}" has these options:\n${optionsList}`,
+      `Resume context: ${profileContext.resumeSummary.slice(0, 1000)}`,
+      `You are completing a job application. Choose the option most likely to advance the candidate to the next stage. Avoid options that would disqualify them. Reply with ONLY the exact option text.`,
+    ].join('\n\n');
+
+    try {
+      const ChoiceSchema = z.object({
+        chosenOption: z.string().describe('The exact text of the best option'),
+      });
+      const result = await sh.extract(prompt, ChoiceSchema, { timeout: 15_000 });
+      if (result.chosenOption) {
+        chosenText =
+          fuzzyMatchOption(result.chosenOption, optionTexts) ??
+          optionTexts.find(o => o.toLowerCase() === result.chosenOption.toLowerCase()) ??
+          null;
+      }
+    } catch { /* fall to sh.act */ }
+  }
+
+  // DOM click the matched option
+  if (chosenText) {
+    const matched = allOptions.find(o => o.text === chosenText);
+    if (matched?.inputSelector) {
+      const clicked = await domClickRadioOption(page, matched.inputSelector);
+      if (clicked) return true;
+    }
+  }
+
+  // sh.act fallback
+  const hint = answerHint ? `The answer should be "${answerHint}". ` : '';
+  const optList = optionTexts.join(', ');
+  await sh.act(
+    `${hint}For the question "${label}", select the option that matches best from: ${optList}`,
+    { timeout: 15_000 },
+  );
+  return true;
+}
 
 async function connectStagehand(
   bbSessionId: string,
   tuning: ReturnType<typeof getAutoApplyStagehandEnv>,
   systemPrompt: string
 ): Promise<Stagehand> {
+  const isGemini = tuning.modelName.toLowerCase().includes('gemini');
+  const resolvedApiKey = isGemini 
+    ? (process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_A || process.env.LLM_API_KEY!) 
+    : process.env.LLM_API_KEY!;
+
   const sh = new Stagehand({
     env:                  'BROWSERBASE',
     apiKey:               process.env.BROWSERBASE_API_KEY!,
     projectId:            process.env.BROWSERBASE_PROJECT_ID!,
     browserbaseSessionID: bbSessionId,
-    model:                { modelName: tuning.modelName, apiKey: process.env.LLM_API_KEY! },
+    model:                { modelName: tuning.modelName, apiKey: resolvedApiKey },
     verbose:              0,
     selfHeal:             false,
     domSettleTimeout:     tuning.domSettleMs,
@@ -69,6 +163,15 @@ export async function executeAutoApplySession({
   const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY! });
   const bbSession = await bb.sessions.create({
     projectId: process.env.BROWSERBASE_PROJECT_ID!,
+    // ── Stealth & anti-detection ────────────────────────────────────────
+    browserSettings: {
+      // advancedStealth is Enterprise-only; disabling to fix 403.
+      solveCaptchas:   true,          // auto-solve CAPTCHAs on Greenhouse/Workday
+      blockAds:        true,          // block ad/tracking scripts that fingerprint bots
+    },
+    // Route through Browserbase residential proxy so ATS platforms see a real ISP IP.
+    // Defaulting to `false` for free plan compatibility. Set `BB_STEALTH_PROXY=true` to enable.
+    proxies: process.env.BB_STEALTH_PROXY === 'true',
   });
   const debug = await bb.sessions.debug(bbSession.id);
   const bbSessionId = bbSession.id;
@@ -118,6 +221,28 @@ export async function executeAutoApplySession({
     {
       const page = sh.context.activePage();
       if (!page) throw new Error('No active page in Browserbase session');
+
+      // ── "Stealth-js" Replacement: Manual Humanization ──────────────────────
+      // Since 'advancedStealth' is Enterprise-only, we inject our own evasions.
+      await page.addInitScript(() => {
+        // 1. Hide navigator.webdriver
+        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+
+        // 2. Mock Chrome runtime (common in real browsers)
+        (window as any).chrome = { runtime: {} };
+
+        // 3. Spoof languages and plugins
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+
+        // 4. Overwrite Permissions API (headless usually denies them)
+        const originalQuery = window.navigator.permissions.query;
+        (window.navigator.permissions as any).query = (parameters: any) =>
+          parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : originalQuery(parameters);
+      });
+
       await page.goto(url, { waitUntil: tuning.navWait as 'load' | 'domcontentloaded' | 'networkidle' });
       await triggerAutoApplyEvent(sessionId, 'navigating', {});
     }
@@ -149,27 +274,117 @@ export async function executeAutoApplySession({
             { timeout: tuning.observeTimeout }
           );
 
+          // ── Session memory: composite field IDs to prevent re-filling ────────
+          const filledFieldsThisPage: FilledFieldEntry[] = [];
+
           let fieldsFilled = 0;
-          for (const obs of observations) {
+          for (let i = 0; i < observations.length; i++) {
+            const obs = observations[i];
             const label = obs.description ?? obs.method ?? '';
+            const selector = obs.selector ?? '';
+
+            // ── Skip if already filled (composite ID: label + selector) ───────
+            const alreadyFilled = filledFieldsThisPage.some(
+              f => f.label === label && f.selector === selector
+            );
+            if (alreadyFilled) {
+              continue;
+            }
+
+            // ── Skip if natively filled in the DOM (e.g. pre-populated fields) ─
+            let domAlreadyFilled = false;
+            if (selector) {
+              let locSel = selector.trim();
+              if (locSel.startsWith('//') || locSel.startsWith('/html') || locSel.startsWith('(')) locSel = `xpath=${locSel}`;
+              try {
+                const pw = page as any;
+                const locator = pw.locator(locSel).first();
+                domAlreadyFilled = await locator.evaluate((el: unknown) => {
+                  const node = el as HTMLElement;
+                  const tag = node.tagName.toLowerCase();
+                  if (tag === 'input') {
+                    const inp = node as HTMLInputElement;
+                    if (inp.type === 'checkbox' || inp.type === 'radio' || inp.type === 'file') return false;
+                    return !!(inp.value && inp.value.trim().length > 0);
+                  }
+                  if (tag === 'textarea') {
+                    return !!((node as HTMLTextAreaElement).value?.trim().length > 0);
+                  }
+                  if (tag === 'select') {
+                    const sel = node as HTMLSelectElement;
+                    const val = sel.value?.trim();
+                    return !!(val && val.length > 0 && val !== 'unselected' && val !== '0' && sel.selectedIndex > 0);
+                  }
+                  return false;
+                }, { timeout: 150 });
+              } catch (e) {
+                // Ignore fast evaluation failures
+              }
+            }
+
+            if (domAlreadyFilled) {
+              filledFieldsThisPage.push({ label, selector, index: i });
+              continue;
+            }
+
             const profileVal = matchFieldToProfile(
-              { label, name: obs.selector ?? '' },
+              { label, name: selector },
               profileContext
             );
 
-            const fast = await tryFastFillObservation(page, obs, profileContext);
-            if (!fast) {
+            // ── Fill cascade: fast-fill → smart-dropdown → LLM fallback ──────
+            let filled = false;
+            const fastResult = await tryFastFillObservation(page, obs, profileContext);
+
+            if (fastResult === true) {
+              filled = true;
+            } else if (fastResult === 'native-select') {
+              // Native select with no profile match: Extract options from DOM, fuzzy match, fallback to LLM
+              try {
+                const handled = await fillNativeSelect(sh, page, obs, profileContext, description);
+                filled = handled;
+              } catch (err) {
+                console.warn(`[native-select] Failed for "${label}":`, err);
+              }
+            } else if (fastResult === 'custom-dropdown') {
+              // Smart dropdown: DOM sniff → fuzzy → LLM → DOM click
+              try {
+                await fillSmartDropdown(sh, page, obs, profileContext, description);
+                filled = true;
+              } catch (err) {
+                console.warn(`[smart-dropdown] Failed for "${label}":`, err);
+              }
+            } else if (fastResult === 'radio-group') {
+              // Radio/checkbox group: DOM sniff → fuzzy → LLM → DOM click
+              try {
+                const handled = await fillRadioOrCheckboxGroup(sh, page, obs, profileContext);
+                filled = handled;
+              } catch (err) {
+                console.warn(`[radio-group] Failed for "${label}":`, err);
+              }
+            }
+
+            if (!filled) {
+              // Build memory context string for the LLM
+              const memoryHint = filledFieldsThisPage.length > 0
+                ? `\nALREADY FILLED on this page (DO NOT interact with these again): [${filledFieldsThisPage.map(f => f.label).join(', ')}]`
+                : '';
+
               if (profileVal !== null) {
-                await sh.act(`Fill the "${label}" field with "${profileVal}"`, {
-                  timeout: tuning.actTimeout,
-                });
+                await sh.act(
+                  `Fill the "${label}" field with "${profileVal}"${memoryHint}`,
+                  { timeout: tuning.actTimeout },
+                );
               } else {
                 await sh.act(
-                  `Fill the "${label}" field with an appropriate value based on this resume context: ${profileContext.resumeSummary}`,
+                  `Fill the "${label}" field with an appropriate value based on this resume context: ${profileContext.resumeSummary.slice(0, 2000)}${memoryHint}`,
                   { timeout: tuning.actTimeout }
                 );
               }
             }
+
+            // ── Record in session memory ──────────────────────────────────────
+            filledFieldsThisPage.push({ label, selector, index: i });
             fieldsFilled++;
 
             await triggerAutoApplyEvent(sessionId, 'field_filled', {
@@ -178,6 +393,34 @@ export async function executeAutoApplySession({
             });
           }
 
+          // ── Pre-flight audit: verify before advancing ─────────────────────
+          const audit = await runPreFlightAudit(
+            sh, page, filledFieldsThisPage, profileContext, description,
+          );
+
+          if (audit.retriedFields.length > 0) {
+            fieldsFilled += audit.retriedFields.length;
+            await triggerAutoApplyEvent(sessionId, 'field_filled', {
+              label: `Pre-flight fixed: ${audit.retriedFields.join(', ')}`,
+              source: 'ai',
+            });
+          }
+
+          // If pre-flight found unresolvable fields, escalate to human review
+          if (audit.unresolvedFields.length > 0) {
+            const msg = `Could not fill: ${audit.unresolvedFields.join(', ')}. Please complete manually.`;
+            await prisma.autoApplySession.update({
+              where: { id: sessionId },
+              data:  { status: 'awaiting_review', errorMessage: msg },
+            });
+            await triggerAutoApplyEvent(sessionId, 'awaiting_review', {
+              pagesVisited:      pageNum + 1,
+              fieldsFilledCount: fieldsFilled,
+            });
+            return { status: 'awaiting_review' };
+          }
+
+          // ── Advance to next page ──────────────────────────────────────────
           await sh.act(
             'Click the Next, Continue, or Save & Continue button to advance to the next step.',
             { timeout: tuning.actTimeout }
