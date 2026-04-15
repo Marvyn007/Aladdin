@@ -15,14 +15,12 @@ const REVIEW_PAGE_PATTERNS = /review|submit application|confirm your|verify your
 
 async function connectStagehand(bbSessionId: string): Promise<Stagehand> {
   const sh = new Stagehand({
-    env: 'BROWSERBASE',
+    env:                  'BROWSERBASE',
     apiKey:               process.env.BROWSERBASE_API_KEY!,
     projectId:            process.env.BROWSERBASE_PROJECT_ID!,
     browserbaseSessionID: bbSessionId,
-    modelName:            'gpt-4o-mini',
-    modelClientOptions:   { apiKey: process.env.LLM_API_KEY! },
+    model:                { modelName: 'gpt-4o-mini', apiKey: process.env.LLM_API_KEY! },
     verbose:              1,
-    headless:             false, // headed required for live view
   });
   await sh.init();
   return sh;
@@ -33,14 +31,10 @@ export const runAutoApplySession = inngest.createFunction(
     id:          'auto-apply-session',
     retries:     2,
     concurrency: { limit: 5 },
+    triggers:    [{ event: 'autoapply/session.start' }],
   },
-  { event: 'autoapply/session.start' },
-  async ({ event, step }) => {
-    const { sessionId, userId, jobId } = event.data as {
-      sessionId: string;
-      userId:    string;
-      jobId:     string;
-    };
+  async ({ event, step }: { event: { data: { sessionId: string; userId: string; jobId: string } }; step: any }) => {
+    const { sessionId, userId, jobId } = event.data;
 
     // ── Step 1: Create Browserbase session, get live view URL ────────────
     const { bbSessionId, liveViewUrl } = await step.run('init-browserbase', async () => {
@@ -79,7 +73,9 @@ export const runAutoApplySession = inngest.createFunction(
 
       const sh = await connectStagehand(bbSessionId);
       try {
-        await sh.page.goto(url, { waitUntil: 'networkidle' });
+        const page = sh.context.activePage();
+        if (!page) throw new Error('No active page in Browserbase session');
+        await page.goto(url, { waitUntil: 'networkidle' });
         await triggerAutoApplyEvent(sessionId, 'navigating', {});
       } finally {
         await sh.close();
@@ -94,8 +90,11 @@ export const runAutoApplySession = inngest.createFunction(
       const pageResult = await step.run(`fill-page-${pageNum}`, async () => {
         const sh = await connectStagehand(bbSessionId);
         try {
-          const currentUrl = sh.page.url();
-          const pageTitle  = await sh.page.title();
+          const page = sh.context.activePage();
+          if (!page) throw new Error('No active page');
+
+          const currentUrl = page.url();
+          const pageTitle  = await page.title();
 
           // Check if we landed on review page before filling anything
           if (REVIEW_PAGE_PATTERNS.test(pageTitle)) {
@@ -103,42 +102,41 @@ export const runAutoApplySession = inngest.createFunction(
           }
 
           // Observe all interactive fields
-          const observations = await sh.page.observe({
-            instruction: 'Find all visible input fields, text areas, dropdowns, and radio groups that need to be filled in this form.',
-          });
+          const observations = await sh.observe(
+            'Find all visible input fields, text areas, dropdowns, and radio groups that need to be filled in this form.'
+          );
 
           let fieldsFilled = 0;
           for (const obs of observations) {
+            const label      = obs.description ?? obs.method ?? '';
             const profileVal = matchFieldToProfile(
-              { label: obs.description, name: obs.selector },
+              { label, name: obs.selector ?? '' },
               profileContext
             );
 
             if (profileVal !== null) {
-              await sh.act({ action: `Fill the "${obs.description}" field with "${profileVal}"` });
+              await sh.act(`Fill the "${label}" field with "${profileVal}"`);
             } else {
-              await sh.act({
-                action: `Fill the "${obs.description}" field with an appropriate value based on this resume context: ${profileContext.resumeSummary}`,
-              });
+              await sh.act(
+                `Fill the "${label}" field with an appropriate value based on this resume context: ${profileContext.resumeSummary}`
+              );
             }
             fieldsFilled++;
 
             await triggerAutoApplyEvent(sessionId, 'field_filled', {
-              label:  obs.description,
+              label,
               source: profileVal !== null ? 'profile' : 'ai',
             });
           }
 
           // Click the advance button
-          await sh.act({
-            action: 'Click the Next, Continue, or Save & Continue button to advance to the next step.',
-          });
+          await sh.act('Click the Next, Continue, or Save & Continue button to advance to the next step.');
 
           // Wait for the new page to fully load — prevents false stalls on SPA ATSes
-          await sh.page.waitForLoadState('networkidle');
+          await page.waitForLoadState('networkidle');
 
-          const newUrl      = sh.page.url();
-          const newTitle    = await sh.page.title();
+          const newUrl      = page.url();
+          const newTitle    = await page.title();
           const isReviewPage = REVIEW_PAGE_PATTERNS.test(newTitle);
           const advanced     = newUrl !== currentUrl;
 
@@ -172,7 +170,9 @@ export const runAutoApplySession = inngest.createFunction(
         const recoveryResult = await step.run(`stall-recovery-${pageNum}`, async () => {
           const sh = await connectStagehand(bbSessionId);
           try {
-            return await attemptStallRecovery(sh.page, stallCount);
+            const page = sh.context.activePage();
+            if (!page) throw new Error('No active page');
+            return await attemptStallRecovery(page, stallCount);
           } finally {
             await sh.close();
           }

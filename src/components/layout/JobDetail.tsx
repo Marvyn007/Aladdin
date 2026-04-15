@@ -14,6 +14,8 @@ import Link from 'next/link';
 import DOMPurify from 'isomorphic-dompurify';
 import he from 'he';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
+import { ApplyPilotButton } from '@/components/shared/ApplyPilotButton';
+import { ApplyPilotModal } from '@/components/shared/ApplyPilotModal';
 
 // Get dynamic color based on company name
 export function getCompanyColor(companyName: string | null): string {
@@ -559,6 +561,7 @@ export function JobDetail({
     const [isGeneratingResume, setIsGeneratingResume] = useState(false);
     const [hasTailoredResume, setHasTailoredResume] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [applyPilotSessionId, setApplyPilotSessionId] = useState<string | null>(null);
     const { toggleJobStatus } = useStoreActions();
     const { status: resumeStatus } = useResumeGeneration();
 
@@ -831,6 +834,13 @@ export function JobDetail({
                             View Original
                         </a>
 
+                        {isAuthenticated && job.applyUrl && (
+                            <ApplyPilotButton
+                                jobId={job.id}
+                                onSessionStart={(sid) => setApplyPilotSessionId(sid)}
+                            />
+                        )}
+
                         {isAuthenticated && (
                             <button
                                 onClick={() => toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved')}
@@ -1052,6 +1062,16 @@ export function JobDetail({
                     job={job}
                     onClose={() => setIsEditModalOpen(false)}
                     onSave={handleEditSave}
+                />
+            )}
+
+            {/* Apply Pilot Modal */}
+            {applyPilotSessionId && job && (
+                <ApplyPilotModal
+                    sessionId={applyPilotSessionId}
+                    jobTitle={job.title}
+                    company={job.company ?? ''}
+                    onClose={() => setApplyPilotSessionId(null)}
                 />
             )}
         </div >

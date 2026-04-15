@@ -1,9 +1,8 @@
 // src/lib/auto-apply/stall-recovery.ts
-// Duck-typed interface — works with both Playwright Page and Stagehand's page wrapper
+// Duck-typed interface — works with Stagehand v3 Page and Playwright Page
 interface PageLike {
   waitForTimeout(ms: number): Promise<void>;
-  $$(selector: string): Promise<unknown[]>;
-  evaluate<T>(fn: () => T): Promise<T>;
+  evaluate<R = unknown>(fn: string | (() => R)): Promise<R>;
 }
 
 export interface StallRecoveryResult {
@@ -15,7 +14,7 @@ export interface StallRecoveryResult {
  * Attempt to recover when the agent is stuck on a page.
  * Runs up to 3 recovery strategies before giving up.
  *
- * @param page    - Playwright/Stagehand page
+ * @param page    - Stagehand/Playwright page
  * @param attempt - Current attempt number (1-based)
  */
 export async function attemptStallRecovery(
@@ -28,21 +27,25 @@ export async function attemptStallRecovery(
 
   // Strategy 1: Wait for JS render — fields may still be hydrating
   await page.waitForTimeout(1500);
-  const fields = await page.$$('input:not([type=hidden]), select, textarea');
-  if (fields.length > 0) {
+  const fieldCount = await page.evaluate<number>(
+    () => document.querySelectorAll('input:not([type=hidden]), select, textarea').length
+  );
+  if (fieldCount > 0) {
     return { recovered: true, reason: 'Fields appeared after waiting for JS render' };
   }
 
   // Strategy 2: Scroll down — lazy-loaded fields may be off-screen
   await page.evaluate(() => window.scrollBy(0, window.innerHeight));
   await page.waitForTimeout(800);
-  const fieldsAfterScroll = await page.$$('input:not([type=hidden]), select, textarea');
-  if (fieldsAfterScroll.length > 0) {
+  const fieldCountAfterScroll = await page.evaluate<number>(
+    () => document.querySelectorAll('input:not([type=hidden]), select, textarea').length
+  );
+  if (fieldCountAfterScroll > 0) {
     return { recovered: true, reason: 'Fields appeared after scrolling' };
   }
 
   // Strategy 3: Detect validation error banners — re-fill required fields
-  const errorText = await page.evaluate(() => {
+  const errorText = await page.evaluate<string>(() => {
     const errorEls = Array.from(
       document.querySelectorAll('[class*="error"], [class*="required"], [aria-invalid="true"]')
     );
