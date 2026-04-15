@@ -56,7 +56,9 @@ export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: Apply
   // Subscribe to Pusher for real-time agent events
   useEffect(() => {
     const pusher = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+      cluster:         process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+      authEndpoint:    '/api/pusher/auth',
+      authTransport:   'ajax',
     });
 
     const channel = pusher.subscribe(`private-apply-${sessionId}`);
