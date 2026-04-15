@@ -118,6 +118,14 @@ export function matchFieldToProfile(
   if (matches(text, ['drug test', 'drug screen'])) return 'Yes';
 
   // 6. Location
+  // Composite full-location for single-field inputs ("Location", "Where are you based?")
+  if (matches(text, ['location', 'where are you', 'where do you live', 'where are you based']) && !matches(text, ['relocat'])) {
+    const city    = getAA('aa_city', profile);
+    const state   = getAA('aa_state', profile);
+    const country = getAA('aa_country', profile);
+    const parts   = [city, state, country].filter(Boolean);
+    if (parts.length) return parts.join(', ');
+  }
   if (matches(text, ['street', 'address line 1']))                            return getAA('aa_address', profile);
   if (matches(text, ['city', 'town']))                                         return getAA('aa_city', profile);
   if (matches(text, ['state', 'province', 'region']))                          return getAA('aa_state', profile);
@@ -144,6 +152,34 @@ export function matchFieldToProfile(
   if (matches(text, ['veteran']))                                                return getAA('aa_veteran_status', profile);
   if (matches(text, ['disability']))                                             return getAA('aa_disability', profile);
   if (matches(text, ['clearance']))                                              return getAA('aa_clearance', profile);
+
+  // 9. Application-specific questions (common on Greenhouse / Lever / Workday)
+  if (matches(text, ['confirmed plans', 'plans to be in', 'willing to be in', 'able to work in'])) {
+    return getAA('aa_willing_relocate', profile) ?? 'Yes';
+  }
+  if (matches(text, ['enrolled in a university', 'currently enrolled', 'return to the program', 'returning to', 'full-time student'])) {
+    return 'Yes';
+  }
+  if (matches(text, ['how did you hear', 'hear about this', 'referred by', 'where did you find'])) {
+    return getAA('aa_referral_source', profile) ?? 'Job Board';
+  }
+  if (matches(text, ['18 years', 'legal age', 'age of majority', 'at least 18'])) {
+    return 'Yes';
+  }
+  if (matches(text, ['acknowledge', 'privacy policy', 'terms and conditions', 'consent'])) {
+    return 'Yes';
+  }
+
+  // 10. Employer-friendly defaults — additional common ATS questions
+  if (matches(text, ['us person', 'us national'])) return 'Yes';
+  if (matches(text, ['willing to work overtime', 'overtime'])) return 'Yes';
+  if (matches(text, ['able to commute', 'commute to', 'willing to commute'])) return 'Yes';
+  if (matches(text, ['non-compete', 'non-solicitation', 'nda', 'confidentiality agreement'])) return 'Yes';
+  if (matches(text, ['felony', 'criminal conviction', 'been convicted', 'criminal record'])) return 'No';
+  if (matches(text, ['open to contract', 'contract work', 'contractor role'])) return 'Yes';
+  if (matches(text, ['currently employed', 'are you currently employed', 'current employment status'])) {
+    return getAA('aa_current_company', profile) ? 'Yes' : null;
+  }
 
   return null;
 }
