@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Plane, Loader2 } from 'lucide-react';
 
 interface ApplyPilotButtonProps {
   jobId: string;
@@ -90,10 +91,14 @@ export function ApplyPilotButton({ jobId, onSessionStart }: ApplyPilotButtonProp
       <button
         onClick={handleClick}
         disabled={isDisabled}
-        className="btn btn-primary"
-        style={{ whiteSpace: 'nowrap' }}
+        className="btn btn-secondary"
+        style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}
       >
-        ✦ Apply Pilot{loading ? '…' : ''}
+        {loading
+          ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+          : <Plane size={14} />
+        }
+        Apply Pilot
       </button>
       {badge && (
         <span

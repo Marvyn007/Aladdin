@@ -16,6 +16,7 @@ import he from 'he';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { ApplyPilotButton } from '@/components/shared/ApplyPilotButton';
 import { ApplyPilotModal } from '@/components/shared/ApplyPilotModal';
+import { Plane } from 'lucide-react';
 
 // Get dynamic color based on company name
 export function getCompanyColor(companyName: string | null): string {
@@ -834,7 +835,7 @@ export function JobDetail({
                             View Original
                         </a>
 
-                        {isAuthenticated && job.applyUrl && (
+                        {isAuthenticated && (
                             <ApplyPilotButton
                                 jobId={job.id}
                                 onSessionStart={(sid) => setApplyPilotSessionId(sid)}
