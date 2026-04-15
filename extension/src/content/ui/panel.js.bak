@@ -1,0 +1,984 @@
+import { fireConfetti } from '../../utils/confetti.js';
+
+const LOGO_URL = chrome.runtime.getURL('assets/aladdin-logo.png');
+const BOOKMARK_WIDTH = 84;
+const BOOKMARK_HEIGHT = 168;
+const PANEL_WIDTH = 372;
+const GUTTER = 16;
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+function cloneDraft(draft) {
+  return {
+    answers: { ...(draft?.answers ?? {}) },
+    customQA: Array.isArray(draft?.customQA)
+      ? draft.customQA.map((entry) => ({
+        question: typeof entry?.question === 'string' ? entry.question : '',
+        answer: typeof entry?.answer === 'string' ? entry.answer : ''
+      }))
+      : []
+  };
+}
+
+export class AutoApplyPanel {
+  constructor(shadowRoot) {
+    this.shadowRoot = shadowRoot;
+    this.host = shadowRoot.host;
+    this.state = 'idle';
+    this.logEntries = [];
+    this.answers = [];
+    this.captchaAlert = false;
+    this.fileAlert = null;
+    this.askingQuestion = null;
+    this.onStart = null;
+    this.onPause = null;
+    this.onResume = null;
+    this.onSaveSettings = null;
+    this.onSignIn = null;
+    this.isOpen = false;
+    this.isVisible = true;
+    this.activeTab = 'overview';
+    this.settingsSaving = false;
+    this.settingsMessage = null;
+    this.pageMeta = { jobTitle: '', company: '', platform: '' };
+    this.progress = { totalQuestions: 0, answeredQuestions: 0, profileAnswered: 0, aiAnswered: 0, manualAnswered: 0, pendingQuestions: 0 };
+    this.profileData = {
+      user: null,
+      sections: [],
+      answers: {},
+      customQA: [],
+      documents: {
+        resume: { ready: false, filename: '', description: 'Add a default resume to upload it automatically.' },
+        coverLetter: { ready: false, filename: '', description: 'Add a saved cover letter to upload it automatically.' }
+      }
+    };
+    this.settingsDraft = cloneDraft(this.profileData);
+    this.position = {
+      x: window.innerWidth - BOOKMARK_WIDTH,
+      y: clamp(108, GUTTER, window.innerHeight - BOOKMARK_HEIGHT - GUTTER)
+    };
+    this._dragState = null;
+    this._mount();
+  }
+
+  _mount() {
+    const style = document.createElement('style');
+    style.textContent = `
+      *,*::before,*::after{box-sizing:border-box}
+      .aa-bookmark,.aa-panel{position:fixed;z-index:2147483647;pointer-events:auto;font-family:'Aptos','Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+      .aa-bookmark{width:${BOOKMARK_WIDTH}px;height:${BOOKMARK_HEIGHT}px;padding:0;border:0;background:transparent;cursor:grab;transition:transform .18s ease}
+      .aa-bookmark:active,.aa-header:active{cursor:grabbing}
+      .aa-bookmark.state-running,.aa-bookmark.state-paused{animation:aaPulse 1.8s ease-in-out infinite}
+      .aa-bookmark.is-open,.aa-bookmark.state-done{transform:scale(1.04)}
+      @keyframes aaPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+      .aa-bookmark-shell{position:relative;width:100%;height:100%;padding:14px 10px 16px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;clip-path:polygon(14% 0,100% 0,100% 87%,50% 100%,0 87%,0 0);background:#fff;border:1px solid #c7dbef;box-shadow:0 18px 34px rgba(16,55,96,.12);overflow:hidden}
+      .aa-bookmark-shell::before{content:'';position:absolute;left:0;top:18px;bottom:52px;width:5px;background:#0d7fe2;border-radius:0 4px 4px 0}
+      .aa-bookmark-kicker,.aa-bookmark-foot{position:relative;z-index:1;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#587491}
+      .aa-bookmark-foot{color:#0f4d88}
+      .aa-bookmark-mark{position:relative;z-index:1;width:54px;height:54px;display:grid;place-items:center;border:1px solid #c9dbef;border-radius:16px;background:#fff;box-shadow:0 8px 18px rgba(22,67,112,.08)}
+      .aa-bookmark-mark img{width:34px;height:34px;object-fit:contain}
+      .aa-panel{width:${PANEL_WIDTH}px;max-height:min(670px,calc(100vh - ${GUTTER * 2}px));display:flex;flex-direction:column;background:#fff;border:1px solid #c7dbef;border-radius:22px;box-shadow:0 30px 60px rgba(11,39,72,.18),0 10px 24px rgba(11,39,72,.08);overflow:hidden;opacity:0;transform:translateY(10px) scale(.98);pointer-events:none;transition:opacity .2s ease,transform .2s ease;color:#173455}
+      .aa-panel.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+      .aa-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:20px 22px 16px;border-bottom:1px solid #d7e5f4;background:#fff;cursor:grab}
+      .aa-brand{display:flex;gap:12px;min-width:0}
+      .aa-brand-mark{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:14px;border:1px solid #cadef2;background:#fff}
+      .aa-brand-mark img{width:28px;height:28px}
+      .aa-eyebrow,.aa-kicker{margin:0 0 4px;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#6c88a4}
+      .aa-title{margin:0;font-size:18px;line-height:1.12;font-weight:800;color:#173455}
+      .aa-subtitle{margin:6px 0 0;font-size:12px;line-height:1.45;color:#58728f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+      .aa-status{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #bdd4ea;border-radius:999px;background:#fff;font-size:12px;font-weight:700;color:#31506f;white-space:nowrap}
+      .aa-status::before{content:'';width:8px;height:8px;border-radius:50%;background:#9bb5cf}
+      .aa-status[data-state="running"]::before{background:#0d7fe2}
+      .aa-status[data-state="paused"]::before{background:#d18a1a}
+      .aa-status[data-state="done"]::before{background:#17905b}
+      .aa-tabs{display:flex;gap:8px;padding:12px 18px 0;background:#fff}
+      .aa-tab{appearance:none;border:1px solid #d3e2f2;border-radius:12px;padding:10px 12px;background:#f7fbff;color:#4b6786;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease}
+      .aa-tab:hover{background:#edf6ff;border-color:#a9caeb;color:#0d5fa7}
+      .aa-tab.is-active{background:#0d7fe2;border-color:#0d7fe2;color:#fff}
+      .aa-body{display:flex;flex-direction:column;gap:14px;padding:16px 18px 18px;overflow-y:auto}
+      .aa-body::-webkit-scrollbar{width:7px}
+      .aa-body::-webkit-scrollbar-thumb{background:#c4d7ea;border-radius:999px}
+      .aa-section,.aa-success{padding:16px;border:1px solid #d8e6f4;border-radius:16px;background:#fff}
+      .aa-hero{background:linear-gradient(180deg,#fafdff 0%,#f4f9ff 100%)}
+      .aa-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+      .aa-h3{margin:0;font-size:15px;line-height:1.2;font-weight:800;color:#173455}
+      .aa-copy,.aa-empty,.aa-doc-copy,.aa-settings-status,.aa-note{margin:8px 0 0;font-size:13px;line-height:1.55;color:#57718d}
+      .aa-note{padding-top:12px;border-top:1px solid #dce9f5;font-size:12px}
+      .aa-progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+      .aa-ratio{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+      .aa-ratio strong{font-size:36px;line-height:1;font-weight:800;color:#0f4d88}
+      .aa-ratio span{font-size:13px;font-weight:700;color:#65809d}
+      .aa-bar{margin-top:14px;height:8px;border-radius:999px;background:#e6f0fa;overflow:hidden}
+      .aa-bar-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,#0fa1ff 0%,#0d7fe2 60%,#0a5da9 100%);transition:width .18s ease}
+      .aa-stats{margin-top:14px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+      .aa-stat,.aa-doc,.aa-summary,.aa-custom{padding:12px 14px;border:1px solid #dbe8f5;border-radius:14px;background:#fff}
+      .aa-stat strong{display:block;font-size:22px;line-height:1;font-weight:800;color:#173455}
+      .aa-stat span{display:block;margin-top:6px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#6984a0}
+      .aa-grid,.aa-list,.aa-activity,.aa-fields,.aa-custom-list{display:grid;gap:10px;list-style:none;margin:0;padding:0}
+      .aa-row,.aa-doc-top,.aa-summary-top,.aa-custom-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+      .aa-row{font-size:12px;line-height:1.45}
+      .aa-row strong,.aa-doc-label,.aa-summary-label,.aa-field-label{color:#173455;font-size:12px;font-weight:800}
+      .aa-row span,.aa-doc-file,.aa-summary-value,.aa-field-note{color:#57718d;font-size:12px;line-height:1.45}
+      .aa-pill{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #c6dcf1;background:#eef7ff;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0d5fa7}
+      .aa-pill.success{border-color:#b8e0ca;background:#ecfbf3;color:#166d48}
+      .aa-pill.warning{border-color:#ecd6b1;background:#fff6e8;color:#9c6413}
+      .aa-alert{padding:14px 16px;border-radius:14px;border:1px solid #d9e7f4;background:#f8fbff;font-size:12px;line-height:1.55;color:#4f6a87}
+      .aa-alert.warn{border-color:#edd9ac;background:#fff7e8;color:#926116}
+      .aa-alert.file{border-color:#c8def0;background:#eef7ff;color:#0d5fa7}
+      .aa-input,.aa-control,.aa-file{width:100%;border-radius:12px;border:1px solid #c4d9ee;background:#fff;color:#173455;font:inherit}
+      .aa-input,.aa-control{padding:12px 13px;font-size:13px}
+      .aa-control{min-height:44px}
+      textarea.aa-control{min-height:96px;resize:vertical}
+      .aa-input:focus,.aa-control:focus{outline:none;border-color:#0d7fe2;box-shadow:0 0 0 3px rgba(13,127,226,.14)}
+      .aa-file{display:grid;place-items:center;padding:18px 14px;border-style:dashed;font-size:12px;line-height:1.55;color:#597391;cursor:pointer;text-align:center}
+      .aa-btn{appearance:none;border:1px solid #c4d9ee;border-radius:12px;padding:12px 14px;background:#fff;color:#173455;font-size:13px;font-weight:800;cursor:pointer;transition:background .16s ease,border-color .16s ease,color .16s ease}
+      .aa-btn:hover{background:#edf6ff;border-color:#a9caeb;color:#0d5fa7}
+      .aa-btn.primary{background:#0d7fe2;border-color:#0d7fe2;color:#fff}
+      .aa-btn.primary:hover{background:#0a70c8;border-color:#0a70c8;color:#fff}
+      .aa-btn:disabled{opacity:.6;cursor:default}
+      .aa-link{appearance:none;padding:0;border:0;background:transparent;color:#0d5fa7;font-size:12px;font-weight:800;cursor:pointer}
+      .aa-link:hover{color:#0a70c8}
+      .aa-actions,.aa-footer{display:flex;gap:10px;padding:0 18px 18px;background:#fff}
+      .aa-footer{align-items:center;justify-content:space-between}
+      .aa-footer-actions{display:flex;gap:10px}
+      .aa-settings-status{flex:1;min-width:0}
+      .aa-settings-status[data-tone="success"]{color:#166d48}
+      .aa-settings-status[data-tone="error"]{color:#a33b2f}
+      .aa-settings-status[data-tone="info"]{color:#0d5fa7}
+      .aa-success{text-align:center;background:#f6fffa;border-color:#cde7d9}
+      .aa-check{width:74px;height:74px;margin:0 auto 14px}
+      .aa-check svg{width:100%;height:100%}
+      .aa-check circle,.aa-check path{fill:none;stroke:#17905b}
+      .aa-check circle{stroke-width:2;stroke-dasharray:166;stroke-dashoffset:166;animation:aaStroke .6s cubic-bezier(.65,0,.45,1) forwards}
+      .aa-check path{stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:50;stroke-dashoffset:50;animation:aaStroke .35s cubic-bezier(.65,0,.45,1) .52s forwards}
+      @keyframes aaStroke{to{stroke-dashoffset:0}}
+      .aa-activity li{display:grid;grid-template-columns:58px 1fr;gap:12px;align-items:start;font-size:12px;line-height:1.45}
+      .aa-activity time{font-weight:800;color:#6a86a2}
+      .aa-activity span{color:#56718e}
+      @media (max-width:640px){.aa-panel{width:min(${PANEL_WIDTH}px,calc(100vw - ${GUTTER * 2}px))}}
+    `;
+    this.shadowRoot.appendChild(style);
+    this.bookmarkEl = document.createElement('button');
+    this.bookmarkEl.type = 'button';
+    this.panelEl = document.createElement('section');
+    this.shadowRoot.appendChild(this.bookmarkEl);
+    this.shadowRoot.appendChild(this.panelEl);
+    this._bindGlobals();
+    this._renderBookmark();
+    this._renderPanel();
+    this._syncVisibility();
+    this._place();
+  }
+
+  _bindGlobals() {
+    this._onPointerMove = (event) => {
+      if (!this._dragState || event.pointerId !== this._dragState.pointerId) return;
+      const dx = event.clientX - this._dragState.startX;
+      const dy = event.clientY - this._dragState.startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) this._dragState.moved = true;
+      this.position = {
+        x: clamp(this._dragState.originX + dx, GUTTER, window.innerWidth - BOOKMARK_WIDTH),
+        y: clamp(this._dragState.originY + dy, GUTTER, window.innerHeight - BOOKMARK_HEIGHT - GUTTER)
+      };
+      this._place();
+    };
+    this._onPointerUp = (event) => {
+      if (!this._dragState || event.pointerId !== this._dragState.pointerId) return;
+      const dragState = this._dragState;
+      this._dragState = null;
+      if (!dragState.moved && dragState.source === 'bookmark') {
+        if (this.isOpen) {
+          this.collapse();
+        } else {
+          this.open();
+        }
+      }
+    };
+    this._onOutsidePointerDown = (event) => {
+      if (!this.isOpen || !this.isVisible) return;
+      if (event.composedPath().includes(this.host)) return;
+      this.collapse();
+    };
+    this._onResize = () => {
+      this.position = {
+        x: clamp(this.position.x, GUTTER, window.innerWidth - BOOKMARK_WIDTH),
+        y: clamp(this.position.y, GUTTER, window.innerHeight - BOOKMARK_HEIGHT - GUTTER)
+      };
+      this._place();
+    };
+    window.addEventListener('pointermove', this._onPointerMove);
+    window.addEventListener('pointerup', this._onPointerUp);
+    window.addEventListener('pointercancel', this._onPointerUp);
+    window.addEventListener('resize', this._onResize);
+    document.addEventListener('pointerdown', this._onOutsidePointerDown, true);
+  }
+
+  _startDrag(event, source) {
+    if (event.button !== 0 || !this.isVisible) return;
+    this._dragState = {
+      pointerId: event.pointerId,
+      source,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: this.position.x,
+      originY: this.position.y,
+      moved: false
+    };
+    event.preventDefault();
+  }
+
+  _side() {
+    return this.position.x > (window.innerWidth - BOOKMARK_WIDTH) / 2 ? 'left' : 'right';
+  }
+
+  _total() {
+    return Math.max(this.progress.totalQuestions || 0, 0);
+  }
+
+  _answered() {
+    return clamp(this.progress.answeredQuestions || 0, 0, this._total());
+  }
+
+  _percent() {
+    const total = this._total();
+    return total ? Math.round((this._answered() / total) * 100) : 0;
+  }
+
+  _filledSettingsCount() {
+    const answers = Object.values(this.profileData.answers ?? {}).filter((value) => typeof value === 'string' && value.trim()).length;
+    const custom = (this.profileData.customQA ?? []).filter((entry) => entry?.answer?.trim()).length;
+    return answers + custom;
+  }
+
+  _place() {
+    const bx = clamp(this.position.x, GUTTER, window.innerWidth - BOOKMARK_WIDTH);
+    const by = clamp(this.position.y, GUTTER, window.innerHeight - BOOKMARK_HEIGHT - GUTTER);
+    const side = this._side();
+    const preferredX = side === 'left' ? bx - PANEL_WIDTH + 26 : bx + BOOKMARK_WIDTH - 26;
+    const px = clamp(preferredX, GUTTER, window.innerWidth - PANEL_WIDTH - GUTTER);
+    const py = clamp(by - 14, GUTTER, Math.max(GUTTER, window.innerHeight - Math.min(670, window.innerHeight - (GUTTER * 2)) - GUTTER));
+    this.position = { x: bx, y: by };
+    this.bookmarkEl.style.left = `${bx}px`;
+    this.bookmarkEl.style.top = `${by}px`;
+    this.panelEl.style.left = `${px}px`;
+    this.panelEl.style.top = `${py}px`;
+    this.panelEl.style.transformOrigin = side === 'left' ? 'calc(100% - 22px) 34px' : '22px 34px';
+  }
+
+  _syncVisibility() {
+    this.bookmarkEl.hidden = !this.isVisible;
+    this.panelEl.hidden = !this.isVisible;
+    if (!this.isVisible) this.panelEl.classList.remove('open');
+  }
+
+  _bookmarkTop() {
+    return { idle: 'ALADDIN', running: 'ACTIVE', paused: 'REVIEW', done: 'FILLED' }[this.state] ?? 'ALADDIN';
+  }
+
+  _bookmarkBottom() {
+    const total = this._total();
+    return total ? `${this._answered()}/${total}` : 'READY';
+  }
+
+  _stateLabel() {
+    if (this.askingQuestion) return 'Needs input';
+    return { idle: 'Ready on page', running: 'Auto Fill active', paused: 'Waiting on review', done: 'Questions filled' }[this.state] ?? 'Ready on page';
+  }
+
+  _subtitle() {
+    return [
+      this.pageMeta.jobTitle || 'Current application',
+      this.pageMeta.company || 'Unknown company',
+      this.pageMeta.platform ? `${this.pageMeta.platform} page` : 'application page'
+    ].join(' | ');
+  }
+
+  _overviewRows() {
+    const total = this._total();
+    const remaining = Math.max(total - this._answered(), 0);
+    const userName = this.profileData.user
+      ? [this.profileData.user.firstName, this.profileData.user.lastName].filter(Boolean).join(' ').trim()
+      : 'Not connected';
+    return [
+      ['Profile sync', userName || 'Connected'],
+      ['Questions remaining', total ? `${remaining} of ${total}` : 'Waiting for a page scan'],
+      ['Saved answers', `${this._filledSettingsCount()} profile fields ready`],
+      ['Bookmark behavior', 'Click outside to collapse. Hide it only from the extension popup.']
+    ].map(([label, value]) => `<div class="aa-row"><strong>${this._esc(label)}</strong><span>${this._esc(value)}</span></div>`).join('');
+  }
+
+  _documentRows() {
+    const items = [
+      ['Default resume', this.profileData.documents?.resume],
+      ['Cover letter', this.profileData.documents?.coverLetter]
+    ];
+    return `
+      <ul class="aa-list">
+        ${items.map(([label, doc]) => `
+          <li class="aa-doc">
+            <div class="aa-doc-top">
+              <div>
+                <div class="aa-doc-label">${this._esc(label)}</div>
+                <div class="aa-doc-file">${this._esc(doc?.filename || doc?.description || '')}</div>
+              </div>
+              <span class="aa-pill${doc?.ready ? ' success' : ' warning'}">${doc?.ready ? 'Ready' : 'Needed'}</span>
+            </div>
+            <p class="aa-doc-copy">${this._esc(doc?.description || '')}</p>
+          </li>
+        `).join('')}
+      </ul>
+    `;
+  }
+
+  _summaryCards() {
+    const cards = [];
+    if (this.profileData.user?.email) cards.push(['Connected account', this.profileData.user.email]);
+    cards.push(['Saved fields', `${this._filledSettingsCount()} answers ready`]);
+    cards.push(['Custom answers', `${(this.profileData.customQA ?? []).filter((entry) => entry?.answer?.trim()).length} remembered`]);
+    return `
+      <ul class="aa-list">
+        ${cards.map(([label, value]) => `
+          <li class="aa-summary">
+            <div class="aa-summary-label">${this._esc(label)}</div>
+            <div class="aa-summary-value">${this._esc(value)}</div>
+          </li>
+        `).join('')}
+      </ul>
+    `;
+  }
+
+  _alerts() {
+    return [
+      this.fileAlert ? `<div class="aa-alert file">${this._esc(this.fileAlert)}</div>` : '',
+      this.captchaAlert ? '<div class="aa-alert warn">This page is asking for a CAPTCHA or another manual checkpoint before Aladdin can continue.</div>' : ''
+    ].join('');
+  }
+
+  _activity() {
+    if (!this.logEntries.length) {
+      return '<p class="aa-empty">The activity feed updates here after you start Auto Fill Application on this page.</p>';
+    }
+    return `
+      <ul class="aa-activity">
+        ${this.logEntries.slice(-6).reverse().map((entry) => {
+          const match = entry.match(/^\[(.*?)\]\s*(.*)$/);
+          return `<li><time>${this._esc(match?.[1] ?? '--:--:--')}</time><span>${this._esc(match?.[2] ?? entry)}</span></li>`;
+        }).join('')}
+      </ul>
+    `;
+  }
+
+  _prompt() {
+    if (!this.askingQuestion) return '';
+    if (this.askingQuestion.type === 'file') {
+      return `
+        <section class="aa-section">
+          <p class="aa-kicker">Manual detail</p>
+          <h3 class="aa-h3">Upload the document this page still needs.</h3>
+          <p class="aa-copy">${this._esc(this.askingQuestion.label)}</p>
+          <label class="aa-file" for="aa-prompt-file-input">
+            Choose a file to keep the application moving.
+            <input id="aa-prompt-file-input" type="file" style="display:none">
+          </label>
+          <div style="margin-top:14px"><button class="aa-btn" id="aa-prompt-skip" type="button">Skip for now</button></div>
+        </section>
+      `;
+    }
+    return `
+      <section class="aa-section">
+        <p class="aa-kicker">Manual detail</p>
+        <h3 class="aa-h3">Answer the field this page still needs.</h3>
+        <p class="aa-copy">${this._esc(this.askingQuestion.label)}</p>
+        <input class="aa-input" id="aa-prompt-answer" type="text" placeholder="Add your answer and continue">
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <button class="aa-btn primary" id="aa-prompt-save" type="button">Save and continue</button>
+          <button class="aa-btn" id="aa-prompt-skip" type="button">Skip for now</button>
+        </div>
+      </section>
+    `;
+  }
+
+  _success() {
+    if (this.state !== 'done' || !this._total() || this._answered() !== this._total()) return '';
+    return `
+      <section class="aa-success">
+        <div class="aa-check" aria-hidden="true">
+          <svg viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="25"></circle>
+            <path d="M14 27.4l7.1 7.1 16.9-16.9"></path>
+          </svg>
+        </div>
+        <h3 class="aa-h3">Aladdin covered every detected question.</h3>
+        <p class="aa-copy">Review the page one last time, then submit the application when you are ready.</p>
+      </section>
+    `;
+  }
+
+  _overviewHtml() {
+    const total = this._total();
+    const answered = this._answered();
+    const heroTitle = this.askingQuestion
+      ? 'One more detail is needed to keep the application moving.'
+      : 'Auto Fill Application with your saved Aladdin profile.';
+    const heroCopy = this.askingQuestion
+      ? 'Save the missing detail here and Aladdin will continue from the same spot on the page.'
+      : this.state === 'running'
+        ? 'This bookmark stays attached to the page edge while Aladdin fills fields, tracks counts, and uploads your saved resume or cover letter when those document inputs appear.'
+        : this.state === 'paused'
+          ? 'Nothing on the page closes this panel. Click outside to collapse it, or reopen it from the bookmark whenever you are ready.'
+          : this.state === 'done'
+            ? 'Review the application one more time before you submit. The page bookmark stays ready if you want to reopen details or settings.'
+            : 'Use the overview to watch live progress, then open Settings to review and edit the saved information Aladdin uses across applications.';
+
+    return `
+      <section class="aa-section aa-hero">
+        <p class="aa-kicker">Page bookmark</p>
+        <h3 class="aa-h3">${this._esc(heroTitle)}</h3>
+        <p class="aa-copy">${this._esc(heroCopy)}</p>
+        <div class="aa-note">Click outside this panel to collapse it back into the page bookmark. The extension popup is the only place that fully hides it.</div>
+      </section>
+      <section class="aa-section">
+        <div class="aa-progress-head">
+          <div>
+            <p class="aa-kicker">Fill progress</p>
+            <h3 class="aa-h3">Questions answered</h3>
+            <p class="aa-copy">${this._esc(total ? `${answered} of ${total} detected questions are answered so far.` : 'Open a supported application page and start Auto Fill Application to populate live counts here.')}</p>
+          </div>
+          <div class="aa-ratio"><strong>${answered}</strong><span>/ ${total || 0}</span></div>
+        </div>
+        <div class="aa-bar"><div class="aa-bar-fill" style="width:${this._percent()}%"></div></div>
+        <div class="aa-stats">
+          <div class="aa-stat"><strong>${total || 0}</strong><span>Detected</span></div>
+          <div class="aa-stat"><strong>${answered}</strong><span>Answered</span></div>
+          <div class="aa-stat"><strong>${Math.max(total - answered, 0)}</strong><span>Remaining</span></div>
+        </div>
+      </section>
+      <section class="aa-section">
+        <p class="aa-kicker">Page details</p>
+        <div class="aa-grid">${this._overviewRows()}</div>
+      </section>
+      <section class="aa-section">
+        <div class="aa-head">
+          <div>
+            <p class="aa-kicker">Documents</p>
+            <h3 class="aa-h3">Automatic upload status</h3>
+          </div>
+          <span class="aa-pill">${[this.profileData.documents?.resume?.ready, this.profileData.documents?.coverLetter?.ready].filter(Boolean).length}/2 ready</span>
+        </div>
+        ${this._documentRows()}
+      </section>
+      <section class="aa-section">
+        <div class="aa-head">
+          <div>
+            <p class="aa-kicker">Saved profile</p>
+            <h3 class="aa-h3">Information Aladdin can reuse</h3>
+          </div>
+          <button class="aa-link" id="aa-open-settings" type="button">Open settings</button>
+        </div>
+        ${this._summaryCards()}
+      </section>
+      ${this._alerts()}
+      ${this._prompt()}
+      ${this._success()}
+      <section class="aa-section">
+        <p class="aa-kicker">Recent activity</p>
+        ${this._activity()}
+      </section>
+    `;
+  }
+
+  _fieldHtml(field) {
+    const id = `aa-field-${field.key}`;
+    const value = this.settingsDraft.answers?.[field.key] ?? '';
+    if (field.type === 'select') {
+      return `
+        <label class="aa-fields" for="${id}">
+          <span class="aa-field-label">${this._esc(field.label)}</span>
+          <select class="aa-control" id="${id}" data-aa-field-key="${this._esc(field.key)}">
+            <option value="">Select an option</option>
+            ${(field.options ?? []).map((option) => `<option value="${this._esc(option)}"${option === value ? ' selected' : ''}>${this._esc(option)}</option>`).join('')}
+          </select>
+        </label>
+      `;
+    }
+    if (field.type === 'textarea') {
+      return `
+        <label class="aa-fields" for="${id}">
+          <span class="aa-field-label">${this._esc(field.label)}</span>
+          <textarea class="aa-control" id="${id}" data-aa-field-key="${this._esc(field.key)}" placeholder="${this._esc(field.placeholder || '')}">${this._esc(value)}</textarea>
+        </label>
+      `;
+    }
+    return `
+      <label class="aa-fields" for="${id}">
+        <span class="aa-field-label">${this._esc(field.label)}</span>
+        <input class="aa-control" id="${id}" type="${this._esc(field.type || 'text')}" data-aa-field-key="${this._esc(field.key)}" value="${this._esc(value)}" placeholder="${this._esc(field.placeholder || '')}">
+      </label>
+    `;
+  }
+
+  _settingsSectionsHtml() {
+    if (!this.profileData.sections?.length) {
+      return '<p class="aa-empty">Sign in to Aladdin to load your saved Auto Apply fields here.</p>';
+    }
+    return this.profileData.sections.map((section) => {
+      const filled = (section.fields ?? []).filter((field) => (this.settingsDraft.answers?.[field.key] ?? '').trim()).length;
+      return `
+        <section class="aa-section">
+          <div class="aa-head">
+            <div>
+              <p class="aa-kicker">${this._esc(section.title)}</p>
+              <h3 class="aa-h3">${filled} of ${(section.fields ?? []).length} saved</h3>
+            </div>
+          </div>
+          <div class="aa-fields">
+            ${(section.fields ?? []).map((field) => this._fieldHtml(field)).join('')}
+          </div>
+        </section>
+      `;
+    }).join('');
+  }
+
+  _customAnswersHtml() {
+    if (!this.settingsDraft.customQA?.length) {
+      return '<div class="aa-custom"><div class="aa-field-note">Save one-off answers here when a specific application asks a custom question you want Aladdin to remember.</div></div>';
+    }
+    return `
+      <div class="aa-custom-list">
+        ${this.settingsDraft.customQA.map((entry, index) => `
+          <div class="aa-custom">
+            <div class="aa-custom-top">
+              <span class="aa-field-label">Saved answer ${index + 1}</span>
+              <button class="aa-link" type="button" data-aa-remove-custom="${index}">Remove</button>
+            </div>
+            <label class="aa-fields">
+              <span class="aa-field-label">Question</span>
+              <input class="aa-control" type="text" data-aa-custom-index="${index}" data-aa-custom-prop="question" value="${this._esc(entry.question)}" placeholder="What did the application ask?">
+            </label>
+            <label class="aa-fields">
+              <span class="aa-field-label">Answer</span>
+              <textarea class="aa-control" data-aa-custom-index="${index}" data-aa-custom-prop="answer" placeholder="How should Aladdin answer it next time?">${this._esc(entry.answer)}</textarea>
+            </label>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  _settingsHtml() {
+    return `
+      <section class="aa-section aa-hero">
+        <div class="aa-head">
+          <div>
+            <p class="aa-kicker">Settings</p>
+            <h3 class="aa-h3">Saved application details</h3>
+          </div>
+          <span class="aa-pill success">${this._filledSettingsCount()} saved</span>
+        </div>
+        <p class="aa-copy">These values stay in sync with the Auto Apply tab in Account Settings. Save here to update your Aladdin profile immediately.</p>
+      </section>
+      <section class="aa-section">
+        <div class="aa-head">
+          <div>
+            <p class="aa-kicker">Documents</p>
+            <h3 class="aa-h3">Upload defaults</h3>
+          </div>
+        </div>
+        ${this._documentRows()}
+      </section>
+      ${this._settingsSectionsHtml()}
+      <section class="aa-section">
+        <div class="aa-head">
+          <div>
+            <p class="aa-kicker">Custom answers</p>
+            <h3 class="aa-h3">Remember one-off application questions</h3>
+          </div>
+          <button class="aa-link" id="aa-add-custom" type="button">Add answer</button>
+        </div>
+        ${this._customAnswersHtml()}
+      </section>
+    `;
+  }
+
+  _footerHtml() {
+    if (this.askingQuestion) return '';
+    if (this.activeTab === 'settings') {
+      return `
+        <div class="aa-footer">
+          <div class="aa-settings-status" data-tone="${this.settingsMessage?.tone || 'info'}">${this._esc(this.settingsMessage?.text || 'Save here to keep your bookmark and account settings aligned.')}</div>
+          <div class="aa-footer-actions">
+            <button class="aa-btn" id="aa-settings-reload" type="button"${this.settingsSaving ? ' disabled' : ''}>Reload saved values</button>
+            <button class="aa-btn primary" id="aa-settings-save" type="button"${this.settingsSaving ? ' disabled' : ''}>${this.settingsSaving ? 'Saving...' : 'Save settings'}</button>
+          </div>
+        </div>
+      `;
+    }
+    if (this.state === 'running') return '<div class="aa-actions"><button class="aa-btn" id="aa-pause" type="button">Pause fill</button></div>';
+    if (this.state === 'paused') return '<div class="aa-actions"><button class="aa-btn primary" id="aa-resume" type="button">Continue filling</button></div>';
+    if (this.state === 'done') return '<div class="aa-actions"><button class="aa-btn" id="aa-start" type="button">Run again</button></div>';
+    return '<div class="aa-actions"><button class="aa-btn primary" id="aa-start" type="button">Auto Fill Application</button></div>';
+  }
+
+  _renderBookmark() {
+    this.bookmarkEl.className = `aa-bookmark state-${this.state}${this.isOpen ? ' is-open' : ''}`;
+    this.bookmarkEl.setAttribute('aria-label', `${this._stateLabel()}. ${this._bookmarkBottom()}.`);
+    this.bookmarkEl.innerHTML = `
+      <span class="aa-bookmark-shell">
+        <span class="aa-bookmark-kicker">${this._bookmarkTop()}</span>
+        <span class="aa-bookmark-mark"><img src="${LOGO_URL}" alt="Aladdin"></span>
+        <span class="aa-bookmark-foot">${this._bookmarkBottom()}</span>
+      </span>
+    `;
+    this.bookmarkEl.onpointerdown = (event) => this._startDrag(event, 'bookmark');
+  }
+
+  _renderPanel() {
+    this.panelEl.className = `aa-panel state-${this.state}${this.isOpen ? ' open' : ''}`;
+
+    if (!this.profileData?.user) {
+      this.panelEl.innerHTML = `
+        <div class="aa-header" id="aa-header-drag">
+          <div class="aa-brand">
+            <div class="aa-brand-mark"><img src="${LOGO_URL}" alt="Aladdin"></div>
+            <div style="min-width:0">
+              <p class="aa-eyebrow">Aladdin Auto Apply</p>
+              <h2 class="aa-title">Sign In Required</h2>
+              <p class="aa-subtitle">Connect your Aladdin account</p>
+            </div>
+          </div>
+        </div>
+        <div class="aa-body">
+          <section class="aa-section aa-hero">
+            <p class="aa-kicker">Account</p>
+            <h3 class="aa-h3">You're not signed in</h3>
+            <p class="aa-copy">Please sign in to Aladdin to access your profile, auto-fill job applications, and save custom answers.</p>
+          </section>
+        </div>
+        <div class="aa-actions" style="padding:18px"><button class="aa-btn primary" id="aa-sign-in" type="button" style="width:100%">Sign In to Aladdin</button></div>
+      `;
+      this._bindPanelEvents();
+      this._syncVisibility();
+      this._place();
+      return;
+    }
+
+    if (this.pageMeta.platform === 'generic') {
+      this.panelEl.innerHTML = `
+        <div class="aa-header" id="aa-header-drag">
+          <div class="aa-brand">
+            <div class="aa-brand-mark"><img src="${LOGO_URL}" alt="Aladdin"></div>
+            <div style="min-width:0">
+              <p class="aa-eyebrow">Aladdin Auto Apply</p>
+              <h2 class="aa-title">Site Not Supported</h2>
+              <p class="aa-subtitle">The auto-apply feature is not allowed on the site.</p>
+            </div>
+          </div>
+        </div>
+        <div class="aa-tabs">
+          <button class="aa-tab${this.activeTab === 'overview' ? ' is-active' : ''}" id="aa-tab-overview" type="button">Overview</button>
+          <button class="aa-tab${this.activeTab === 'settings' ? ' is-active' : ''}" id="aa-tab-settings" type="button">Settings</button>
+        </div>
+        <div class="aa-body">
+          ${this.activeTab === 'settings' ? this._settingsHtml() : `
+            <section class="aa-section aa-hero">
+              <p class="aa-kicker">Not Supported</p>
+              <h3 class="aa-h3">Site Not Supported</h3>
+              <p class="aa-copy">The auto-apply feature is not allowed on the site. Please navigate to a supported job application page to use Aladdin.</p>
+            </section>
+          `}
+        </div>
+        ${this.activeTab === 'settings' ? this._footerHtml() : ''}
+      `;
+      this._bindPanelEvents();
+      this._syncVisibility();
+      this._place();
+      return;
+    }
+
+    this.panelEl.innerHTML = `
+      <div class="aa-header" id="aa-header-drag">
+        <div class="aa-brand">
+          <div class="aa-brand-mark"><img src="${LOGO_URL}" alt="Aladdin"></div>
+          <div style="min-width:0">
+            <p class="aa-eyebrow">Aladdin Auto Apply</p>
+            <h2 class="aa-title">${this._esc(this.pageMeta.jobTitle || 'Application bookmark')}</h2>
+            <p class="aa-subtitle">${this._esc(this._subtitle())}</p>
+          </div>
+        </div>
+        <div class="aa-status" data-state="${this.state}">${this._esc(this._stateLabel())}</div>
+      </div>
+      <div class="aa-tabs">
+        <button class="aa-tab${this.activeTab === 'overview' ? ' is-active' : ''}" id="aa-tab-overview" type="button">Overview</button>
+        <button class="aa-tab${this.activeTab === 'settings' ? ' is-active' : ''}" id="aa-tab-settings" type="button">Settings</button>
+      </div>
+      <div class="aa-body">${this.activeTab === 'settings' ? this._settingsHtml() : this._overviewHtml()}</div>
+      ${this._footerHtml()}
+    `;
+    this._bindPanelEvents();
+    this._syncVisibility();
+    this._place();
+  }
+
+  _bindPanelEvents() {
+    this.panelEl.querySelector('#aa-sign-in')?.addEventListener('click', () => this.onSignIn?.());
+    this.panelEl.querySelector('#aa-header-drag')?.addEventListener('pointerdown', (event) => this._startDrag(event, 'panel'));
+    this.panelEl.querySelector('#aa-tab-overview')?.addEventListener('click', () => this._switchTab('overview'));
+    this.panelEl.querySelector('#aa-tab-settings')?.addEventListener('click', () => this._switchTab('settings'));
+    this.panelEl.querySelector('#aa-open-settings')?.addEventListener('click', () => this._switchTab('settings'));
+    this.panelEl.querySelector('#aa-start')?.addEventListener('click', () => this.onStart?.());
+    this.panelEl.querySelector('#aa-pause')?.addEventListener('click', () => this.onPause?.());
+    this.panelEl.querySelector('#aa-resume')?.addEventListener('click', () => this.onResume?.());
+    this.panelEl.querySelector('#aa-settings-save')?.addEventListener('click', () => this.onSaveSettings?.(this.getSettingsDraft()));
+    this.panelEl.querySelector('#aa-settings-reload')?.addEventListener('click', () => {
+      this._syncDraft();
+      this.setSettingsMessage('Reloaded the latest saved values from your Aladdin profile.', 'info');
+      this._renderPanel();
+      this.onOpenSettings?.();
+    });
+    this.panelEl.querySelector('#aa-add-custom')?.addEventListener('click', () => {
+      this.settingsDraft.customQA.push({ question: '', answer: '' });
+      this._renderPanel();
+    });
+    this.panelEl.querySelectorAll('[data-aa-remove-custom]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const index = Number.parseInt(button.getAttribute('data-aa-remove-custom'), 10);
+        if (Number.isFinite(index)) {
+          this.settingsDraft.customQA.splice(index, 1);
+          this._renderPanel();
+        }
+      });
+    });
+    this.panelEl.querySelectorAll('[data-aa-field-key]').forEach((control) => {
+      const sync = () => {
+        this.settingsDraft.answers[control.getAttribute('data-aa-field-key')] = control.value;
+      };
+      control.addEventListener('input', sync);
+      control.addEventListener('change', sync);
+    });
+    this.panelEl.querySelectorAll('[data-aa-custom-index]').forEach((control) => {
+      const sync = () => {
+        const index = Number.parseInt(control.getAttribute('data-aa-custom-index'), 10);
+        const prop = control.getAttribute('data-aa-custom-prop');
+        if (!Number.isFinite(index) || !prop) return;
+        this.settingsDraft.customQA[index] = this.settingsDraft.customQA[index] ?? { question: '', answer: '' };
+        this.settingsDraft.customQA[index][prop] = control.value;
+      };
+      control.addEventListener('input', sync);
+      control.addEventListener('change', sync);
+    });
+    this.panelEl.querySelector('#aa-prompt-save')?.addEventListener('click', () => {
+      const value = this.panelEl.querySelector('#aa-prompt-answer')?.value?.trim();
+      if (value) this._resolvePrompt(value);
+    });
+    this.panelEl.querySelector('#aa-prompt-answer')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        const value = event.target.value.trim();
+        if (value) this._resolvePrompt(value);
+      }
+    });
+    this.panelEl.querySelector('#aa-prompt-file-input')?.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const result = loadEvent.target?.result;
+        const base64 = typeof result === 'string' ? result.split(',')[1] : '';
+        if (base64) this._resolvePrompt(base64);
+      };
+      reader.readAsDataURL(file);
+    });
+    this.panelEl.querySelector('#aa-prompt-skip')?.addEventListener('click', () => this._resolvePrompt(null));
+    this.panelEl.querySelector('#aa-prompt-answer')?.focus({ preventScroll: true });
+  }
+
+  _switchTab(tab) {
+    if (this.activeTab === tab) return;
+    this.activeTab = tab;
+    this._renderPanel();
+    if (tab === 'settings') this.onOpenSettings?.();
+  }
+
+  _resolvePrompt(value) {
+    if (typeof this._resolveAsking === 'function') this._resolveAsking(value);
+  }
+
+  _syncDraft() {
+    this.settingsDraft = cloneDraft(this.profileData);
+  }
+
+  setProfileData(profileData) {
+    this.profileData = {
+      user: profileData?.user ?? null,
+      sections: Array.isArray(profileData?.sections) ? profileData.sections : [],
+      answers: { ...(profileData?.answers ?? {}) },
+      customQA: Array.isArray(profileData?.customQA) ? profileData.customQA.map((entry) => ({
+        question: typeof entry?.question === 'string' ? entry.question : '',
+        answer: typeof entry?.answer === 'string' ? entry.answer : ''
+      })) : [],
+      documents: {
+        resume: {
+          ready: !!profileData?.documents?.resume?.ready,
+          filename: typeof profileData?.documents?.resume?.filename === 'string' ? profileData.documents.resume.filename : '',
+          description: typeof profileData?.documents?.resume?.description === 'string' ? profileData.documents.resume.description : 'Add a default resume to upload it automatically.'
+        },
+        coverLetter: {
+          ready: !!profileData?.documents?.coverLetter?.ready,
+          filename: typeof profileData?.documents?.coverLetter?.filename === 'string' ? profileData.documents.coverLetter.filename : '',
+          description: typeof profileData?.documents?.coverLetter?.description === 'string' ? profileData.documents.coverLetter.description : 'Add a saved cover letter to upload it automatically.'
+        }
+      }
+    };
+    this._syncDraft();
+    this._renderPanel();
+  }
+
+  setSettingsSaving(isSaving) {
+    this.settingsSaving = !!isSaving;
+    this._renderPanel();
+  }
+
+  setSettingsMessage(text, tone = 'info') {
+    this.settingsMessage = text ? { text, tone } : null;
+    this._renderPanel();
+  }
+
+  setJobMeta(jobTitle, company, platform = this.pageMeta.platform) {
+    this.pageMeta = { jobTitle: jobTitle || '', company: company || '', platform: platform || '' };
+    this._renderPanel();
+  }
+
+  setPlatform(platform) {
+    this.pageMeta.platform = platform || '';
+    this._renderPanel();
+  }
+
+  setProgress(progress) {
+    this.progress = { ...this.progress, ...progress };
+    this._renderBookmark();
+    this._renderPanel();
+  }
+
+  resetSession() {
+    this.logEntries = [];
+    this.answers = [];
+    this.captchaAlert = false;
+    this.fileAlert = null;
+    this.askingQuestion = null;
+    this.activeTab = 'overview';
+    this.progress = { totalQuestions: 0, answeredQuestions: 0, profileAnswered: 0, aiAnswered: 0, manualAnswered: 0, pendingQuestions: 0 };
+    this._renderBookmark();
+    this._renderPanel();
+  }
+
+  setState(state) {
+    this.state = state;
+    this._renderBookmark();
+    this._renderPanel();
+  }
+
+  addLog(message) {
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+    this.logEntries.push(`[${time}] ${message}`);
+    this._renderPanel();
+  }
+
+  addAnswer(question, answer) {
+    if (!this.answers.find((entry) => entry.question === question)) this.answers.push({ question, answer });
+  }
+
+  showCaptchaAlert(show) {
+    this.captchaAlert = show;
+    this._renderPanel();
+  }
+
+  showFileAlert(message) {
+    this.fileAlert = message;
+    this._renderPanel();
+  }
+
+  hideFileAlert() {
+    this.fileAlert = null;
+    this._renderPanel();
+  }
+
+  getAnswers() {
+    return this.answers;
+  }
+
+  getSettingsDraft() {
+    return {
+      sections: this.profileData.sections,
+      answers: { ...(this.settingsDraft.answers ?? {}) },
+      customQA: (this.settingsDraft.customQA ?? []).map((entry) => ({
+        question: typeof entry?.question === 'string' ? entry.question : '',
+        answer: typeof entry?.answer === 'string' ? entry.answer : ''
+      }))
+    };
+  }
+
+  askUser(label, type = 'text') {
+    return new Promise((resolve) => {
+      this.askingQuestion = { label, type };
+      this.activeTab = 'overview';
+      this.show();
+      this.open();
+      this._resolveAsking = (value) => {
+        this.askingQuestion = null;
+        this._resolveAsking = null;
+        this._renderPanel();
+        resolve(value);
+      };
+      this._renderPanel();
+    });
+  }
+
+  celebrateSuccess() {
+    fireConfetti(this.shadowRoot);
+  }
+
+  open() {
+    if (!this.isVisible) return;
+    this.isOpen = true;
+    this.panelEl.classList.add('open');
+    this._renderBookmark();
+  }
+
+  collapse() {
+    this.isOpen = false;
+    this.panelEl.classList.remove('open');
+    this._renderBookmark();
+  }
+
+  show() {
+    this.isVisible = true;
+    this._syncVisibility();
+    this._place();
+    this._renderBookmark();
+  }
+
+  hide() {
+    this.isVisible = false;
+    this.collapse();
+    this._syncVisibility();
+  }
+
+  getSnapshot() {
+    return {
+      visible: this.isVisible,
+      open: this.isOpen,
+      state: this.state,
+      jobTitle: this.pageMeta.jobTitle,
+      company: this.pageMeta.company,
+      platform: this.pageMeta.platform,
+      progress: { ...this.progress },
+      requiresInput: !!this.askingQuestion,
+      activeTab: this.activeTab
+    };
+  }
+
+  _esc(value) {
+    if (value === null || value === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(value);
+    return div.innerHTML;
+  }
+}

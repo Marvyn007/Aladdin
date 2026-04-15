@@ -363,6 +363,9 @@ export function JobList({ onJobClick, recommendedJobs = [], recommendedStatus = 
                                     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                                 }}
                             >
+                                <button onClick={() => setJobStatus('recommended')} style={getStatusTabStyle('recommended')}>
+                                    For You
+                                </button>
                                 <button onClick={() => setJobStatus('fresh')} style={getStatusTabStyle('fresh')}>
                                     Fresh
                                 </button>
@@ -371,9 +374,6 @@ export function JobList({ onJobClick, recommendedJobs = [], recommendedStatus = 
                                 </button>
                                 <button onClick={() => setJobStatus('archived')} style={getStatusTabStyle('archived')}>
                                     Archived
-                                </button>
-                                <button onClick={() => setJobStatus('recommended')} style={getStatusTabStyle('recommended')}>
-                                    For You
                                 </button>
                             </div>
                         ) : (

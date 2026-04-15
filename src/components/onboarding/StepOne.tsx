@@ -37,7 +37,13 @@ export function StepOne({ questions, answers, setAnswers }: StepOneProps) {
   return (
     <div>
       {questions.map((question) => (
-        <div key={question.key} style={cardStyle}>
+        <div
+          key={question.key}
+          style={{
+            ...cardStyle,
+            ...(question.type === 'job_function' ? { position: 'relative', zIndex: 10 } : {}),
+          }}
+        >
           <div style={titleStyle}>{question.title}</div>
           <div style={descStyle}>{question.description}</div>
           {question.type === 'job_function' && (
