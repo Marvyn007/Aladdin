@@ -44,6 +44,7 @@ model User {
   applyPilotProfile     ApplyPilotProfile?
   userContext           Json?                  @default("{}") @map("user_context")
   extensionAccessTokens ExtensionAccessToken[]
+  contactReveals        ContactReveal[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -704,4 +705,57 @@ model AutoApplySession {
   @@index([userId], map: "idx_auto_apply_sessions_user")
   @@index([status],  map: "idx_auto_apply_sessions_status")
   @@map("auto_apply_sessions")
+}
+
+model Contact {
+  id              String    @id @default(uuid()) @db.Uuid
+  apolloId        String    @unique @map("apollo_id")
+  firstName       String?   @map("first_name")
+  lastName        String?   @map("last_name")
+  title           String?
+  companyName     String?   @map("company_name")
+  companyDomain   String?   @map("company_domain")
+  linkedinUrl     String?   @map("linkedin_url")
+  location        String?
+  email           String?
+  emailStatus     String?   @map("email_status")
+  emailRevealedAt DateTime? @map("email_revealed_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reveals ContactReveal[]
+
+  @@index([companyDomain], map: "idx_contacts_company_domain")
+  @@map("contacts")
+}
+
+model ContactSearchCache {
+  id               String   @id @default(uuid()) @db.Uuid
+  queryHash        String   @unique @map("query_hash")
+  companyDomain    String   @map("company_domain")
+  jobFunction      String?  @map("job_function")
+  managementLevel  String?  @map("management_level")
+  country          String?
+  page             Int      @default(1)
+  totalEntries     Int?     @map("total_entries")
+  contactApolloIds Json     @map("contact_apollo_ids")
+  expiresAt        DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([queryHash, expiresAt], map: "idx_contact_search_cache_hash_expires")
+  @@map("contact_search_cache")
+}
+
+model ContactReveal {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id")
+  contactId  String   @map("contact_id") @db.Uuid
+  revealedAt DateTime @default(now()) @map("revealed_at") @db.Timestamptz(6)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactId], map: "uniq_contact_reveal_user_contact")
+  @@index([userId], map: "idx_contact_reveals_user_id")
+  @@map("contact_reveals")
 }
