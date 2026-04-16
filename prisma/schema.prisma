@@ -39,12 +39,27 @@ model User {
   jobVotes             JobVote[]
   userLeetCodeProgress UserLeetCodeProgress[]
 
-  lastActiveAt        DateTime?              @map("last_active_at") @db.Timestamptz(6)
-  autoApplySessions   AutoApplySession[]
-  applyPilotProfile   ApplyPilotProfile?
+  lastActiveAt          DateTime?              @map("last_active_at") @db.Timestamptz(6)
+  autoApplySessions     AutoApplySession[]
+  applyPilotProfile     ApplyPilotProfile?
+  userContext           Json?                  @default("{}") @map("user_context")
+  extensionAccessTokens ExtensionAccessToken[]
 
   @@index([email], map: "idx_users_email")
   @@map("users")
+}
+
+model ExtensionAccessToken {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  label      String?
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("extension_access_tokens")
 }
 
 /// Per-user Apply Pilot context: one row per `users.id` (`user_id` PK). `payload` holds every field from the
