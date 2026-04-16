@@ -1,4 +1,4 @@
-const ALADDIN_BASE_URL = "https://aladdin-staging.vercel.app";
+const ALADDIN_BASE_URL = "http://localhost:3000";
 async function getSession() {
   const { session } = await chrome.storage.local.get("session");
   return session ?? null;
