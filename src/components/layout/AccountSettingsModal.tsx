@@ -16,8 +16,9 @@ import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { Pencil, Trash2, ExternalLink, AlertCircle, Clock as ClockIcon, CheckCircle2, Plus, Loader2 } from 'lucide-react';
 import { ONBOARDING_QUESTIONS } from '@/lib/onboarding';
 import { ApplyPilotSettingsTab } from '@/components/settings/ApplyPilotSettingsTab';
+import { ExtensionKeyTab } from '@/components/settings/ExtensionKeyTab';
 
-type TabType = 'profile' | 'preferences' | 'apply-pilot' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
+type TabType = 'profile' | 'preferences' | 'apply-pilot' | 'extension' | 'documents' | 'appearance' | 'security' | 'touch-grass' | 'reviews';
 
 interface AccountSettingsModalProps {
     isOpen: boolean;
@@ -121,6 +122,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
         { id: 'profile', label: 'Profile', icon: <ProfileIcon /> },
         { id: 'preferences', label: 'Preferences', icon: <PreferencesIcon /> },
         { id: 'apply-pilot', label: 'Apply Pilot', icon: <ApplyPilotIcon /> },
+        { id: 'extension', label: 'Extension', icon: <ExtensionIcon /> },
         { id: 'touch-grass', label: 'Touch the grass', icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.2-2.2.5-3.3.3-1.09.88-2.16 1.7-3.2.3 2.5.8 4 1.3 5.2z"></path></svg> },
         { id: 'documents', label: 'My Documents', icon: <DocumentsIcon /> },
         { id: 'reviews', label: 'Interview Experiences', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg> },
@@ -447,6 +449,7 @@ export function AccountSettingsModal({ isOpen, onClose }: AccountSettingsModalPr
                         )}
                         {activeTab === 'preferences' && <PreferencesTab />}
                         {activeTab === 'apply-pilot' && <ApplyPilotSettingsTab />}
+                        {activeTab === 'extension' && <ExtensionKeyTab />}
                         {activeTab === 'touch-grass' && <TouchGrassTab />}
                         {activeTab === 'documents' && <DocumentsTab isMobile={isMobile} />}
                         {activeTab === 'appearance' && (
@@ -1424,6 +1427,16 @@ function PreferencesIcon() {
             <circle cx="8" cy="6" r="2" fill="currentColor" stroke="none" />
             <circle cx="16" cy="12" r="2" fill="currentColor" stroke="none" />
             <circle cx="10" cy="18" r="2" fill="currentColor" stroke="none" />
+        </svg>
+    );
+}
+
+function ExtensionIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+            <line x1="12" y1="22.08" x2="12" y2="12" />
         </svg>
     );
 }
