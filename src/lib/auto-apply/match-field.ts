@@ -71,6 +71,9 @@ export function matchFieldToProfile(
   // 1. Direct user table fields
   if (matches(text, ['first name', 'firstname', 'first_name', 'given name'])) return profile.user.firstName ?? null;
   if (matches(text, ['last name', 'lastname', 'last_name', 'surname', 'family name'])) return profile.user.lastName ?? null;
+  if (matches(text, ['preferred name', 'preferred first'])) return getAA('aa_preferred_name', profile);
+  if (matches(text, ['suffix', 'name suffix', 'jr', 'sr', 'ii ', 'iii '])) return getAA('aa_name_suffix', profile);
+  if (matches(text, ['date of birth', 'birth date', 'dob', 'birthday'])) return getAA('aa_date_of_birth', profile);
   if (matches(text, ['email', 'e-mail', 'email address'])) return profile.user.email ?? null;
 
   // 2. userContext custom learned entries
@@ -95,6 +98,15 @@ export function matchFieldToProfile(
   if (matches(text, ['twitter', 'x.com']))                         return getAA('aa_twitter_url', profile);
 
   // 4. Work eligibility — user Apply Pilot first, then positive defaults
+  if (matches(text, ['authorized to work in the us', 'authorized to work in us', 'work in the united states', 'legally authorized', 'work authorization']) && !matches(text, ['canada', 'uk', 'united kingdom'])) {
+    return getAA('aa_authorized_us', profile) ?? 'Yes';
+  }
+  if (matches(text, ['authorized to work in canada', 'work in canada'])) {
+    return getAA('aa_authorized_canada', profile) ?? 'No';
+  }
+  if (matches(text, ['authorized to work in the uk', 'authorized to work in uk', 'authorized to work in the united kingdom', 'right to work in the uk', 'right to work in uk'])) {
+    return getAA('aa_authorized_uk', profile) ?? 'No';
+  }
   if (matches(text, ['authorized to work', 'legally authorized', 'work authorization'])) {
     return getAA('aa_authorized_us', profile) ?? 'Yes';
   }
@@ -126,7 +138,9 @@ export function matchFieldToProfile(
     const parts   = [city, state, country].filter(Boolean);
     if (parts.length) return parts.join(', ');
   }
-  if (matches(text, ['street', 'address line 1']))                            return getAA('aa_address', profile);
+  if (matches(text, ['street', 'address line 1', 'address 1']))               return getAA('aa_address', profile);
+  if (matches(text, ['address line 2', 'address 2', 'apt', 'suite', 'unit'])) return getAA('aa_address_line2', profile);
+  if (matches(text, ['address line 3', 'address 3']))                          return getAA('aa_address_line3', profile);
   if (matches(text, ['city', 'town']))                                         return getAA('aa_city', profile);
   if (matches(text, ['state', 'province', 'region']))                          return getAA('aa_state', profile);
   if (matches(text, ['zip', 'postal']))                                         return getAA('aa_zip', profile);
@@ -147,6 +161,7 @@ export function matchFieldToProfile(
   // 8. EEO / demographic
   if (matches(text, ['gender']))                                                 return getAA('aa_gender', profile);
   if (matches(text, ['pronoun']))                                                return getAA('aa_pronouns', profile);
+  if (matches(text, ['lgbtq', 'lgbt', 'sexual orientation', 'identify as lgbtq'])) return getAA('aa_lgbtq', profile) ?? 'Prefer not to say';
   if (matches(text, ['ethnicity', 'race']) && !matches(text, ['hispanic']))     return getAA('aa_ethnicity', profile);
   if (matches(text, ['hispanic', 'latino']))                                     return getAA('aa_hispanic', profile);
   if (matches(text, ['veteran']))                                                return getAA('aa_veteran_status', profile);

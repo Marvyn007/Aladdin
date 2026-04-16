@@ -11,7 +11,7 @@ import { fillSmartDropdown, fuzzyMatchOption } from '@/lib/auto-apply/smart-drop
 import { fillNativeSelect, inferAnswerFromContext } from '@/lib/auto-apply/native-select-fill';
 import { runPreFlightAudit, type FilledFieldEntry } from '@/lib/auto-apply/preflight-audit';
 import { getAutoApplyStagehandEnv } from '@/lib/auto-apply/stagehand-tuning';
-import { domSniffRadioGroup, domClickRadioOption } from '@/lib/auto-apply/dom-interaction';
+import { domSniffRadioGroup, domClickRadioOption, domCheckCustomDropdownFilled, domCheckRadioGroupFilled } from '@/lib/auto-apply/dom-interaction';
 import { z } from 'zod';
 
 const MAX_PAGES = 30;
@@ -347,6 +347,16 @@ export async function executeAutoApplySession({
                 console.warn(`[native-select] Failed for "${label}":`, err);
               }
             } else if (fastResult === 'custom-dropdown') {
+              // Skip if the dropdown already has a real selection (not a placeholder)
+              if (selector) {
+                try {
+                  const alreadySelected = await domCheckCustomDropdownFilled(page, selector);
+                  if (alreadySelected) {
+                    filledFieldsThisPage.push({ label, selector, index: i });
+                    continue;
+                  }
+                } catch { /* proceed to fill */ }
+              }
               // Smart dropdown: DOM sniff → fuzzy → LLM → DOM click
               try {
                 await fillSmartDropdown(sh, page, obs, profileContext, description);
@@ -355,6 +365,16 @@ export async function executeAutoApplySession({
                 console.warn(`[smart-dropdown] Failed for "${label}":`, err);
               }
             } else if (fastResult === 'radio-group') {
+              // Skip if any option in the group is already checked
+              if (selector) {
+                try {
+                  const alreadyChecked = await domCheckRadioGroupFilled(page, selector);
+                  if (alreadyChecked) {
+                    filledFieldsThisPage.push({ label, selector, index: i });
+                    continue;
+                  }
+                } catch { /* proceed to fill */ }
+              }
               // Radio/checkbox group: DOM sniff → fuzzy → LLM → DOM click
               try {
                 const handled = await fillRadioOrCheckboxGroup(sh, page, obs, profileContext);

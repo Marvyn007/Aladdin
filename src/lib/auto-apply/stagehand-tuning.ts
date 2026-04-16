@@ -23,7 +23,9 @@ export function getAutoApplyStagehandEnv() {
   );
 
   const modelName =
-    process.env.AUTO_APPLY_STAGEHAND_MODEL?.trim() || 'openai/gpt-4o-mini';
+    process.env.AUTO_APPLY_STAGEHAND_MODEL?.trim() || 
+    process.env.AUTO_SPLY_STAGEHAND_MODEL?.trim() || 
+    'openai/gpt-4o-mini';
 
   return {
     navWait,

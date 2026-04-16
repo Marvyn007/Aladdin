@@ -729,6 +729,20 @@ export function JobDetail({
                 </button>
             )}
 
+            {/* Relative wrapper — gives the inline ApplyPilot overlay a positioning context */}
+            <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+
+            {/* Apply Pilot inline overlay — sits above job-detail-scroll, same size */}
+            {applyPilotSessionId && job && (
+                <ApplyPilotModal
+                    sessionId={applyPilotSessionId}
+                    jobTitle={job.title}
+                    company={job.company ?? ''}
+                    onClose={() => setApplyPilotSessionId(null)}
+                    inline
+                />
+            )}
+
             <div className="job-detail-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {/* Header Info (Static) */}
                 <div
@@ -1054,8 +1068,11 @@ export function JobDetail({
                             Source: <a href={job.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>{new URL(job.source_url).hostname}</a>
                         </p>
                     </div>
-                </div >
-            </div >
+                </div>
+
+            </div>{/* end job-detail-scroll */}
+
+            </div>{/* end relative wrapper */}
 
             {/* Edit Job Modal */}
             {isEditModalOpen && job && (
@@ -1066,15 +1083,7 @@ export function JobDetail({
                 />
             )}
 
-            {/* Apply Pilot Modal */}
-            {applyPilotSessionId && job && (
-                <ApplyPilotModal
-                    sessionId={applyPilotSessionId}
-                    jobTitle={job.title}
-                    company={job.company ?? ''}
-                    onClose={() => setApplyPilotSessionId(null)}
-                />
-            )}
+            {/* Apply Pilot modal is now rendered inline above the scroll area — see above */}
         </div >
     );
 }

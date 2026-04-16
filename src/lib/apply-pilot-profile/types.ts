@@ -4,67 +4,83 @@
  * per system prompt unless the user chose a value.
  */
 export interface ApplyPilotProfilePayload {
-  phoneCountryCode:     string;
-  phoneNational:        string;
-  linkedinUrl:          string;
-  githubUrl:              string;
-  portfolioUrl:           string;
-  otherWebsiteUrl:        string;
-  twitterUrl:             string;
-  addressLine1:           string;
-  city:                   string;
-  state:                  string;
-  zipCode:                string;
-  country:                string;
-  willingToRelocate:      string;
-  openToRemote:           string;
-  sponsorshipRequired:    string;
-  authorizedToWorkUs:     string;
-  gender:                 string;
-  pronouns:               string;
-  race:                   string;
-  hispanicLatino:         string;
-  veteranStatus:          string;
-  disabilityStatus:       string;
-  governmentClearance:    string;
-  currentJobTitle:        string;
-  currentEmployer:        string;
-  yearsExperienceRange:   string;
-  expectedSalary:         string;
-  noticePeriod:           string;
-  earliestStartDate:      string;
+  phoneCountryCode:         string;
+  phoneNational:            string;
+  preferredName:            string;
+  nameSuffix:               string;
+  dateOfBirth:              string;
+  linkedinUrl:              string;
+  githubUrl:                string;
+  portfolioUrl:             string;
+  otherWebsiteUrl:          string;
+  twitterUrl:               string;
+  addressLine1:             string;
+  addressLine2:             string;
+  addressLine3:             string;
+  city:                     string;
+  state:                    string;
+  zipCode:                  string;
+  country:                  string;
+  willingToRelocate:        string;
+  openToRemote:             string;
+  sponsorshipRequired:      string;
+  authorizedToWorkUs:       string;
+  authorizedToWorkCanada:   string;
+  authorizedToWorkUk:       string;
+  gender:                   string;
+  pronouns:                 string;
+  lgbtqIdentity:            string;
+  race:                     string;
+  hispanicLatino:           string;
+  veteranStatus:            string;
+  disabilityStatus:         string;
+  governmentClearance:      string;
+  currentJobTitle:          string;
+  currentEmployer:          string;
+  yearsExperienceRange:     string;
+  expectedSalary:           string;
+  noticePeriod:             string;
+  earliestStartDate:        string;
 }
 
 export const EMPTY_APPLY_PILOT_PAYLOAD: ApplyPilotProfilePayload = {
-  phoneCountryCode:     '',
-  phoneNational:        '',
-  linkedinUrl:          '',
-  githubUrl:              '',
-  portfolioUrl:           '',
-  otherWebsiteUrl:        '',
-  twitterUrl:             '',
-  addressLine1:           '',
-  city:                   '',
-  state:                  '',
-  zipCode:                '',
-  country:                '',
-  willingToRelocate:      '',
-  openToRemote:           '',
-  sponsorshipRequired:    '',
-  authorizedToWorkUs:     '',
-  gender:                 '',
-  pronouns:               '',
-  race:                   '',
-  hispanicLatino:         '',
-  veteranStatus:          '',
-  disabilityStatus:       '',
-  governmentClearance:    '',
-  currentJobTitle:        '',
-  currentEmployer:        '',
-  yearsExperienceRange:   '',
-  expectedSalary:         '',
-  noticePeriod:           '',
-  earliestStartDate:      '',
+  phoneCountryCode:         '',
+  phoneNational:            '',
+  preferredName:            '',
+  nameSuffix:               '',
+  dateOfBirth:              '',
+  linkedinUrl:              '',
+  githubUrl:                '',
+  portfolioUrl:             '',
+  otherWebsiteUrl:          '',
+  twitterUrl:               '',
+  addressLine1:             '',
+  addressLine2:             '',
+  addressLine3:             '',
+  city:                     '',
+  state:                    '',
+  zipCode:                  '',
+  country:                  '',
+  willingToRelocate:        '',
+  openToRemote:             '',
+  sponsorshipRequired:      '',
+  authorizedToWorkUs:       '',
+  authorizedToWorkCanada:   '',
+  authorizedToWorkUk:       '',
+  gender:                   '',
+  pronouns:                 '',
+  lgbtqIdentity:            '',
+  race:                     '',
+  hispanicLatino:           '',
+  veteranStatus:            '',
+  disabilityStatus:         '',
+  governmentClearance:      '',
+  currentJobTitle:          '',
+  currentEmployer:          '',
+  yearsExperienceRange:     '',
+  expectedSalary:           '',
+  noticePeriod:             '',
+  earliestStartDate:        '',
 };
 
 export const YES_NO_UNSPECIFIED = [
@@ -181,6 +197,13 @@ export const VETERAN_OPTIONS = [
   { value: 'Prefer not to say', label: 'Prefer not to answer' },
 ] as const;
 
+export const LGBTQ_OPTIONS = [
+  { value: '', label: '— Prefer not to say —' },
+  { value: 'Yes', label: 'Yes' },
+  { value: 'No', label: 'No' },
+  { value: 'Prefer not to say', label: 'Prefer not to say' },
+] as const;
+
 export const DISABILITY_OPTIONS = [
   { value: '', label: '— Prefer not to say —' },
   { value: 'Yes', label: 'Yes, I have a disability (or history)' },
@@ -230,34 +253,42 @@ export function parseApplyPilotPayload(raw: unknown): ApplyPilotProfilePayload {
   const str = (k: keyof ApplyPilotProfilePayload) =>
     typeof o[k] === 'string' ? o[k] as string : '';
   return {
-    phoneCountryCode:     str('phoneCountryCode'),
-    phoneNational:        str('phoneNational'),
-    linkedinUrl:          str('linkedinUrl'),
-    githubUrl:              str('githubUrl'),
-    portfolioUrl:           str('portfolioUrl'),
-    otherWebsiteUrl:        str('otherWebsiteUrl'),
-    twitterUrl:             str('twitterUrl'),
-    addressLine1:           str('addressLine1'),
-    city:                   str('city'),
-    state:                  str('state'),
-    zipCode:                str('zipCode'),
-    country:                str('country'),
-    willingToRelocate:      str('willingToRelocate'),
-    openToRemote:           str('openToRemote'),
-    sponsorshipRequired:    str('sponsorshipRequired'),
-    authorizedToWorkUs:     str('authorizedToWorkUs'),
-    gender:                 str('gender'),
-    pronouns:               str('pronouns'),
-    race:                   str('race'),
-    hispanicLatino:         str('hispanicLatino'),
-    veteranStatus:          str('veteranStatus'),
-    disabilityStatus:       str('disabilityStatus'),
-    governmentClearance:    str('governmentClearance'),
-    currentJobTitle:        str('currentJobTitle'),
-    currentEmployer:        str('currentEmployer'),
-    yearsExperienceRange:   str('yearsExperienceRange'),
-    expectedSalary:         str('expectedSalary'),
-    noticePeriod:           str('noticePeriod'),
-    earliestStartDate:      str('earliestStartDate'),
+    phoneCountryCode:         str('phoneCountryCode'),
+    phoneNational:            str('phoneNational'),
+    preferredName:            str('preferredName'),
+    nameSuffix:               str('nameSuffix'),
+    dateOfBirth:              str('dateOfBirth'),
+    linkedinUrl:              str('linkedinUrl'),
+    githubUrl:                str('githubUrl'),
+    portfolioUrl:             str('portfolioUrl'),
+    otherWebsiteUrl:          str('otherWebsiteUrl'),
+    twitterUrl:               str('twitterUrl'),
+    addressLine1:             str('addressLine1'),
+    addressLine2:             str('addressLine2'),
+    addressLine3:             str('addressLine3'),
+    city:                     str('city'),
+    state:                    str('state'),
+    zipCode:                  str('zipCode'),
+    country:                  str('country'),
+    willingToRelocate:        str('willingToRelocate'),
+    openToRemote:             str('openToRemote'),
+    sponsorshipRequired:      str('sponsorshipRequired'),
+    authorizedToWorkUs:       str('authorizedToWorkUs'),
+    authorizedToWorkCanada:   str('authorizedToWorkCanada'),
+    authorizedToWorkUk:       str('authorizedToWorkUk'),
+    gender:                   str('gender'),
+    pronouns:                 str('pronouns'),
+    lgbtqIdentity:            str('lgbtqIdentity'),
+    race:                     str('race'),
+    hispanicLatino:           str('hispanicLatino'),
+    veteranStatus:            str('veteranStatus'),
+    disabilityStatus:         str('disabilityStatus'),
+    governmentClearance:      str('governmentClearance'),
+    currentJobTitle:          str('currentJobTitle'),
+    currentEmployer:          str('currentEmployer'),
+    yearsExperienceRange:     str('yearsExperienceRange'),
+    expectedSalary:           str('expectedSalary'),
+    noticePeriod:             str('noticePeriod'),
+    earliestStartDate:        str('earliestStartDate'),
   };
 }

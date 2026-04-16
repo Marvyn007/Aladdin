@@ -201,7 +201,96 @@ async function _fireEvents(pw: PageLike): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// ── 3. domSniffRadioGroup ────────────────────────────────────────────────────
+// ── 3. domCheckCustomDropdownFilled ─────────────────────────────────────────
+
+/**
+ * Check whether a custom (non-<select>) dropdown already has a non-placeholder value selected.
+ * Looks at the trigger element's text/aria-valuenow/data-value and returns true if it looks filled.
+ *
+ * @param page             Playwright page
+ * @param triggerSelector  CSS/XPath selector for the dropdown trigger element
+ * @returns true if a real selection is already made, false otherwise
+ */
+export async function domCheckCustomDropdownFilled(
+  page: unknown,
+  triggerSelector: string,
+): Promise<boolean> {
+  const pw = page as PageLike;
+  try {
+    return await pw.evaluate(
+      (arg: unknown) => {
+        const { sel } = arg as { sel: string };
+        let el: Element | null = null;
+        // XPath selectors can't be used with querySelector
+        const isXPath = sel.startsWith('//') || sel.startsWith('/html') || sel.startsWith('(');
+        if (isXPath) {
+          const r = document.evaluate(sel, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+          el = r.singleNodeValue as Element | null;
+        } else {
+          try { el = document.querySelector(sel); } catch { /* invalid selector */ }
+        }
+        if (!el) return false;
+
+        // aria-valuenow or data-value attributes indicate a selected value
+        const ariaValue = el.getAttribute('aria-valuenow') ?? el.getAttribute('data-value') ?? '';
+        if (ariaValue.trim()) return true;
+
+        // The displayed text — if it's non-empty and not a placeholder phrase, it's filled
+        const displayText = ((el as HTMLElement).innerText ?? el.textContent ?? '').trim();
+        if (!displayText) return false;
+
+        const PLACEHOLDER_PATTERNS = /^(select|choose|pick|--|-–|please select|type to search|search)/i;
+        return !PLACEHOLDER_PATTERNS.test(displayText);
+      },
+      { sel: triggerSelector } as unknown,
+    );
+  } catch {
+    return false;
+  }
+}
+
+// ── 4. domCheckRadioGroupFilled ──────────────────────────────────────────────
+
+/**
+ * Check whether any radio or checkbox input within a container is already checked.
+ *
+ * @param page                    Playwright page
+ * @param groupContainerSelector  CSS selector for the group wrapper (or 'body' for whole page)
+ * @returns true if at least one input[type=radio] or input[type=checkbox] is checked
+ */
+export async function domCheckRadioGroupFilled(
+  page: unknown,
+  groupContainerSelector: string,
+): Promise<boolean> {
+  const pw = page as PageLike;
+  try {
+    return await pw.evaluate(
+      (arg: unknown) => {
+        const { containerSel } = arg as { containerSel: string };
+        const isXPath =
+          containerSel.startsWith('//') ||
+          containerSel.startsWith('/html') ||
+          containerSel.startsWith('(');
+        let root: ParentNode = document;
+        if (!isXPath) {
+          try {
+            const el = document.querySelector(containerSel);
+            if (el) root = el;
+          } catch { /* use document */ }
+        }
+        const inputs = Array.from(
+          root.querySelectorAll('input[type="radio"], input[type="checkbox"]'),
+        ) as HTMLInputElement[];
+        return inputs.some(inp => inp.checked);
+      },
+      { containerSel: groupContainerSelector } as unknown,
+    );
+  } catch {
+    return false;
+  }
+}
+
+// ── 5. domSniffRadioGroup ────────────────────────────────────────────────────
 
 export interface RadioOption {
   text: string;
@@ -280,7 +369,7 @@ export async function domSniffRadioGroup(
   }
 }
 
-// ── 4. domClickRadioOption ───────────────────────────────────────────────────
+// ── 6. domClickRadioOption ───────────────────────────────────────────────────
 
 /**
  * Click a radio or checkbox input by CSS selector, then fire a change event.

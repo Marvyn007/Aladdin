@@ -16,6 +16,10 @@ interface ApplyPilotModalProps {
   jobTitle:  string;
   company:   string;
   onClose:   () => void;
+  /** When true, renders as an absolute overlay over the parent container
+   *  instead of a fixed full-screen modal. The parent must have
+   *  position: relative (or similar) for this to work correctly. */
+  inline?:   boolean;
 }
 
 interface SessionState {
@@ -31,7 +35,7 @@ interface StatusLine {
   source?: 'profile' | 'ai';
 }
 
-export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: ApplyPilotModalProps) {
+export function ApplyPilotModal({ sessionId, jobTitle, company, onClose, inline = false }: ApplyPilotModalProps) {
   const [session, setSession]       = useState<SessionState | null>(null);
   const [statusLine, setStatusLine] = useState<StatusLine>({ text: 'Connecting…' });
   const [pageNum, setPageNum]       = useState(0);
@@ -152,6 +156,229 @@ export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: Apply
     onClose();
   }
 
+  // ── Inline mode: absolute overlay that covers the parent container ──────────
+  // Agent is considered "active" (border pulses) while queued, running, or stalled.
+  const isAgentActive = status === 'queued' || status === 'running' || status === 'stalled';
+
+  if (inline) {
+    return (
+      <>
+        {/* Keyframes for the rotating gradient border */}
+        <style>{`
+          @keyframes applyPilotBorderSpin {
+            0%   { background-position: 0%   50%; }
+            50%  { background-position: 100% 50%; }
+            100% { background-position: 0%   50%; }
+          }
+          .apply-pilot-border-active {
+            background: linear-gradient(270deg, #3b82f6, #6366f1, #06b6d4, #3b82f6);
+            background-size: 400% 400%;
+            animation: applyPilotBorderSpin 3s ease infinite;
+          }
+          /* Scale iframe content down to ~80% without shrinking the element */
+          .apply-pilot-iframe-zoom {
+            width:  125%;
+            height: 125%;
+            transform: scale(0.8);
+            transform-origin: top left;
+            border: none;
+          }
+        `}</style>
+
+        {/* Outer wrapper — zIndex 100 beats the sticky action-bar (zIndex 10) */}
+        <div
+          style={{
+            position: 'absolute', inset: 0, zIndex: 100,
+            display: 'flex', flexDirection: 'column',
+            background: 'var(--background)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* X close button — floats top-right above everything */}
+          <button
+            onClick={handleClose}
+            title="Cancel auto-apply and show job details"
+            style={{
+              position:      'absolute',
+              top:           '10px',
+              right:         '12px',
+              zIndex:        110,
+              background:    'rgba(0,0,0,0.55)',
+              border:        '1px solid rgba(255,255,255,0.15)',
+              borderRadius:  '50%',
+              width:         '30px',
+              height:        '30px',
+              display:       'flex',
+              alignItems:    'center',
+              justifyContent:'center',
+              cursor:        'pointer',
+              color:         '#fff',
+              fontSize:      '14px',
+              lineHeight:    1,
+              backdropFilter:'blur(4px)',
+              transition:    'background 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.85)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.55)')}
+          >
+            ✕
+          </button>
+
+          {/* Mini header strip */}
+          <div style={{
+            padding:      '10px 48px 10px 16px',
+            borderBottom: '1px solid var(--border)',
+            display:      'flex',
+            alignItems:   'center',
+            gap:          '8px',
+            flexShrink:   0,
+            background:   'var(--background)',
+          }}>
+            {/* Animated dot while active */}
+            {isAgentActive && (
+              <span style={{
+                display:      'inline-block',
+                width:        '7px',
+                height:       '7px',
+                borderRadius: '50%',
+                background:   '#3b82f6',
+                animation:    'applyPilotBorderSpin 1.5s ease infinite',
+                flexShrink:   0,
+              }} />
+            )}
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>✦ Apply Pilot</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+              {company} — {jobTitle}
+            </span>
+          </div>
+
+          {/* Live view iframe wrapper — gradient border ring while agent is active */}
+          <div
+            style={{
+              flex:     1,
+              position: 'relative',
+              overflow: 'hidden',
+              /* 3-px padding acts as the "border" gap when active */
+              padding:  isAgentActive ? '3px' : '0',
+              background: '#0a0a0a',
+            }}
+          >
+            {/* Animated gradient border layer (rendered behind iframe via z-index) */}
+            {isAgentActive && (
+              <div
+                className="apply-pilot-border-active"
+                style={{
+                  position:     'absolute',
+                  inset:        0,
+                  zIndex:       1,
+                  borderRadius: '2px',
+                }}
+              />
+            )}
+
+            {/* Inner container that clips the iframe — zIndex 2 keeps it above the border layer but below the X button */}
+            <div style={{
+              position:   'absolute',
+              inset:      isAgentActive ? '3px' : '0',
+              zIndex:     2,
+              background: '#0a0a0a',
+              overflow:   'hidden',
+            }}>
+              {session?.liveViewUrl ? (
+                <iframe
+                  src={session.liveViewUrl}
+                  className="apply-pilot-iframe-zoom"
+                  title="Apply Pilot Live View"
+                  sandbox="allow-same-origin allow-scripts allow-forms allow-pointer-lock"
+                />
+              ) : (
+                <div style={{
+                  display:       'flex',
+                  alignItems:    'center',
+                  justifyContent:'center',
+                  height:        '100%',
+                  color:         '#666',
+                  fontSize:      '13px',
+                  flexDirection: 'column',
+                  gap:           '8px',
+                }}>
+                  <div style={{ fontSize: '24px' }}>✦</div>
+                  Starting browser session…
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Status Footer */}
+          <div style={{
+            padding:       '8px 16px',
+            borderTop:     '1px solid var(--border)',
+            display:       'flex',
+            justifyContent:'space-between',
+            alignItems:    'center',
+            gap:           '12px',
+            flexShrink:    0,
+            minHeight:     '48px',
+            background:    'var(--background)',
+          }}>
+            <div style={{
+              fontSize:     '12px',
+              color:        stalled ? 'var(--warning, #fbbf24)' : 'var(--text-secondary)',
+              flex:         1,
+              overflow:     'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace:   'nowrap',
+            }}>
+              {stalled && <span style={{ marginRight: '6px' }}>⚠</span>}
+              {statusLine.text}
+              {statusLine.source && (
+                <span style={{ marginLeft: '6px', opacity: 0.5 }}>[{statusLine.source}]</span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+              {pageNum > 0 && status === 'running' && (
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  Page {pageNum}
+                </span>
+              )}
+
+              {status === 'failed' && (
+                <span style={{ fontSize: '12px', color: 'var(--error, #f87171)' }}>
+                  Agent failed — close and retry
+                </span>
+              )}
+
+              {status === 'awaiting_review' && (
+                <button onClick={handleTakeOver} className="btn btn-primary" style={{ fontSize: '12px', padding: '5px 12px' }}>
+                  Take Over &amp; Submit
+                </button>
+              )}
+
+              {status === 'taken_over' && (
+                <button
+                  onClick={handleMarkDone}
+                  disabled={completing}
+                  className="btn btn-primary"
+                  style={{ fontSize: '12px', padding: '5px 12px' }}
+                >
+                  {completing ? 'Saving…' : 'Done, I Submitted ✓'}
+                </button>
+              )}
+
+              {status === 'completed' && (
+                <span style={{ fontSize: '12px', color: 'var(--success, #4ade80)', fontWeight: 600 }}>
+                  ✓ Application submitted
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Original full-screen overlay mode ────────────────────────────────────────
   return (
     <div
       style={{
@@ -282,3 +509,4 @@ export function ApplyPilotModal({ sessionId, jobTitle, company, onClose }: Apply
     </div>
   );
 }
+

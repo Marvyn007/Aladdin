@@ -113,13 +113,30 @@ export async function fillSmartDropdown(
   );
 
   await withRetry(async () => {
-    // ── Step 1: Open the dropdown ───────────────────────────────────────────
-    await sh.act(`Click the "${label}" dropdown or selector to open its list of options`, {
-      timeout: 15_000,
-    });
+    // ── Step 1: Open the dropdown — Playwright DOM click (zero LLM cost) ───
+    const p = page as {
+      waitForTimeout: (ms: number) => Promise<void>;
+      locator: (s: string) => { first: () => { click: (opts?: { timeout?: number }) => Promise<void> } };
+    };
 
-    const p = page as { waitForTimeout: (ms: number) => Promise<void> };
-    await p.waitForTimeout(600);
+    let opened = false;
+    const rawSel = obs.selector?.trim();
+    if (rawSel) {
+      try {
+        const sel = rawSel.startsWith('//') || rawSel.startsWith('/html') || rawSel.startsWith('(')
+          ? `xpath=${rawSel}` : rawSel;
+        await p.locator(sel).first().click({ timeout: 5_000 });
+        opened = true;
+      } catch { /* fall through to sh.act */ }
+    }
+    if (!opened) {
+      // LLM fallback only when DOM click failed (selector missing or stale)
+      await sh.act(`Click the "${label}" dropdown or selector to open its list of options`, {
+        timeout: 15_000,
+      });
+    }
+
+    await p.waitForTimeout(300);
 
     // ── Step 2: DOM-first option sniff (primary — no LLM cost) ─────────────
     let options = await domSniffDropdownOptions(page, obs.selector);

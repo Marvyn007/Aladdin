@@ -23,18 +23,21 @@ export async function validateExtensionPat(
 
   const tokenHash = hashToken(raw);
 
-  const row = await prisma.extensionAccessToken.findUnique({
-    where:  { tokenHash },
-    select: { id: true, userId: true, revokedAt: true },
-  });
+  type PatRow = { id: string; user_id: string; revoked_at: Date | null };
+  const rows = await prisma.$queryRaw<PatRow[]>`
+    SELECT id, user_id, revoked_at
+    FROM extension_access_tokens
+    WHERE token_hash = ${tokenHash}
+    LIMIT 1
+  `;
+  const row = rows[0] ?? null;
 
-  if (!row || row.revokedAt) return null;
+  if (!row || row.revoked_at) return null;
 
   // Fire-and-forget lastUsedAt update — don't block the response
-  prisma.extensionAccessToken.update({
-    where: { tokenHash },
-    data:  { lastUsedAt: new Date() },
-  }).catch(() => {});
+  prisma.$executeRaw`
+    UPDATE extension_access_tokens SET last_used_at = NOW() WHERE token_hash = ${tokenHash}
+  `.catch(() => {});
 
-  return { userId: row.userId };
+  return { userId: row.user_id };
 }
