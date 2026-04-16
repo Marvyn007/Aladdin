@@ -210,21 +210,26 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         const raw = typeof msg.token === 'string' ? msg.token.trim() : '';
         if (!raw.startsWith('ald_ext_')) {
           return {
-            error: 'That does not look like a valid key. Make sure you copy the full key from Aladdin → Account → Auto Apply.',
+            error: 'That does not look like a valid key. Make sure you copy the full key from Aladdin → Account → Apply Pilot.',
           };
         }
         await chrome.storage.local.remove(['profileCache', 'profileCachedAt']);
-        const authRes = await fetch(`${ALADDIN_BASE_URL}/api/extension/auth`, {
-          headers: { Authorization: `Bearer ${raw}` },
-        });
+        let authRes;
+        try {
+          authRes = await fetch(`${ALADDIN_BASE_URL}/api/extension/auth`, {
+            headers: { Authorization: `Bearer ${raw}` },
+          });
+        } catch (networkErr) {
+          return { error: `Cannot reach Aladdin (${ALADDIN_BASE_URL}). Make sure you are online and the app is running.` };
+        }
         if (authRes.status === 401 || authRes.status === 403) {
           return {
             error:
-              'This key has expired or been revoked. Please generate a new one from Aladdin → Account → Auto Apply.',
+              'This key has expired or been revoked. Please generate a new one from Aladdin → Account → Apply Pilot.',
           };
         }
         if (!authRes.ok) {
-          return { error: 'Could not connect to Aladdin. Check your internet connection and try again.' };
+          return { error: `Server error (${authRes.status}) — please try again or re-generate the key from Aladdin → Account → Apply Pilot.` };
         }
         await setSession({ jwt: raw });
         await getProfile(true);
