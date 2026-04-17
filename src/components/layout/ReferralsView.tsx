@@ -7,6 +7,8 @@ import {
   Search, Users, Mail, Lock, Eye, Loader2, MapPin, X, ChevronDown, Send,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useSubscription, isFeatureLocked } from '@/hooks/useSubscription';
+import { PricingModal } from '@/components/subscription/PricingModal';
 
 interface ContactLocation {
   city: string | null;
@@ -272,6 +274,9 @@ function ReferralsSearchInput({
 export function ReferralsView() {
   const searchParams = useSearchParams();
   const initialDomain = searchParams.get('domain') ?? '';
+  const sub = useSubscription();
+  const linkedinLocked = isFeatureLocked('linkedinRetrieved', sub);
+  const [pricingModalOpen, setPricingModalOpen] = useState(false);
 
   const [companyInput, setCompanyInput] = useState(initialDomain);
   const [isSearching, setIsSearching] = useState(false);
@@ -625,16 +630,21 @@ export function ReferralsView() {
                               </td>
                               <td>
                                 {contact.linkedinUrl ? (
-                                  <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="referrals-linkedin-btn">
-                                    <Image
-                                      src={LINKEDIN_LOGO_SRC}
-                                      alt=""
-                                      width={14}
-                                      height={14}
-                                      className="referrals-linkedin-logo"
-                                    />
-                                    View
-                                  </a>
+                                  linkedinLocked ? (
+                                    <button
+                                      type="button"
+                                      className="referrals-linkedin-btn referrals-linkedin-btn--locked"
+                                      onClick={() => setPricingModalOpen(true)}
+                                    >
+                                      <Image src={LINKEDIN_LOGO_SRC} alt="" width={14} height={14} className="referrals-linkedin-logo" style={{ opacity: 0.4 }} />
+                                      <Lock size={11} strokeWidth={2} />
+                                    </button>
+                                  ) : (
+                                    <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="referrals-linkedin-btn">
+                                      <Image src={LINKEDIN_LOGO_SRC} alt="" width={14} height={14} className="referrals-linkedin-logo" />
+                                      View
+                                    </a>
+                                  )
                                 ) : <span className="referrals-empty-cell">—</span>}
                               </td>
                               <td>
@@ -687,6 +697,10 @@ export function ReferralsView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {pricingModalOpen && (
+        <PricingModal isOpen={pricingModalOpen} onClose={() => setPricingModalOpen(false)} sub={sub} />
+      )}
     </div>
   );
 }
