@@ -44,6 +44,8 @@ model User {
   userContext           Json?                  @default("{}") @map("user_context")
   extensionAccessTokens ExtensionAccessToken[]
   contactReveals        ContactReveal[]
+  subscription          Subscription?
+  userUsage             UserUsage?
 
   @@index([email], map: "idx_users_email")
   @@map("users")
@@ -731,4 +733,42 @@ model ContactReveal {
   @@unique([userId, contactId], map: "uniq_contact_reveal_user_contact")
   @@index([userId], map: "idx_contact_reveals_user_id")
   @@map("contact_reveals")
+}
+
+model Subscription {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @unique @map("user_id")
+  stripeCustomerId  String?   @unique @map("stripe_customer_id")
+  stripeSubId       String?   @unique @map("stripe_sub_id")
+  stripePriceId     String?   @map("stripe_price_id")
+  planType          String    @default("LITE")
+  status            String    @default("active")
+  cancelAtPeriodEnd Boolean   @default(false) @map("cancel_at_period_end")
+  currentPeriodEnd  DateTime? @map("current_period_end") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model UserUsage {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @unique @map("user_id")
+  resumesGenerated      Int      @default(0) @map("resumes_generated")
+  coverLettersGenerated Int      @default(0) @map("cover_letters_generated")
+  emailsRetrieved       Int      @default(0) @map("emails_retrieved")
+  linkedinRetrieved     Int      @default(0) @map("linkedin_retrieved")
+  lastResetDate         DateTime @default(now()) @map("last_reset_date") @db.Timestamptz(6)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_usage")
+}
+
+model WebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  @@map("webhook_events")
 }
