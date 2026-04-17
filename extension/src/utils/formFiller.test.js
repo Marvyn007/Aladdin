@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as formFiller from './formFiller.js';
-import { clickAutocompleteSuggestion, sniffComboboxOptions } from './formFiller.js';
+import { clickAutocompleteSuggestion, sniffComboboxOptions, isConditionalFollowUp } from './formFiller.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -425,5 +425,17 @@ describe('fillSelect', () => {
     expect(select.value).toBe('yes');
 
     select.remove();
+  });
+});
+
+describe('isConditionalFollowUp — referral Other detail (Workday)', () => {
+  it('does not skip referral free-text that appears after choosing Other', () => {
+    document.body.innerHTML = `
+      <fieldset>
+        <input type="radio" name="src" value="a" />
+        <textarea id="spec"></textarea>
+      </fieldset>`;
+    const ta = document.getElementById('spec');
+    expect(isConditionalFollowUp(ta, 'If Other, please specify how you heard about this job')).toBe(false);
   });
 });

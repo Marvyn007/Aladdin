@@ -16,9 +16,14 @@ if (process.env.NODE_ENV !== 'production') {
 
 /**
  * Dev HMR can keep a PrismaClient that was instantiated before `prisma generate` added a model;
- * then `prisma.applyPilotProfile` (etc.) is undefined at runtime.
+ * then newly added delegates (e.g. contactSearchCache) are undefined at runtime.
+ * Check for the most recently added model to detect a stale client.
  */
-if (typeof (prisma as unknown as { applyPilotProfile?: unknown }).applyPilotProfile === 'undefined') {
+type PrismaWithExtras = { applyPilotProfile?: unknown; contactSearchCache?: unknown };
+if (
+    typeof (prisma as unknown as PrismaWithExtras).applyPilotProfile === 'undefined' ||
+    typeof (prisma as unknown as PrismaWithExtras).contactSearchCache === 'undefined'
+) {
     void prisma.$disconnect().catch(() => {});
     prisma = createPrismaClient();
     if (process.env.NODE_ENV !== 'production') {

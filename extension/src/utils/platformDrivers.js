@@ -100,37 +100,73 @@ export async function scrollToBottom() {
   });
 }
 
+// ─── Shadow DOM Utilities ──────────────────────────────────────────────────────
+
+/**
+ * Returns the shadow root of an element, piercing closed roots via the
+ * Chrome Extension API (chrome.dom.openOrClosedShadowRoot — available in MV3
+ * content scripts since Chrome 106). Returns null if the element has no shadow.
+ *
+ * @param {Element} el
+ * @returns {ShadowRoot|null}
+ */
+function getShadowRoot(el) {
+  try {
+    // Open shadow root: directly accessible
+    if (el.shadowRoot) return el.shadowRoot;
+    // Closed shadow root: requires the privileged extension API
+    if (typeof chrome?.dom?.openOrClosedShadowRoot === 'function') {
+      return chrome.dom.openOrClosedShadowRoot(el) ?? null;
+    }
+  } catch { /* ignore SecurityError or unsupported */ }
+  return null;
+}
+
 // ─── Field Collection ──────────────────────────────────────────────────────────
 
+/**
+ * Entry point: collects all fillable fields from the document, including those
+ * nested inside Shadow Roots (up to MAX_SHADOW_DEPTH levels deep).
+ */
 function collectFields() {
-  const results = [];
   const seen = new WeakSet();
-
-  // 1. Detect Platform for specialized collection
   const platform = detectPlatform();
+  const results = [];
 
-  // 2. Select candidates (all interactive inputs)
-  const candidates = document.querySelectorAll(
+  _walkRoot(document, results, seen, platform, 0);
+
+  return results;
+}
+
+/** Maximum levels of Shadow DOM nesting to traverse. Workday uses ≤3 in practice. */
+const MAX_SHADOW_DEPTH = 5;
+
+/**
+ * Recursively collects fillable fields from a DOM root (Document or ShadowRoot).
+ * After collecting standard fields, it walks all elements in this root looking
+ * for shadow hosts and recurses into each one (depth-limited).
+ *
+ * @param {Document|ShadowRoot} root
+ * @param {Array} results        — accumulator (mutated in place)
+ * @param {WeakSet} seen         — dedup set for elements and shadow roots
+ * @param {string} platform
+ * @param {number} depth         — current shadow nesting level
+ */
+function _walkRoot(root, results, seen, platform, depth) {
+  // ── 1. Interactive form fields ────────────────────────────────────────────
+  const candidates = root.querySelectorAll(
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select, [role="combobox"], [role="listbox"]'
   );
 
   for (const el of candidates) {
     if (seen.has(el)) continue;
-    
-    // Safety: ignore hidden inputs or aria-hidden elements
     if (el.type === 'hidden' || el.getAttribute('aria-hidden') === 'true') continue;
-    
-    if (!isVisible(el)) continue;
-    
-    // Safety check for cross-origin frame access if we ever recursive-scan (not yet, but good to have)
     try {
-      if (el.tagName === 'IFRAME' && el.contentDocument === null) continue; 
-    } catch (e) {
-      continue; // SecurityError in cross-origin iframe
-    }
+      if (el.tagName === 'IFRAME' && el.contentDocument === null) continue;
+    } catch { continue; }
+    if (!isVisible(el)) continue;
 
     seen.add(el);
-
     results.push({
       element: el,
       type: getFieldType(el),
@@ -140,23 +176,19 @@ function collectFields() {
       ariaLabel: el.getAttribute('aria-label') ?? '',
       context: getContext(el),
       maxLength: el.maxLength > 0 ? el.maxLength : null,
-      platform: platform,
-      /** @type {{ value: string, text: string }[]} */
+      platform,
       selectOptions: collectFieldOptions(el),
     });
   }
 
-  // 3) File inputs are frequently hidden behind "Attach / Dropbox / Google Drive" widgets.
-  // We still need to detect them so the engine can inject a File via DataTransfer.
-  const fileInputs = document.querySelectorAll('input[type="file"]');
+  // ── 2. File inputs (kept hidden by most ATSes — collect regardless of visibility) ──
+  const fileInputs = root.querySelectorAll('input[type="file"]');
   for (const el of fileInputs) {
     if (seen.has(el)) continue;
     if (el.getAttribute('aria-hidden') === 'true') continue;
     if (el.disabled) continue;
 
     seen.add(el);
-
-    // NOTE: do NOT require visibility for file inputs; many platforms keep them hidden.
     results.push({
       element: el,
       type: 'file',
@@ -166,12 +198,24 @@ function collectFields() {
       ariaLabel: el.getAttribute('aria-label') ?? '',
       context: getUploadContext(el),
       maxLength: null,
-      platform: platform,
+      platform,
       selectOptions: [],
     });
   }
 
-  return results;
+  // ── 3. Recurse into Shadow Roots (depth-limited) ──────────────────────────
+  if (depth < MAX_SHADOW_DEPTH) {
+    const allEls = root.querySelectorAll('*');
+    for (const el of allEls) {
+      const shadow = getShadowRoot(el);
+      if (!shadow) continue;
+      // Use the shadow root object itself as the dedup key so we never walk the
+      // same shadow twice even if the host element appears in multiple queries.
+      if (seen.has(shadow)) continue;
+      seen.add(shadow);
+      _walkRoot(shadow, results, seen, platform, depth + 1);
+    }
+  }
 }
 
 /**
@@ -248,9 +292,17 @@ function isVisible(el) {
 }
 
 function getLabelText(el, platform) {
+  // Resolve the root that contains this element — either a ShadowRoot or the
+  // top-level document. Label lookups must be scoped to the same root; a
+  // document.querySelector cannot reach inside a shadow root and vice-versa.
+  const root = (el.getRootNode && el.getRootNode() instanceof ShadowRoot)
+    ? el.getRootNode()
+    : document;
+
   // Common: Check for 'for' attribute
   if (el.id) {
-    const label = document.querySelector(`label[for="${el.id}"]`);
+    const label = root.querySelector(`label[for="${CSS.escape(el.id)}"]`)
+      ?? document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
     if (label) return label.textContent?.trim() ?? '';
   }
 

@@ -158,7 +158,8 @@ export async function getAllPublicJobs(
                    u.votes as poster_votes,
                    u.id as poster_id,
                    viewer_uj.status as viewer_status,
-                   c.logo_url as company_logo_url
+                   c.logo_url as company_logo_url,
+                   c.domain as company_domain
             FROM jobs j
             LEFT JOIN companies c ON j.company = c.name
             LEFT JOIN user_jobs uj ON j.id = uj.job_id AND j.posted_by_user_id = uj.user_id
@@ -172,7 +173,8 @@ export async function getAllPublicJobs(
                    uj.poster_first_name, uj.poster_last_name, uj.poster_image_url,
                    u.votes as poster_votes,
                    u.id as poster_id,
-                   c.logo_url as company_logo_url
+                   c.logo_url as company_logo_url,
+                   c.domain as company_domain
             FROM jobs j
             LEFT JOIN companies c ON j.company = c.name
             LEFT JOIN user_jobs uj ON j.id = uj.job_id AND j.posted_by_user_id = uj.user_id
@@ -239,7 +241,7 @@ export async function getAllPublicJobs(
         const db = getSQLiteDB();
         // SQLite local handling
         const rows = db.prepare(`
-            SELECT j.*, c.logo_url as company_logo_url
+            SELECT j.*, c.logo_url as company_logo_url, c.domain as company_domain
             FROM jobs j 
             LEFT JOIN companies c ON j.company = c.name
             ORDER BY j.${sortColumn} ${sortDir.toUpperCase()}, j.id ASC
@@ -288,7 +290,8 @@ export async function getJobs(
                    uj.archived_at,
                    poster_uj.poster_first_name, poster_uj.poster_last_name, poster_uj.poster_image_url,
                    u.id as poster_id, u.votes as poster_votes,
-                   c.logo_url as company_logo_url
+                   c.logo_url as company_logo_url,
+                   c.domain as company_domain
             FROM jobs j
             LEFT JOIN companies c ON j.company = c.name
             JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $1 AND uj.status = $2
@@ -350,7 +353,7 @@ export async function getJobs(
         const db = getSQLiteDB();
         // Simplified SQLite query - might need adjustment for JOINs if strictly needed but usually local doesn't have users table fully populated same way
         const rows = db.prepare(`
-            SELECT j.*, uj.status, uj.archived_at, c.logo_url as company_logo_url
+            SELECT j.*, uj.status, uj.archived_at, c.logo_url as company_logo_url, c.domain as company_domain
             FROM jobs j
             LEFT JOIN companies c ON j.company = c.name
             JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
@@ -485,7 +488,7 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
 
     if (dbType === 'postgres') {
         const pool = getPostgresPool();
-        let query = 'SELECT j.*, c.logo_url as company_logo_url FROM jobs j LEFT JOIN companies c ON j.company = c.name WHERE j.id = $1';
+        let query = 'SELECT j.*, c.logo_url as company_logo_url, c.domain as company_domain FROM jobs j LEFT JOIN companies c ON j.company = c.name WHERE j.id = $1';
         let params: any[] = [id];
 
         if (userId) {
@@ -497,7 +500,8 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
                        uj.missing_skills, 
                        uj.why, 
                        uj.archived_at,
-                       c.logo_url as company_logo_url
+                       c.logo_url as company_logo_url,
+                       c.domain as company_domain
                 FROM jobs j
                 LEFT JOIN companies c ON j.company = c.name
                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = $2
@@ -569,7 +573,7 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
         let row;
         if (userId) {
             row = db.prepare(`
-                SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at, c.logo_url as company_logo_url
+                SELECT j.*, uj.status, uj.match_score, uj.matched_skills, uj.missing_skills, uj.why, uj.archived_at, c.logo_url as company_logo_url, c.domain as company_domain
                 FROM jobs j
                 LEFT JOIN companies c ON j.company = c.name
                 LEFT JOIN user_jobs uj ON j.id = uj.job_id AND uj.user_id = ?
@@ -577,7 +581,7 @@ export async function getJobById(userId: string | null, id: string): Promise<Job
             `).get(userId, id);
         } else {
             row = db.prepare(`
-                SELECT j.*, c.logo_url as company_logo_url
+                SELECT j.*, c.logo_url as company_logo_url, c.domain as company_domain
                 FROM jobs j
                 LEFT JOIN companies c ON j.company = c.name
                 WHERE j.id = ?

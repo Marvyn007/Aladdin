@@ -12,6 +12,7 @@ const JobsMap = dynamic(() => import('@/components/layout/JobsMap'), {
     loading: () => <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#666' }}>Loading Map...</div>
 });
 import { InterviewExperiencesView } from '@/components/layout/InterviewExperiencesView';
+import { ReferralsView } from '@/components/layout/ReferralsView';
 import { InterviewExperienceDetailView } from '@/components/layout/InterviewExperienceDetailView';
 import { PracticeView } from '@/components/layout/PracticeView';
 import { CompanyQuestionsTable } from '@/components/layout/CompanyQuestionsTable';
@@ -326,7 +327,7 @@ function DroppableColumn({
 }
 
 interface DashboardProps {
-    defaultActiveView?: 'jobs' | 'tracker' | 'interview-experiences' | 'practice';
+    defaultActiveView?: 'jobs' | 'tracker' | 'referrals' | 'interview-experiences' | 'practice';
     defaultJobMode?: 'list' | 'map';
     selectedCompany?: string; // New prop for detail view
 }
@@ -373,12 +374,13 @@ export function Dashboard({
     // Derive active state mainly from props/URL
     const isJobBoard = defaultActiveView === 'jobs';
     const isTracker = defaultActiveView === 'tracker';
+    const isReferrals = defaultActiveView === 'referrals';
     const isInterviewExperiences = defaultActiveView === 'interview-experiences';
     const isPracticeView = defaultActiveView === 'practice';
     const isMapMode = defaultJobMode === 'map';
 
     // We keep these for internal logic, but they should sync with props
-    const [activeView, setActiveView] = useState<'jobs' | 'tracker' | 'interview-experiences' | 'practice'>(defaultActiveView);
+    const [activeView, setActiveView] = useState<'jobs' | 'tracker' | 'referrals' | 'interview-experiences' | 'practice'>(defaultActiveView ?? 'jobs');
     const [applicationStatus, setApplicationStatus] = useState<Record<string, 'none' | 'applied' | 'loading'>>({});
     const [applications, setApplications] = useState<ApplicationWithJob[]>([]);
 
@@ -1294,6 +1296,15 @@ export function Dashboard({
                         {!isSignedIn && <span style={{ marginLeft: 6, opacity: 0.5 }}>🔒</span>}
                     </Link>
                     <Link
+                        href="/find-referrals"
+                        className={`view-tab ${isReferrals ? 'active' : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: !isSignedIn ? 0.65 : 1 }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Referrals
+                        {!isSignedIn && <span style={{ marginLeft: 6, opacity: 0.5 }}>🔒</span>}
+                    </Link>
+                    <Link
                         href="/jobs-map"
                         className={`view-tab ${isJobBoard && isMapMode ? 'active' : ''}`}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: !isSignedIn ? 0.65 : 1 }}
@@ -1540,6 +1551,8 @@ export function Dashboard({
                         </DndContext>
                     </div>
                 )}
+
+                {isReferrals && <ReferralsView />}
 
                 {isInterviewExperiences && (
                     selectedCompany ? (

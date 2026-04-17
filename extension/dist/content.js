@@ -1,14 +1,56 @@
-function detectJobApplicationPage() {
-  const url = window.location.href;
-  if (/greenhouse\.io\/[^/]+\/jobs\/|boards\.greenhouse\.io/.test(url)) return "greenhouse";
+function detectJobApplicationPageDetailed() {
+  if (isSuppressedPage()) return { platform: null, strength: null };
+  const byUrl = detectByUrlPattern();
+  if (byUrl) return { platform: byUrl, strength: "strong" };
+  const byParam = detectByUrlParams();
+  if (byParam) return { platform: byParam, strength: "strong" };
+  const byFingerprint = detectByATSFingerprint();
+  if (byFingerprint) return { platform: byFingerprint, strength: "strong" };
+  const { platform: platform2, signalCount } = detectByDomSignals();
+  if (platform2 === "generic") return { platform: "generic", strength: "strong" };
+  if (platform2 === "generic-weak" || signalCount === 1) {
+    return { platform: "generic-weak", strength: "weak" };
+  }
+  return { platform: null, strength: null };
+}
+const SUPPRESSED_PATH_PATTERNS = [
+  /\/log[-_]?in(\/|$)/i,
+  /\/sign[-_]?in(\/|$)/i,
+  /\/sign[-_]?up(\/|$)/i,
+  /\/register(\/|$)/i,
+  /\/checkout(\/|$)/i,
+  /\/cart(\/|$)/i,
+  /\/basket(\/|$)/i,
+  /\/account\/billing/i,
+  /\/billing(\/|$)/i,
+  /\/subscribe(\/|$)/i,
+  /\/payments?(\/|$)/i,
+  /\/search(\/|$)/i
+];
+const SUPPRESSED_SUBMIT_TEXT = /^\s*(sign\s*in|log\s*in|log\s*on|login|pay|pay\s*now|continue\s*to\s*payment|place\s*order|subscribe|search)\s*$/i;
+function isSuppressedPage() {
+  const path = location.pathname || "";
+  if (SUPPRESSED_PATH_PATTERNS.some((re) => re.test(path))) return true;
+  const submit = document.querySelector(
+    'button[type="submit"], input[type="submit"], button[data-testid*="submit" i]'
+  );
+  if (submit) {
+    const text = (submit.textContent || submit.value || submit.getAttribute("aria-label") || "").trim();
+    if (SUPPRESSED_SUBMIT_TEXT.test(text)) return true;
+  }
+  return false;
+}
+function detectByUrlPattern() {
+  const url = location.href;
+  if (/greenhouse\.io\/[^/]+\/jobs\/|boards\.greenhouse\.io|job-boards\.greenhouse\.io/.test(url)) return "greenhouse";
   if (/jobs\.lever\.co\/[^/]+\/[a-f0-9-]{36}/.test(url)) return "lever";
-  if (/myworkdayjobs\.com/.test(url)) return "workday";
-  if (/jobs\.ashbyhq\.com/.test(url)) return "ashby";
+  if (/myworkdayjobs\.com|wd\d+\.myworkdayjobs\.com/.test(url)) return "workday";
+  if (/jobs\.ashbyhq\.com|ashbyhq\.com\/[^/]+/.test(url)) return "ashby";
   if (/icims\.com/.test(url)) return "icims";
   if (/recruiting\.ultipro\.com/.test(url)) return "ultipro";
   if (/smartrecruiters\.com\/[^/]+\/[^/]+/.test(url)) return "smartrecruiters";
-  if (/jobvite\.com\/[^/]+\/job\//.test(url)) return "jobvite";
-  if (/taleo\.net/.test(url)) return "taleo";
+  if (/jobvite\.com\/[^/]+\/job\/|app\.jobvite\.com\/j\//.test(url)) return "jobvite";
+  if (/taleo\.net|taleo\.com/.test(url)) return "taleo";
   if (/successfactors\.com|sapsf\.com/.test(url)) return "successfactors";
   if (/bamboohr\.com/.test(url)) return "bamboohr";
   if (/jobs\.rippling\.com/.test(url)) return "rippling";
@@ -20,47 +62,74 @@ function detectJobApplicationPage() {
   if (/apply\.workable\.com/.test(url)) return "workable";
   if (/applytojob\.com/.test(url)) return "jazzhr";
   if (/bullhornstaffing\.com/.test(url)) return "bullhorn";
-  return detectByDomSignals();
+  if (/\.linkedin\.com\/jobs\/view\//.test(url)) return "linkedin";
+  if (/indeed\.com\/(viewjob|jobs|apply)/.test(url)) return "indeed";
+  if (/glassdoor\.com\/job/.test(url)) return "glassdoor";
+  return null;
 }
-const BLOCKED_HOSTS = [
-  "google.com",
-  "chatgpt.com",
-  "notion.so",
-  "slack.com",
-  "mail.google.com",
-  "docs.google.com",
-  "sheets.google.com",
-  "localhost"
-];
-const BLOCKED_SUBMIT_PATTERNS = /^(subscribe|contact us|send message|sign up|log in|login|register|search)$/i;
-function isBlockedPage() {
-  const host2 = window.location.hostname;
-  if (BLOCKED_HOSTS.some((b) => host2.includes(b))) return true;
-  const submitBtn = document.querySelector(
-    'button[type="submit"], input[type="submit"]'
-  );
-  if (submitBtn) {
-    const text = (submitBtn.textContent || submitBtn.value || "").trim();
-    if (BLOCKED_SUBMIT_PATTERNS.test(text)) return true;
-  }
-  return false;
+function detectByUrlParams() {
+  const params = new URLSearchParams(location.search);
+  if (params.has("gh_jid") || params.has("gh_src") || params.has("gh_aid")) return "greenhouse";
+  if (params.has("ashby_jid") || params.has("ashbyJobId")) return "ashby";
+  if (params.has("lever_source")) return "lever";
+  if (params.has("workable_job")) return "workable";
+  if (params.has("jvs") || params.has("__jvst")) return "jobvite";
+  if (params.has("srjid")) return "smartrecruiters";
+  return null;
+}
+function detectByATSFingerprint() {
+  if (document.querySelector('iframe[src*="boards.greenhouse.io" i], iframe[src*="job-boards.greenhouse.io" i]')) return "greenhouse";
+  if (document.querySelector('iframe[src*="jobs.lever.co" i]')) return "lever";
+  if (document.querySelector('iframe[src*="apply.workable.com" i]')) return "workable";
+  if (document.querySelector('iframe[src*="jobs.ashbyhq.com" i]')) return "ashby";
+  if (document.querySelector('iframe[src*="myworkdayjobs.com" i]')) return "workday";
+  if (document.querySelector('iframe[src*="icims.com" i]')) return "icims";
+  if (document.querySelector('iframe[src*="smartrecruiters.com" i]')) return "smartrecruiters";
+  if (document.querySelector('script[src*="boards.greenhouse.io" i], script[src*="greenhouse.io/embed" i]')) return "greenhouse";
+  if (document.querySelector('script[src*="jobs.lever.co" i], script[src*="lever.co/embed" i]')) return "lever";
+  if (document.querySelector('script[src*="ashbyhq.com" i]')) return "ashby";
+  if (document.querySelector('script[src*="workable.com" i]')) return "workable";
+  if (document.querySelector('meta[name="application-name"][content="Workday"]') || document.querySelector('[data-automation-id="jobPostingPage"]') || document.querySelector('[data-automation-id="jobApplicationPage"]') || document.querySelector("[data-automation-id]") && /workday/i.test(document.title)) return "workday";
+  if (document.querySelector("[data-gh-id], [data-ghs-id]") || document.querySelector('meta[name="generator"][content*="Greenhouse" i]') || document.querySelector("div#grnhse_app, div#grnhse_iframe, #grnhse")) return "greenhouse";
+  if (document.querySelector('[class*="lever-"], [data-qa*="lever"]') || document.querySelector('meta[name="generator"][content*="Lever" i]')) return "lever";
+  if (document.querySelector('meta[name="generator"][content*="iCIMS" i]') || document.querySelector('[class*="icims-"]') || document.querySelector('link[href*="icims.com"]')) return "icims";
+  if (document.getElementById("oracleTaleo") || document.querySelector('[id*="taleo" i]') || document.querySelector('script[src*="taleo"]')) return "taleo";
+  if (document.querySelector('meta[name="generator"][content*="Ashby" i]') || document.querySelector("[data-ashby-job-posting-id], [data-ashby-application-id]") || document.querySelector("div#ashby_embed, div#ashby_job_board_embed")) return "ashby";
+  if (document.querySelector('meta[name="generator"][content*="SmartRecruiters" i]') || document.querySelector('[class*="smartrecruiters"]')) return "smartrecruiters";
+  if (document.querySelector("[data-workable-widget], [data-whatever-workable]")) return "workable";
+  return null;
 }
 function detectByDomSignals() {
-  var _a;
-  if (isBlockedPage()) return null;
+  var _a, _b;
   let score = 0;
   const form = document.querySelector("form");
   if (form && form.querySelector('input[type="file"]')) score += 1;
-  const pageText = document.body.innerText.toLowerCase();
-  const jobTextSignals = ["resume", "cover letter", "work authorization", "years of experience", "linkedin", "sponsorship"];
+  const pageText = (((_a = document.body) == null ? void 0 : _a.innerText) || "").toLowerCase();
+  const jobTextSignals = [
+    "resume",
+    "cover letter",
+    "work authorization",
+    "years of experience",
+    "linkedin profile",
+    "sponsorship",
+    "eeo",
+    "voluntary self-identification"
+  ];
   if (jobTextSignals.some((s) => pageText.includes(s))) score += 1;
-  const titleText = (document.title + " " + (((_a = document.querySelector("h1")) == null ? void 0 : _a.textContent) ?? "")).toLowerCase();
-  if (/\b(apply|application|job application)\b/.test(titleText)) score += 1;
-  const ldJson = document.querySelector('script[type="application/ld+json"]');
-  if (ldJson) {
+  const titleText = (document.title + " " + (((_b = document.querySelector("h1")) == null ? void 0 : _b.textContent) ?? "")).toLowerCase();
+  if (/\b(apply|application|job application|careers?|hiring)\b/.test(titleText)) score += 1;
+  const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (const ld of ldScripts) {
     try {
-      const data = JSON.parse(ldJson.textContent);
-      if (data["@type"] === "JobPosting") score += 1;
+      const data = JSON.parse(ld.textContent || "{}");
+      const types = Array.isArray(data) ? data : [data];
+      for (const t of types) {
+        const ty = t == null ? void 0 : t["@type"];
+        if (ty === "JobPosting" || Array.isArray(ty) && ty.includes("JobPosting")) {
+          score += 1;
+          break;
+        }
+      }
     } catch {
     }
   }
@@ -68,21 +137,28 @@ function detectByDomSignals() {
     const visibleInputs = form.querySelectorAll(
       'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select'
     );
-    const pathLower = window.location.pathname.toLowerCase();
-    if (visibleInputs.length >= 4 && /\/(careers|jobs|apply)(\/|$)/.test(pathLower)) score += 1;
+    const pathLower = location.pathname.toLowerCase();
+    if (visibleInputs.length >= 4 && /\/(careers?|jobs?|apply|application)(\/|$)/.test(pathLower)) score += 1;
   }
-  if (score >= 2) return "generic";
-  if (score === 1) return "generic-weak";
-  return null;
+  if (score >= 2) return { platform: "generic", signalCount: score };
+  if (score === 1) return { platform: "generic-weak", signalCount: score };
+  return { platform: null, signalCount: 0 };
 }
 function parseJobMeta() {
-  var _a, _b, _c, _d, _e;
-  const ldJson = document.querySelector('script[type="application/ld+json"]');
-  if (ldJson) {
+  var _a, _b, _c, _d, _e, _f;
+  const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+  for (const ld of ldScripts) {
     try {
-      const data = JSON.parse(ldJson.textContent);
-      if (data["@type"] === "JobPosting") {
-        return { jobTitle: data.title ?? "", company: ((_a = data.hiringOrganization) == null ? void 0 : _a.name) ?? "" };
+      const data = JSON.parse(ld.textContent || "{}");
+      const items = Array.isArray(data) ? data : [data];
+      for (const it of items) {
+        const ty = it == null ? void 0 : it["@type"];
+        if (ty === "JobPosting" || Array.isArray(ty) && ty.includes("JobPosting")) {
+          return {
+            jobTitle: it.title ?? "",
+            company: ((_a = it.hiringOrganization) == null ? void 0 : _a.name) ?? ""
+          };
+        }
       }
     } catch {
     }
@@ -91,9 +167,30 @@ function parseJobMeta() {
   const h1 = ((_d = (_c = document.querySelector("h1")) == null ? void 0 : _c.textContent) == null ? void 0 : _d.trim()) ?? "";
   const titleTag = document.title ?? "";
   const jobTitle2 = h1 || ogTitle || titleTag;
-  const companyEl = document.querySelector('[class*="company"], [class*="employer"], [data-company]');
-  const company2 = ((_e = companyEl == null ? void 0 : companyEl.textContent) == null ? void 0 : _e.trim()) ?? "";
+  const ogSite = ((_e = document.querySelector('meta[property="og:site_name"]')) == null ? void 0 : _e.content) ?? "";
+  const companyEl = document.querySelector('[class*="company" i], [class*="employer" i], [data-company]');
+  const company2 = ((_f = companyEl == null ? void 0 : companyEl.textContent) == null ? void 0 : _f.trim()) || ogSite || "";
   return { jobTitle: jobTitle2, company: company2 };
+}
+const ATS_IFRAME_HOSTS = [
+  "icims.com",
+  "taleo.net",
+  "taleo.com",
+  "boards.greenhouse.io",
+  "job-boards.greenhouse.io",
+  "jobs.lever.co",
+  "apply.workable.com",
+  "jobs.ashbyhq.com",
+  "myworkdayjobs.com",
+  "smartrecruiters.com",
+  "jobs.smartrecruiters.com",
+  "jobvite.com",
+  "app.jobvite.com",
+  "recruiting.ultipro.com"
+];
+function isAtsIframeHost(hostname = location.hostname) {
+  const h = String(hostname || "").toLowerCase();
+  return ATS_IFRAME_HOSTS.some((x) => h === x || h.endsWith("." + x) || h.includes(x));
 }
 const FATAL_PATTERNS = [
   "Extension context invalidated",
@@ -1197,11 +1294,13 @@ class AutoApplyPanel {
     this.captchaAlert = false;
     this.fileAlert = null;
     this.askingQuestion = null;
+    this.autoAdvance = false;
     this.onStart = null;
     this.onPause = null;
     this.onResume = null;
     this.onSkip = null;
     this.onSaveSettings = null;
+    this.onAutoAdvanceChange = null;
     this.onSignIn = null;
     this.onDisconnect = null;
     this.onConnectPat = null;
@@ -1232,17 +1331,19 @@ class AutoApplyPanel {
     this.snappedEdge = "right";
     const initBm = this._bmSize();
     this.position = {
-      x: window.innerWidth - initBm.w - GUTTER,
+      x: this._bookmarkRightX(initBm.w),
       y: clamp(108, GUTTER, window.innerHeight - initBm.h - GUTTER)
     };
     this._dragState = null;
     this._mount();
   }
   _bmSize() {
-    if (this.snappedEdge === "top" || this.snappedEdge === "bottom") {
-      return { w: WHITE_SIDE, h: WHITE_SIDE + GRIP };
-    }
     return { w: WHITE_SIDE + GRIP, h: WHITE_SIDE };
+  }
+  /** Fixed X for the bookmark so it stays flush to the right edge of the viewport. */
+  _bookmarkRightX(bookmarkWidth) {
+    const w = bookmarkWidth ?? this._bmSize().w;
+    return Math.max(GUTTER, window.innerWidth - w - GUTTER);
   }
   _applyBookmarkLayout() {
     if (!this.bookmarkEl) return;
@@ -1482,7 +1583,7 @@ class AutoApplyPanel {
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) this._dragState.moved = true;
       const { w, h } = this._bmSize();
       this.position = {
-        x: clamp(this._dragState.originX + dx, GUTTER, window.innerWidth - w - GUTTER),
+        x: this._bookmarkRightX(w),
         y: clamp(this._dragState.originY + dy, GUTTER, window.innerHeight - h - GUTTER)
       };
       this._place();
@@ -1492,13 +1593,13 @@ class AutoApplyPanel {
       const dragState = this._dragState;
       this._dragState = null;
       if (dragState.source === "grip") {
-        this._snapBookmarkToNearestEdge();
+        this._snapBookmarkToRightWall();
       }
     };
     this._onResize = () => {
       const { w, h } = this._bmSize();
       this.position = {
-        x: clamp(this.position.x, GUTTER, window.innerWidth - w - GUTTER),
+        x: this._bookmarkRightX(w),
         y: clamp(this.position.y, GUTTER, window.innerHeight - h - GUTTER)
       };
       this._place();
@@ -1539,51 +1640,20 @@ class AutoApplyPanel {
     }).length;
     return answers + custom;
   }
-  _snapBookmarkToNearestEdge() {
-    var _a;
-    const W = window.innerWidth;
+  _snapBookmarkToRightWall() {
     const H = window.innerHeight;
-    const horiz = { w: WHITE_SIDE + GRIP, h: WHITE_SIDE };
-    const vert = { w: WHITE_SIDE, h: WHITE_SIDE + GRIP };
-    const rect = (_a = this.bookmarkEl) == null ? void 0 : _a.getBoundingClientRect();
-    const cx = rect ? rect.left + rect.width / 2 : this.position.x + horiz.w / 2;
-    const cy = rect ? rect.top + rect.height / 2 : this.position.y + horiz.h / 2;
-    const candidates = [
-      { edge: "left", dist: cx, dims: horiz },
-      { edge: "right", dist: W - cx, dims: horiz },
-      { edge: "top", dist: cy, dims: vert },
-      { edge: "bottom", dist: H - cy, dims: vert }
-    ];
-    candidates.sort((a, b) => a.dist - b.dist);
-    const best = candidates[0];
-    this.snappedEdge = best.edge;
-    const { w, h } = best.dims;
-    let x;
-    let y;
-    if (best.edge === "left") {
-      x = GUTTER;
-      y = clamp(this.position.y, GUTTER, H - h - GUTTER);
-    } else if (best.edge === "right") {
-      x = W - w - GUTTER;
-      y = clamp(this.position.y, GUTTER, H - h - GUTTER);
-    } else if (best.edge === "top") {
-      y = GUTTER;
-      x = clamp(this.position.x, GUTTER, W - w - GUTTER);
-    } else {
-      y = H - h - GUTTER;
-      x = clamp(this.position.x, GUTTER, W - w - GUTTER);
-    }
-    this.position = { x, y };
-    this.bookmarkEl.style.transition = "left 0.22s cubic-bezier(0.22,1,0.36,1), top 0.22s cubic-bezier(0.22,1,0.36,1)";
+    const { w, h } = this._bmSize();
+    this.snappedEdge = "right";
+    this.position = {
+      x: this._bookmarkRightX(w),
+      y: clamp(this.position.y, GUTTER, H - h - GUTTER)
+    };
     this._applyBookmarkLayout();
     this._place();
-    window.setTimeout(() => {
-      if (this.bookmarkEl) this.bookmarkEl.style.transition = "";
-    }, 240);
   }
   _place() {
     const { w: bmW, h: bmH } = this._bmSize();
-    const bx = clamp(this.position.x, GUTTER, window.innerWidth - bmW - GUTTER);
+    const bx = this._bookmarkRightX(bmW);
     const by = clamp(this.position.y, GUTTER, window.innerHeight - bmH - GUTTER);
     this.position = { x: bx, y: by };
     this.bookmarkEl.style.left = `${bx}px`;
@@ -1779,6 +1849,16 @@ class AutoApplyPanel {
         </div>
         <p class="bento-kicker">Profile Settings</p>
         <h2 class="bento-title">Customize Flow</h2>
+        <div class="aa-section">
+          <h3 class="headline" style="font-size:16px;margin:0 0 12px">Automation</h3>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+            <span style="font-size:13px;color:var(--text);flex:1;line-height:1.4">
+              <strong>Auto-Advance</strong><br>
+              <span style="color:var(--text-muted)">Automatically click Next after all fields on a step are filled. Blocks if mandatory fields are empty.</span>
+            </span>
+            <input type="checkbox" id="aa-auto-advance-toggle" ${this.autoAdvance ? "checked" : ""} style="width:18px;height:18px;accent-color:var(--brand,#6366f1);cursor:pointer;flex-shrink:0">
+          </label>
+        </div>
         <div class="aa-section">
           <h3 class="headline" style="font-size:16px;margin:0 0 12px">Aladdin account</h3>
           ${this.profileData.user ? `
@@ -2079,6 +2159,14 @@ class AutoApplyPanel {
       this.setSettingsMessage("Settings reloaded.", "info");
       this._renderPanel();
     });
+    const autoAdvanceToggle = this.panelEl.querySelector("#aa-auto-advance-toggle");
+    if (autoAdvanceToggle) {
+      autoAdvanceToggle.addEventListener("change", () => {
+        var _a2;
+        this.autoAdvance = autoAdvanceToggle.checked;
+        (_a2 = this.onAutoAdvanceChange) == null ? void 0 : _a2.call(this, this.autoAdvance);
+      });
+    }
     (_p = this.panelEl.querySelector("#aa-generate-cover-letter")) == null ? void 0 : _p.addEventListener("click", () => {
       this.addLog("Generate cover letter — coming soon.");
     });
@@ -2357,9 +2445,6 @@ function removePanel() {
 function getJobMeta() {
   return parseJobMeta();
 }
-function shouldActivate(platform2) {
-  return !!platform2 && platform2 !== "generic-weak";
-}
 function installErrorBoundary() {
   window.addEventListener("error", (event) => {
     if (event.error && isFatalExtensionError(event.error)) {
@@ -2386,6 +2471,254 @@ function performGhostCleanup() {
   } catch {
   }
 }
+function scanFields(platform2, onNewFields) {
+  const fields = collectFields();
+  if (["workday", "lever", "ashby", "generic", "generic-weak"].includes(platform2)) {
+    let lastFieldCount = fields.length;
+    const observer = new MutationObserver(() => {
+      const updated = collectFields();
+      const visibleCount = updated.filter((f) => {
+        var _a;
+        return (_a = f.element) == null ? void 0 : _a.isConnected;
+      }).length;
+      if (lastFieldCount > 1 && visibleCount <= 1) {
+        setTimeout(() => {
+          const afterSettle = collectFields();
+          lastFieldCount = afterSettle.length;
+          onNewFields(afterSettle);
+        }, 800);
+        return;
+      }
+      lastFieldCount = updated.length;
+      onNewFields(updated);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    window._autoapplyObserver = observer;
+  }
+  return fields;
+}
+function stopObserver() {
+  var _a;
+  (_a = window._autoapplyObserver) == null ? void 0 : _a.disconnect();
+  delete window._autoapplyObserver;
+}
+async function scrollFieldIntoView(el) {
+  return new Promise((resolve) => {
+    try {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch {
+    }
+    setTimeout(resolve, 300);
+  });
+}
+async function retryFailedFields(failedFields2, fillFn, maxRetries = 3) {
+  const delays = [500, 1e3, 2e3];
+  let remaining = [...failedFields2];
+  for (let attempt = 0; attempt < maxRetries && remaining.length > 0; attempt++) {
+    await new Promise((r) => setTimeout(r, delays[attempt] ?? 2e3));
+    const stillFailing = [];
+    for (const field of remaining) {
+      const ok = await fillFn(field);
+      if (!ok) stillFailing.push(field);
+    }
+    remaining = stillFailing;
+  }
+  return remaining;
+}
+function getShadowRoot(el) {
+  var _a;
+  try {
+    if (el.shadowRoot) return el.shadowRoot;
+    if (typeof ((_a = chrome == null ? void 0 : chrome.dom) == null ? void 0 : _a.openOrClosedShadowRoot) === "function") {
+      return chrome.dom.openOrClosedShadowRoot(el) ?? null;
+    }
+  } catch {
+  }
+  return null;
+}
+function collectFields() {
+  const seen = /* @__PURE__ */ new WeakSet();
+  const platform2 = detectPlatform();
+  const results = [];
+  _walkRoot(document, results, seen, platform2, 0);
+  return results;
+}
+const MAX_SHADOW_DEPTH = 5;
+function _walkRoot(root, results, seen, platform2, depth) {
+  const candidates = root.querySelectorAll(
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select, [role="combobox"], [role="listbox"]'
+  );
+  for (const el of candidates) {
+    if (seen.has(el)) continue;
+    if (el.type === "hidden" || el.getAttribute("aria-hidden") === "true") continue;
+    try {
+      if (el.tagName === "IFRAME" && el.contentDocument === null) continue;
+    } catch {
+      continue;
+    }
+    if (!isVisible$1(el)) continue;
+    seen.add(el);
+    results.push({
+      element: el,
+      type: getFieldType(el),
+      label: getLabelText(el, platform2),
+      placeholder: el.placeholder ?? el.getAttribute("placeholder") ?? "",
+      name: el.name ?? el.getAttribute("name") ?? "",
+      ariaLabel: el.getAttribute("aria-label") ?? "",
+      context: getContext(el),
+      maxLength: el.maxLength > 0 ? el.maxLength : null,
+      platform: platform2,
+      selectOptions: collectFieldOptions(el)
+    });
+  }
+  const fileInputs = root.querySelectorAll('input[type="file"]');
+  for (const el of fileInputs) {
+    if (seen.has(el)) continue;
+    if (el.getAttribute("aria-hidden") === "true") continue;
+    if (el.disabled) continue;
+    seen.add(el);
+    results.push({
+      element: el,
+      type: "file",
+      label: getLabelText(el, platform2) || guessUploadLabelFromContext(el),
+      placeholder: el.getAttribute("placeholder") ?? "",
+      name: el.name ?? el.getAttribute("name") ?? "",
+      ariaLabel: el.getAttribute("aria-label") ?? "",
+      context: getUploadContext(el),
+      maxLength: null,
+      platform: platform2,
+      selectOptions: []
+    });
+  }
+  if (depth < MAX_SHADOW_DEPTH) {
+    const allEls = root.querySelectorAll("*");
+    for (const el of allEls) {
+      const shadow2 = getShadowRoot(el);
+      if (!shadow2) continue;
+      if (seen.has(shadow2)) continue;
+      seen.add(shadow2);
+      _walkRoot(shadow2, results, seen, platform2, depth + 1);
+    }
+  }
+}
+function collectFieldOptions(el) {
+  var _a;
+  if (el.tagName === "SELECT") {
+    return Array.from(el.options).filter((o) => !o.disabled && (o.text || "").trim().length > 0).filter((o) => !(o.value === "" && /^(select|choose|please|--)/i.test((o.text || "").trim()))).map((o) => ({ value: o.value, text: (o.text || o.value || "").trim() }));
+  }
+  const listId = (_a = el.getAttribute) == null ? void 0 : _a.call(el, "list");
+  if (listId && el.tagName === "INPUT") {
+    const dl = document.getElementById(listId);
+    if (dl) {
+      return Array.from(dl.querySelectorAll("option")).map((o) => {
+        var _a2;
+        return {
+          value: o.value || ((_a2 = o.textContent) == null ? void 0 : _a2.trim()) || "",
+          text: (o.textContent || o.value || "").trim()
+        };
+      }).filter((o) => o.text.length > 0);
+    }
+  }
+  return [];
+}
+function detectPlatform() {
+  const host2 = window.location.hostname;
+  if (host2.includes("chatgpt.com") || host2.includes("google.com") || host2.includes("localhost")) {
+    return "generic";
+  }
+  if (host2.includes("greenhouse.io")) return "greenhouse";
+  if (host2.includes("lever.co")) return "lever";
+  if (host2.includes("myworkdayjobs.com")) return "workday";
+  if (host2.includes("ashbyhq.com")) return "ashby";
+  if (document.querySelector("[data-gh-id]")) return "greenhouse";
+  return "generic";
+}
+function getFieldType(el) {
+  if (el.tagName === "TEXTAREA") return "textarea";
+  if (el.tagName === "SELECT") return "select";
+  if (el.getAttribute("role") === "combobox") return "select";
+  if (el.getAttribute("role") === "listbox") return "select";
+  if (el.getAttribute("aria-haspopup") === "listbox") return "select";
+  if (el.getAttribute("type")) return el.getAttribute("type");
+  return "text";
+}
+function isVisible$1(el) {
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+  const rect = el.getBoundingClientRect();
+  if (style.display !== "none" && (el.id || el.name)) return true;
+  return rect.width > 0 && rect.height > 0;
+}
+function getLabelText(el, platform2) {
+  var _a, _b, _c, _d, _e, _f, _g;
+  const root = el.getRootNode && el.getRootNode() instanceof ShadowRoot ? el.getRootNode() : document;
+  if (el.id) {
+    const label = root.querySelector(`label[for="${CSS.escape(el.id)}"]`) ?? document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+    if (label) return ((_a = label.textContent) == null ? void 0 : _a.trim()) ?? "";
+  }
+  if (platform2 === "workday") {
+    const wdContainer = el.closest('[data-automation-id="formField"]');
+    if (wdContainer) {
+      const label = wdContainer.querySelector("label");
+      if (label) return ((_b = label.textContent) == null ? void 0 : _b.trim()) ?? "";
+    }
+  }
+  if (platform2 === "greenhouse") {
+    const ghField = el.closest(".field, .field-wrapper, [data-gh-id]");
+    if (ghField) {
+      const label = ghField.querySelector("label, .label, .field-label");
+      if (label) {
+        return ((_c = label.textContent) == null ? void 0 : _c.replace(/\(Required\)$/i, "").replace(/\*$/, "").trim()) ?? "";
+      }
+    }
+  }
+  const ariaLabel = el.getAttribute("aria-label");
+  if (ariaLabel) return ariaLabel;
+  const labelledBy = el.getAttribute("aria-labelledby");
+  if (labelledBy) {
+    const ref = document.getElementById(labelledBy);
+    if (ref) return ((_d = ref.textContent) == null ? void 0 : _d.trim()) ?? "";
+  }
+  const parent = el.closest("label");
+  if (parent) return ((_e = parent.textContent) == null ? void 0 : _e.trim()) ?? "";
+  const prev = el.previousElementSibling;
+  if (prev && prev.tagName === "LABEL") return ((_f = prev.textContent) == null ? void 0 : _f.trim()) ?? "";
+  let current = el.parentElement;
+  for (let i = 0; i < 3 && current; i++) {
+    const label = current.querySelector("label, span.label, .label");
+    if (label) return ((_g = label.textContent) == null ? void 0 : _g.trim()) ?? "";
+    current = current.parentElement;
+  }
+  return "";
+}
+function getContext(el) {
+  var _a;
+  const container = el.closest('fieldset, [role="group"], .field, .form-group, li, div') ?? el.parentElement;
+  return ((_a = container == null ? void 0 : container.textContent) == null ? void 0 : _a.replace(/\s+/g, " ").trim().slice(0, 300)) ?? "";
+}
+function getUploadContext(el) {
+  var _a, _b;
+  const container = el.closest(
+    'fieldset, [role="group"], .field, .form-group, [data-automation-id="formField"], [data-testid*="upload"], [class*="upload"], li, div'
+  ) ?? el.parentElement;
+  const text = ((_a = container == null ? void 0 : container.textContent) == null ? void 0 : _a.replace(/\s+/g, " ").trim()) ?? "";
+  if (text.length >= 12) return text.slice(0, 300);
+  let current = (container == null ? void 0 : container.parentElement) ?? el.parentElement;
+  for (let i = 0; i < 5 && current; i++) {
+    const t = ((_b = current.textContent) == null ? void 0 : _b.replace(/\s+/g, " ").trim()) ?? "";
+    if (t.length >= 12) return t.slice(0, 300);
+    current = current.parentElement;
+  }
+  return text.slice(0, 300);
+}
+function guessUploadLabelFromContext(el) {
+  const ctx = getUploadContext(el).toLowerCase();
+  if (/\b(resume|cv|curriculum vitae)\b/.test(ctx)) return "Resume/CV";
+  if (/\bcover letter\b/.test(ctx)) return "Cover letter";
+  if (/\bportfolio\b/.test(ctx)) return "Portfolio";
+  if (/\btranscript\b/.test(ctx)) return "Transcript";
+  return "File upload";
+}
 function matchFieldToProfile(fieldMeta, profile2) {
   const text = buildFieldText(fieldMeta);
   const { user, onboardingAnswers, userContext = {} } = profile2;
@@ -2404,7 +2737,19 @@ function matchFieldToProfile(fieldMeta, profile2) {
     return ((_a = onboardingAnswers == null ? void 0 : onboardingAnswers.find((a) => a.questionKey === key)) == null ? void 0 : _a.answerText) ?? null;
   };
   if (isPhoneCountryCodeFieldText(text)) return getAA("aa_phone_country_code");
+  if (matches(text, ["phone device", "device type", "type of phone", "phone type"])) {
+    return getAA("aa_phone_device_type");
+  }
   if (matches(text, ["phone", "mobile", "telephone", "cell"])) return getAA("aa_phone");
+  if (matches(text, ["how did you hear", "hear about us", "how did you find", "where did you hear", "source of hire", "referral source", "how did you learn", "about this job", "about this role", "about this position"]) && !matches(text, ["specify", "explain", "describe", "detail", "if other", "please list"])) {
+    return "Other";
+  }
+  if (matches(text, ["if other", "please specify", "please explain", "please describe", "additional detail"]) && matches(text, ["hear", "referral", "source", "opening", "opportunity", "position", "job", "about"])) {
+    return getAA("aa_hear_about_other_detail") || "aladdin";
+  }
+  if (matches(text, ["previously been employed", "previously employed", "ever been employed by", "ever worked for", "have you ever worked for", "have you worked for"]) || matches(text, ["previously"]) && matches(text, ["employ"]) || matches(text, ["current teammate", "current teammates", "internal workday", "internal jobs report", "apply via your internal"])) {
+    if (matches(text, ["employ", "company", "minor", "teammate", "internal", "worked", "by", "?"])) return "No";
+  }
   if (matches(text, ["linkedin", "linkedin url", "linkedin profile", "urls[LinkedIn]"])) return getAA("aa_linkedin_url");
   if (matches(text, ["github", "github url", "github profile", "urls[GitHub]"])) return getAA("aa_github_url");
   if (matches(text, ["portfolio", "website", "personal site", "portfolio url", "urls[Portfolio]"])) return getAA("aa_portfolio_url");
@@ -2496,6 +2841,54 @@ function getAAField(profile2, key) {
   const row = onboardingAnswers.find((a) => a.questionKey === key);
   return ((_a = row == null ? void 0 : row.answerText) == null ? void 0 : _a.trim()) || null;
 }
+function fuzzyMatchFieldToProfile(fieldMeta, profile2) {
+  const text = buildFieldText(fieldMeta);
+  const FUZZY_TOKEN_MAP = [
+    { tokens: ["phone", "device"], key: "aa_phone_device_type" },
+    { tokens: ["years", "experience"], key: "aa_years_experience" },
+    { tokens: ["current", "title"], key: "aa_current_title" },
+    { tokens: ["current", "company"], key: "aa_current_company" },
+    { tokens: ["current", "employer"], key: "aa_current_company" },
+    { tokens: ["highest", "degree"], key: "aa_education_level" },
+    { tokens: ["highest", "education"], key: "aa_education_level" },
+    { tokens: ["linkedin", "profile"], key: "aa_linkedin_url" },
+    { tokens: ["linkedin", "url"], key: "aa_linkedin_url" },
+    { tokens: ["github", "profile"], key: "aa_github_url" },
+    { tokens: ["github", "url"], key: "aa_github_url" },
+    { tokens: ["phone", "number"], key: "aa_phone" },
+    { tokens: ["mobile", "number"], key: "aa_phone" },
+    { tokens: ["zip", "code"], key: "aa_zip" },
+    { tokens: ["postal", "code"], key: "aa_zip" },
+    { tokens: ["street", "address"], key: "aa_address" },
+    { tokens: ["work", "authorization"], value: "Yes" },
+    { tokens: ["authorized", "work"], value: "Yes" },
+    { tokens: ["visa", "sponsorship"], value: "No" },
+    { tokens: ["require", "sponsorship"], value: "No" },
+    { tokens: ["willing", "relocate"], value: "Yes" },
+    { tokens: ["open", "relocation"], value: "Yes" },
+    { tokens: ["willing", "travel"], value: "Yes" },
+    { tokens: ["background", "check"], value: "Yes" },
+    { tokens: ["drug", "test"], value: "Yes" },
+    { tokens: ["portfolio", "url"], key: "aa_portfolio_url" },
+    { tokens: ["portfolio", "website"], key: "aa_portfolio_url" },
+    { tokens: ["gender", "identity"], key: "aa_gender" },
+    { tokens: ["race", "ethnicity"], key: "aa_ethnicity" },
+    { tokens: ["veteran", "status"], key: "aa_veteran_status" },
+    { tokens: ["disability", "status"], key: "aa_disability" },
+    { tokens: ["citizenship", "country"], key: "aa_citizenship_country" },
+    { tokens: ["security", "clearance"], key: "aa_clearance" }
+  ];
+  for (const { tokens, key, value } of FUZZY_TOKEN_MAP) {
+    if (tokens.every((t) => text.includes(t))) {
+      if (value !== void 0) return value;
+      if (key) {
+        const v = getAAField(profile2, key);
+        if (v) return v;
+      }
+    }
+  }
+  return null;
+}
 function extractSchoolNameFromProfile(profile2) {
   var _a;
   if (!profile2) return null;
@@ -2558,6 +2951,9 @@ function inferSelectHintFromProfile(fieldMeta, profile2) {
     return getAAField(profile2, "aa_willing_to_relocate");
   }
   if (matches(text, ["clearance"])) return getAAField(profile2, "aa_clearance");
+  if (matches(text, ["how did you hear", "hear about us", "referral source", "where did you hear"]) && !matches(text, ["specify", "explain", "describe", "if other"])) {
+    return "Other";
+  }
   return null;
 }
 const PREFIX_STRIP = [
@@ -2774,7 +3170,7 @@ function pickFallbackSelectOption(options) {
   );
   return otherish ?? null;
 }
-const sleep$1 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep$2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const isBackground = () => document.visibilityState === "hidden";
 function readableOptionText(el) {
   var _a, _b;
@@ -2790,14 +3186,14 @@ function readableOptionText(el) {
 async function applyHumanJitter(opts = {}) {
   if (isBackground()) return;
   if (opts.quick) {
-    await sleep$1(2 + Math.floor(Math.random() * 10));
+    await sleep$2(2 + Math.floor(Math.random() * 10));
     return;
   }
   const jitter = Math.floor(Math.random() * 56 + 15);
-  await sleep$1(jitter);
+  await sleep$2(jitter);
   if (Math.random() < 0.05) {
     window.scrollBy({ top: (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 30 + 10), behavior: "auto" });
-    await sleep$1(Math.floor(Math.random() * 40) + 20);
+    await sleep$2(Math.floor(Math.random() * 40) + 20);
   }
 }
 function getNativeSelectOptions(select) {
@@ -2812,7 +3208,7 @@ async function fillTextInput(input, value, status = "success", opts = {}) {
   await applyHumanJitter({ quick: instant });
   input.focus();
   input.scrollIntoView({ behavior: "auto", block: "center" });
-  await sleep$1(instant ? 4 : 25);
+  await sleep$2(instant ? 4 : 25);
   const proto = input.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   const nativeSetter = Object.getOwnPropertyDescriptor(proto, "value").set;
   const setValue = (v) => {
@@ -2835,7 +3231,7 @@ async function fillTextInput(input, value, status = "success", opts = {}) {
       }
       console.warn("Aladdin fillTextInput instant events:", e);
     }
-    await sleep$1(6);
+    await sleep$2(6);
     if (input.value !== str) {
       setValue(str);
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -2855,7 +3251,7 @@ async function fillTextInput(input, value, status = "success", opts = {}) {
     input.dispatchEvent(new InputEvent("input", { data: char, inputType: "insertText", bubbles: true }));
     input.dispatchEvent(new KeyboardEvent("keyup", { key: char, bubbles: true }));
     if (!isBackground()) {
-      await sleep$1(2 + Math.random() * 8);
+      await sleep$2(2 + Math.random() * 8);
     }
   }
   try {
@@ -2868,7 +3264,7 @@ async function fillTextInput(input, value, status = "success", opts = {}) {
     }
     console.warn("Aladdin fillTextInput finalize:", e);
   }
-  await sleep$1(15);
+  await sleep$2(15);
   if (input.value !== str) {
     setValue(str);
     try {
@@ -2976,10 +3372,10 @@ async function fillSelect(select, value, status = "success", precomputedOptions 
       return { el, value: text, text };
     }).filter((o) => o.text);
   };
-  await sleep$1(40);
+  await sleep$2(40);
   let structuredList = collectOptions();
   for (let i = 0; i < 8 && !structuredList.length; i++) {
-    await sleep$1(80);
+    await sleep$2(80);
     structuredList = collectOptions();
   }
   if (structuredList.length) {
@@ -3183,12 +3579,12 @@ async function sniffComboboxOptions(element) {
     }).filter((o, i, arr) => o.text.length > 0 && arr.findIndex((x) => x.text === o.text) === i);
   };
   const bg = isBackground();
-  await sleep$1(bg ? 0 : 100);
+  await sleep$2(bg ? 0 : 100);
   let opts = collectOpts();
   const maxRetries = bg ? 2 : 6;
   const retryDelay = bg ? 0 : 120;
   for (let i = 0; i < maxRetries && !opts.length; i++) {
-    await sleep$1(retryDelay);
+    await sleep$2(retryDelay);
     opts = collectOpts();
   }
   try {
@@ -3210,7 +3606,7 @@ async function clickAutocompleteSuggestion(input, typedValue) {
     }));
   } catch {
   }
-  await sleep$1(isBackground() ? 0 : 350);
+  await sleep$2(isBackground() ? 0 : 350);
   const findSuggestions = () => {
     var _a2, _b2;
     const controlsId = ((_a2 = input.getAttribute) == null ? void 0 : _a2.call(input, "aria-controls")) || ((_b2 = input.getAttribute) == null ? void 0 : _b2.call(input, "aria-owns")) || "";
@@ -3245,7 +3641,7 @@ async function clickAutocompleteSuggestion(input, typedValue) {
   const _maxSuggRetries = _bgMode ? 1 : 4;
   const _suggRetryDelay = _bgMode ? 0 : 200;
   for (let i = 0; i < _maxSuggRetries && !suggestions.length; i++) {
-    await sleep$1(_suggRetryDelay);
+    await sleep$2(_suggRetryDelay);
     suggestions = findSuggestions();
   }
   if (!suggestions.length) return false;
@@ -3279,10 +3675,10 @@ async function clickAutocompleteSuggestion(input, typedValue) {
     const topContainsHint = topText.includes(hint.toLowerCase()) || hintWords.length > 0 && hintWords.every((w) => topText.includes(w));
     if (bestEl && bestScore >= 150) {
       bestEl.click();
-      await sleep$1(50);
+      await sleep$2(50);
     } else if (topContainsHint) {
       topEl.click();
-      await sleep$1(50);
+      await sleep$2(50);
     }
     try {
       (_a = input.dispatchEvent) == null ? void 0 : _a.call(input, new KeyboardEvent("keydown", { key: "Enter", keyCode: 13, code: "Enter", bubbles: true }));
@@ -3306,7 +3702,7 @@ async function fillLocationWithAutocomplete(input, value) {
   }
   input.focus();
   input.scrollIntoView({ behavior: "auto", block: "center" });
-  await sleep$1(80);
+  await sleep$2(80);
   const proto = HTMLInputElement.prototype;
   const nativeSetter = Object.getOwnPropertyDescriptor(proto, "value").set;
   const setValue = (v) => {
@@ -3336,7 +3732,7 @@ async function fillLocationWithAutocomplete(input, value) {
         input.dispatchEvent(new KeyboardEvent("keyup", { key: char, bubbles: true }));
       } catch {
       }
-      if (!isBackground()) await sleep$1(40 + Math.random() * 30);
+      if (!isBackground()) await sleep$2(40 + Math.random() * 30);
     }
     return currentVal;
   };
@@ -3382,7 +3778,7 @@ async function fillLocationWithAutocomplete(input, value) {
   const tryClickBest = async () => {
     let suggs = gatherSuggestions();
     for (let i = 0; i < 3 && !suggs.length; i++) {
-      await sleep$1(80);
+      await sleep$2(80);
       suggs = gatherSuggestions();
     }
     if (!suggs.length) return false;
@@ -3397,10 +3793,10 @@ async function fillLocationWithAutocomplete(input, value) {
     if (bestEl && bestScore >= 150) {
       try {
         bestEl.click();
-        await sleep$1(80);
+        await sleep$2(80);
         input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 13, code: "Enter", bubbles: true }));
         input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", keyCode: 13, code: "Enter", bubbles: true }));
-        await sleep$1(50);
+        await sleep$2(50);
         highlightField(input, "success");
         return true;
       } catch {
@@ -3418,13 +3814,13 @@ async function fillLocationWithAutocomplete(input, value) {
   if (!breakpoints.includes(str.length)) breakpoints.push(str.length);
   for (const bp of breakpoints) {
     await typeCharByChar(bp);
-    await sleep$1(200 + Math.random() * 100);
+    await sleep$2(200 + Math.random() * 100);
     if (await tryClickBest()) return true;
   }
   if ((((_a = input.value) == null ? void 0 : _a.length) ?? 0) < str.length) {
     await typeCharByChar(str.length);
   }
-  await sleep$1(250);
+  await sleep$2(250);
   if (await tryClickBest()) return true;
   if ((_b = input.value) == null ? void 0 : _b.trim()) {
     highlightField(input, "success");
@@ -3444,6 +3840,11 @@ function highlightField(el, status = "success") {
   }, 1500);
 }
 function isConditionalFollowUp(el, fieldLabel) {
+  var _a;
+  const combined = `${fieldLabel} ${(el == null ? void 0 : el.placeholder) || ""} ${((_a = el == null ? void 0 : el.getAttribute) == null ? void 0 : _a.call(el, "aria-label")) || ""}`.toLowerCase();
+  if (/\b(specify|please explain|please describe|if other|additional detail|please enter)\b/.test(combined) && /\b(hear|heard|referral|source|opening|opportunity|position|job|find us|about us)\b/.test(combined)) {
+    return false;
+  }
   const container = el.closest('fieldset, [role="group"]') ?? el.closest('.field, .form-group, li, [class*="question"], [class*="pronoun"], [class*="eeo"]');
   if (!container) return false;
   const checkboxes = Array.from(
@@ -3483,228 +3884,313 @@ function getLabelForInput(input) {
   }
   return null;
 }
-function scanFields(platform2, onNewFields) {
-  const fields = collectFields();
-  if (["workday", "lever", "ashby", "generic", "generic-weak"].includes(platform2)) {
-    let lastFieldCount = fields.length;
-    const observer = new MutationObserver(() => {
-      const updated = collectFields();
-      const visibleCount = updated.filter((f) => {
-        var _a;
-        return (_a = f.element) == null ? void 0 : _a.isConnected;
-      }).length;
-      if (lastFieldCount > 1 && visibleCount <= 1) {
-        setTimeout(() => {
-          const afterSettle = collectFields();
-          lastFieldCount = afterSettle.length;
-          onNewFields(afterSettle);
-        }, 800);
-        return;
-      }
-      lastFieldCount = updated.length;
-      onNewFields(updated);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    window._autoapplyObserver = observer;
-  }
-  return fields;
-}
-function stopObserver() {
-  var _a;
-  (_a = window._autoapplyObserver) == null ? void 0 : _a.disconnect();
-  delete window._autoapplyObserver;
-}
-async function scrollFieldIntoView(el) {
-  return new Promise((resolve) => {
-    try {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    } catch {
+const sleep$1 = (ms) => new Promise((r) => setTimeout(r, ms));
+let _booted = false;
+function bootHeadlessFrame() {
+  if (_booted) return;
+  _booted = true;
+  _postToParent({ action: "FRAME_READY", href: window.location.href });
+  window.addEventListener("message", async (event) => {
+    if (event.source !== window.parent) return;
+    const msg = event.data;
+    if (!msg || msg.source !== "aladdin-parent") return;
+    if (msg.action === "FILL_FRAME") {
+      const { profile: profile2, jobTitle: jobTitle2 = "", company: company2 = "", requestId = null } = msg;
+      const result = await _fillFrame(profile2);
+      _postToParent({ action: "FILL_RESULT", requestId, ...result });
     }
-    setTimeout(resolve, 300);
   });
 }
-async function retryFailedFields(failedFields2, fillFn, maxRetries = 3) {
-  const delays = [500, 1e3, 2e3];
-  let remaining = [...failedFields2];
-  for (let attempt = 0; attempt < maxRetries && remaining.length > 0; attempt++) {
-    await new Promise((r) => setTimeout(r, delays[attempt] ?? 2e3));
-    const stillFailing = [];
-    for (const field of remaining) {
-      const ok = await fillFn(field);
-      if (!ok) stillFailing.push(field);
-    }
-    remaining = stillFailing;
-  }
-  return remaining;
-}
-function collectFields() {
-  const results = [];
-  const seen = /* @__PURE__ */ new WeakSet();
-  const platform2 = detectPlatform();
-  const candidates = document.querySelectorAll(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select, [role="combobox"], [role="listbox"]'
-  );
-  for (const el of candidates) {
-    if (seen.has(el)) continue;
-    if (el.type === "hidden" || el.getAttribute("aria-hidden") === "true") continue;
-    if (!isVisible(el)) continue;
-    try {
-      if (el.tagName === "IFRAME" && el.contentDocument === null) continue;
-    } catch (e) {
-      continue;
-    }
-    seen.add(el);
-    results.push({
-      element: el,
-      type: getFieldType(el),
-      label: getLabelText(el, platform2),
-      placeholder: el.placeholder ?? el.getAttribute("placeholder") ?? "",
-      name: el.name ?? el.getAttribute("name") ?? "",
-      ariaLabel: el.getAttribute("aria-label") ?? "",
-      context: getContext(el),
-      maxLength: el.maxLength > 0 ? el.maxLength : null,
-      platform: platform2,
-      /** @type {{ value: string, text: string }[]} */
-      selectOptions: collectFieldOptions(el)
-    });
-  }
-  const fileInputs = document.querySelectorAll('input[type="file"]');
-  for (const el of fileInputs) {
-    if (seen.has(el)) continue;
-    if (el.getAttribute("aria-hidden") === "true") continue;
-    if (el.disabled) continue;
-    seen.add(el);
-    results.push({
-      element: el,
-      type: "file",
-      label: getLabelText(el, platform2) || guessUploadLabelFromContext(el),
-      placeholder: el.getAttribute("placeholder") ?? "",
-      name: el.name ?? el.getAttribute("name") ?? "",
-      ariaLabel: el.getAttribute("aria-label") ?? "",
-      context: getUploadContext(el),
-      maxLength: null,
-      platform: platform2,
-      selectOptions: []
-    });
-  }
-  return results;
-}
-function collectFieldOptions(el) {
-  var _a;
-  if (el.tagName === "SELECT") {
-    return Array.from(el.options).filter((o) => !o.disabled && (o.text || "").trim().length > 0).filter((o) => !(o.value === "" && /^(select|choose|please|--)/i.test((o.text || "").trim()))).map((o) => ({ value: o.value, text: (o.text || o.value || "").trim() }));
-  }
-  const listId = (_a = el.getAttribute) == null ? void 0 : _a.call(el, "list");
-  if (listId && el.tagName === "INPUT") {
-    const dl = document.getElementById(listId);
-    if (dl) {
-      return Array.from(dl.querySelectorAll("option")).map((o) => {
-        var _a2;
-        return {
-          value: o.value || ((_a2 = o.textContent) == null ? void 0 : _a2.trim()) || "",
-          text: (o.textContent || o.value || "").trim()
-        };
-      }).filter((o) => o.text.length > 0);
-    }
-  }
-  return [];
-}
-function detectPlatform() {
-  const host2 = window.location.hostname;
-  if (host2.includes("chatgpt.com") || host2.includes("google.com") || host2.includes("localhost")) {
-    return "generic";
-  }
+function detectFramePlatform() {
+  const host2 = String(window.location.hostname || "").toLowerCase();
+  if (host2.includes("icims.com")) return "icims";
+  if (host2.includes("taleo")) return "taleo";
   if (host2.includes("greenhouse.io")) return "greenhouse";
   if (host2.includes("lever.co")) return "lever";
-  if (host2.includes("myworkdayjobs.com")) return "workday";
+  if (host2.includes("workable.com")) return "workable";
   if (host2.includes("ashbyhq.com")) return "ashby";
-  if (document.querySelector("[data-gh-id]")) return "greenhouse";
+  if (host2.includes("myworkdayjobs.com")) return "workday";
+  if (host2.includes("smartrecruiters.com")) return "smartrecruiters";
+  if (host2.includes("jobvite.com")) return "jobvite";
+  if (host2.includes("recruiting.ultipro.com")) return "ultipro";
   return "generic";
 }
-function getFieldType(el) {
-  if (el.tagName === "TEXTAREA") return "textarea";
-  if (el.tagName === "SELECT") return "select";
-  if (el.getAttribute("role") === "combobox") return "select";
-  if (el.getAttribute("role") === "listbox") return "select";
-  if (el.getAttribute("aria-haspopup") === "listbox") return "select";
-  if (el.getAttribute("type")) return el.getAttribute("type");
-  return "text";
-}
-function isVisible(el) {
-  const style = window.getComputedStyle(el);
-  if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
-  const rect = el.getBoundingClientRect();
-  if (style.display !== "none" && (el.id || el.name)) return true;
-  return rect.width > 0 && rect.height > 0;
-}
-function getLabelText(el, platform2) {
-  var _a, _b, _c, _d, _e, _f, _g;
-  if (el.id) {
-    const label = document.querySelector(`label[for="${el.id}"]`);
-    if (label) return ((_a = label.textContent) == null ? void 0 : _a.trim()) ?? "";
+function _postToParent(payload) {
+  try {
+    window.parent.postMessage({ source: "aladdin-frame", ...payload }, "*");
+  } catch {
   }
-  if (platform2 === "workday") {
-    const wdContainer = el.closest('[data-automation-id="formField"]');
-    if (wdContainer) {
-      const label = wdContainer.querySelector("label");
-      if (label) return ((_b = label.textContent) == null ? void 0 : _b.trim()) ?? "";
+}
+async function _fillFrame(profile2, jobTitle2, company2) {
+  var _a;
+  if (!isContextValid()) return { filled: 0, skipped: 0, failed: 0 };
+  const platform2 = detectFramePlatform();
+  const fields = scanFields(platform2, () => {
+  });
+  let filled = 0;
+  let skipped = 0;
+  let failed = 0;
+  const processedRadioGroups2 = /* @__PURE__ */ new Set();
+  for (const field of fields) {
+    if (!isContextValid()) break;
+    const { element, type, label, placeholder, name, ariaLabel, selectOptions = [] } = field;
+    if (!(element == null ? void 0 : element.isConnected)) continue;
+    if (type === "file") {
+      skipped++;
+      continue;
+    }
+    if (type === "radio" || type === "checkbox") {
+      const groupKey = element.name || ((_a = element.closest('fieldset, [role="group"]')) == null ? void 0 : _a.id) || null;
+      if (groupKey && processedRadioGroups2.has(groupKey)) {
+        skipped++;
+        continue;
+      }
+      if (groupKey) processedRadioGroups2.add(groupKey);
+      const groupLabel = getRadioGroupLabel(element) || label;
+      const groupOptions = getRadioGroupOptions(element);
+      const profileVal = matchFieldToProfile({ label: groupLabel, placeholder: "", name: element.name || "", ariaLabel: "" }, profile2) ?? fuzzyMatchFieldToProfile({ label: groupLabel, placeholder: "", name: element.name || "", ariaLabel: "" }, profile2);
+      if (profileVal) {
+        const ok = await fillRadioGroupOption(groupOptions, String(profileVal));
+        ok ? filled++ : failed++;
+      } else {
+        skipped++;
+      }
+      continue;
+    }
+    const profileValue = matchFieldToProfile({ label, placeholder, name, ariaLabel }, profile2) ?? fuzzyMatchFieldToProfile({ label, placeholder, name, ariaLabel }, profile2);
+    if (profileValue !== null) {
+      let ok = false;
+      if (type === "select") {
+        let opts = (selectOptions == null ? void 0 : selectOptions.length) ? selectOptions : getNativeSelectOptions(element);
+        if (!opts.length) opts = await sniffComboboxOptions(element);
+        ok = await fillSelect(element, profileValue, "success", opts.length ? opts : null);
+      } else {
+        ok = await fillTextInput(element, profileValue, "success", { instant: true });
+      }
+      ok ? filled++ : failed++;
+      await sleep$1(30);
+    } else {
+      skipped++;
     }
   }
-  if (platform2 === "greenhouse") {
-    const ghField = el.closest(".field, .field-wrapper, [data-gh-id]");
-    if (ghField) {
-      const label = ghField.querySelector("label, .label, .field-label");
-      if (label) {
-        return ((_c = label.textContent) == null ? void 0 : _c.replace(/\(Required\)$/i, "").replace(/\*$/, "").trim()) ?? "";
+  return { filled, skipped, failed };
+}
+const FILL_TIMEOUT_MS = 3e4;
+const DEFAULT_POLL_MS = 150;
+let _installed = false;
+const readyFrames = /* @__PURE__ */ new Map();
+const inflight = /* @__PURE__ */ new Map();
+let _nextRequestId = 1;
+function initIframeCoordinator() {
+  if (_installed) return;
+  if (typeof window === "undefined") return;
+  _installed = true;
+  window.addEventListener("message", _onMessage);
+}
+function _onMessage(event) {
+  const msg = event == null ? void 0 : event.data;
+  if (!msg || msg.source !== "aladdin-frame") return;
+  if (msg.action === "FRAME_READY") {
+    if (event.source) readyFrames.set(event.source, { href: msg.href || "" });
+    return;
+  }
+  if (msg.action === "FILL_RESULT") {
+    const ticket = inflight.get(msg.requestId);
+    if (!ticket) return;
+    ticket.partial.push({
+      filled: Number(msg.filled) || 0,
+      skipped: Number(msg.skipped) || 0,
+      failed: Number(msg.failed) || 0,
+      frame: event.source
+    });
+    ticket.frames.delete(event.source);
+    if (ticket.frames.size === 0) {
+      clearTimeout(ticket.timer);
+      inflight.delete(msg.requestId);
+      ticket.resolve(ticket.partial);
+    }
+  }
+}
+function collectAtsIframes(root = typeof document === "undefined" ? null : document) {
+  if (!root || typeof root.querySelectorAll !== "function") return [];
+  const matches2 = [];
+  const iframes = root.querySelectorAll("iframe");
+  for (const el of iframes) {
+    const src = el.getAttribute("src") || el.src || "";
+    if (!src) continue;
+    let host2 = "";
+    try {
+      host2 = new URL(src, location.href).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    if (_matchesAtsHost(host2)) matches2.push(el);
+  }
+  return matches2;
+}
+function _matchesAtsHost(host2) {
+  if (!host2) return false;
+  return ATS_IFRAME_HOSTS.some((x) => host2 === x || host2.endsWith("." + x) || host2.includes(x));
+}
+async function fillAllAtsIframes({
+  profile: profile2,
+  jobTitle: jobTitle2 = "",
+  company: company2 = "",
+  panel: panel2 = null,
+  timeoutMs = FILL_TIMEOUT_MS,
+  win = typeof window !== "undefined" ? window : null
+} = {}) {
+  var _a;
+  const zero = { filled: 0, skipped: 0, failed: 0, dispatched: 0, replied: 0 };
+  if (!profile2 || !win) return zero;
+  const iframes = collectAtsIframes(win.document);
+  if (iframes.length === 0) return zero;
+  const targets = [];
+  for (const el of iframes) {
+    try {
+      const cw = el.contentWindow;
+      if (cw) targets.push({ el, cw });
+    } catch {
+    }
+  }
+  if (targets.length === 0) return zero;
+  await _waitForFramesReady(targets.map((t) => t.cw), 1500);
+  const requestId = `aladdin-fill-${Date.now()}-${_nextRequestId++}`;
+  const frameSet = new Set(targets.map((t) => t.cw));
+  (_a = panel2 == null ? void 0 : panel2.addLog) == null ? void 0 : _a.call(
+    panel2,
+    `Form lives inside ${targets.length} embedded iframe${targets.length > 1 ? "s" : ""}. Filling there.`
+  );
+  const resultPromise = new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      inflight.delete(requestId);
+      resolve(_ticketOrEmpty());
+    }, timeoutMs);
+    inflight.set(requestId, {
+      resolve: (partial) => resolve(partial),
+      frames: frameSet,
+      partial: [],
+      timer
+    });
+  });
+  for (const { cw } of targets) {
+    try {
+      cw.postMessage({
+        source: "aladdin-parent",
+        action: "FILL_FRAME",
+        requestId,
+        profile: profile2,
+        jobTitle: jobTitle2,
+        company: company2
+      }, "*");
+    } catch {
+    }
+  }
+  const results = await resultPromise;
+  const agg = results.reduce((acc, r) => ({
+    filled: acc.filled + (r.filled || 0),
+    skipped: acc.skipped + (r.skipped || 0),
+    failed: acc.failed + (r.failed || 0)
+  }), { filled: 0, skipped: 0, failed: 0 });
+  const summary = {
+    ...agg,
+    dispatched: targets.length,
+    replied: results.length
+  };
+  if (panel2 == null ? void 0 : panel2.addLog) {
+    if (summary.replied === 0) {
+      panel2.addLog("Embedded application did not respond. Try refreshing the page.");
+    } else {
+      panel2.addLog(
+        `Embedded form: filled ${summary.filled}, skipped ${summary.skipped}` + (summary.failed ? `, failed ${summary.failed}` : "") + "."
+      );
+    }
+  }
+  return summary;
+}
+function _ticketOrEmpty() {
+  return [];
+}
+async function _waitForFramesReady(expected, maxMs) {
+  const start = Date.now();
+  const allReady = () => expected.every((w) => readyFrames.has(w));
+  if (allReady()) return;
+  while (Date.now() - start < maxMs) {
+    await new Promise((r) => setTimeout(r, DEFAULT_POLL_MS));
+    if (allReady()) return;
+  }
+}
+function isVisible(el) {
+  if (!el || !el.getBoundingClientRect) return false;
+  const s = window.getComputedStyle(el);
+  if (s.display === "none" || s.visibility === "hidden" || s.opacity === "0") return false;
+  const r = el.getBoundingClientRect();
+  if (r.width > 0 && r.height > 0) return true;
+  const tag = el.tagName;
+  const txt = (el.textContent || el.value || "").trim();
+  if (txt && (tag === "BUTTON" || el.getAttribute("role") === "button")) return true;
+  return false;
+}
+function textOf(el) {
+  return (el.textContent || el.value || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function findWorkdaySaveAndContinue(root = document) {
+  const selectors = [
+    '[data-automation-id="bottom-navigation-next-button"]',
+    '[data-automation-id="nextButton"]',
+    '[data-automation-id="footerButtons"] button',
+    '[data-automation-id="footerButtons"] [role="button"]',
+    '[data-automation-id="footerButtons"] div[tabindex="0"]',
+    '[data-automation-id="pageFooter"] button',
+    '[data-automation-id="pageFooter"] [role="button"]',
+    '[data-automation-id="pageFooter"] div[tabindex="0"]',
+    '[data-automation-id="footerContainer"] [role="button"]',
+    '[data-automation-id="footerContainer"] button'
+  ];
+  const rank = (txt) => {
+    if (txt.includes("save and continue")) return 0;
+    if (txt === "continue" || txt.startsWith("continue ")) return 1;
+    if (txt.includes("next step")) return 2;
+    if (txt === "next" || txt.startsWith("next ")) return 3;
+    return 99;
+  };
+  let best = null;
+  let bestRank = Infinity;
+  for (const sel of selectors) {
+    let nodes;
+    try {
+      nodes = root.querySelectorAll(sel);
+    } catch {
+      continue;
+    }
+    for (const el of nodes) {
+      if (!isVisible(el)) continue;
+      const txt = textOf(el);
+      const r = rank(txt);
+      if (r === 99) continue;
+      if (r < bestRank) {
+        bestRank = r;
+        best = el;
       }
     }
   }
-  const ariaLabel = el.getAttribute("aria-label");
-  if (ariaLabel) return ariaLabel;
-  const labelledBy = el.getAttribute("aria-labelledby");
-  if (labelledBy) {
-    const ref = document.getElementById(labelledBy);
-    if (ref) return ((_d = ref.textContent) == null ? void 0 : _d.trim()) ?? "";
+  if (best) return best;
+  const footer = root.querySelector(
+    '[data-automation-id="pageFooter"], [data-automation-id="footerContainer"], [data-automation-id="footerButtons"]'
+  );
+  if (!footer) return null;
+  const candidates = footer.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"], a[role="button"], div[tabindex="0"]');
+  for (const el of candidates) {
+    if (!isVisible(el)) continue;
+    const txt = textOf(el);
+    const r = rank(txt);
+    if (r === 99) continue;
+    if (r < bestRank) {
+      bestRank = r;
+      best = el;
+    }
   }
-  const parent = el.closest("label");
-  if (parent) return ((_e = parent.textContent) == null ? void 0 : _e.trim()) ?? "";
-  const prev = el.previousElementSibling;
-  if (prev && prev.tagName === "LABEL") return ((_f = prev.textContent) == null ? void 0 : _f.trim()) ?? "";
-  let current = el.parentElement;
-  for (let i = 0; i < 3 && current; i++) {
-    const label = current.querySelector("label, span.label, .label");
-    if (label) return ((_g = label.textContent) == null ? void 0 : _g.trim()) ?? "";
-    current = current.parentElement;
-  }
-  return "";
-}
-function getContext(el) {
-  var _a;
-  const container = el.closest('fieldset, [role="group"], .field, .form-group, li, div') ?? el.parentElement;
-  return ((_a = container == null ? void 0 : container.textContent) == null ? void 0 : _a.replace(/\s+/g, " ").trim().slice(0, 300)) ?? "";
-}
-function getUploadContext(el) {
-  var _a, _b;
-  const container = el.closest(
-    'fieldset, [role="group"], .field, .form-group, [data-automation-id="formField"], [data-testid*="upload"], [class*="upload"], li, div'
-  ) ?? el.parentElement;
-  const text = ((_a = container == null ? void 0 : container.textContent) == null ? void 0 : _a.replace(/\s+/g, " ").trim()) ?? "";
-  if (text.length >= 12) return text.slice(0, 300);
-  let current = (container == null ? void 0 : container.parentElement) ?? el.parentElement;
-  for (let i = 0; i < 5 && current; i++) {
-    const t = ((_b = current.textContent) == null ? void 0 : _b.replace(/\s+/g, " ").trim()) ?? "";
-    if (t.length >= 12) return t.slice(0, 300);
-    current = current.parentElement;
-  }
-  return text.slice(0, 300);
-}
-function guessUploadLabelFromContext(el) {
-  const ctx = getUploadContext(el).toLowerCase();
-  if (/\b(resume|cv|curriculum vitae)\b/.test(ctx)) return "Resume/CV";
-  if (/\bcover letter\b/.test(ctx)) return "Cover letter";
-  if (/\bportfolio\b/.test(ctx)) return "Portfolio";
-  if (/\btranscript\b/.test(ctx)) return "Transcript";
-  return "File upload";
+  return best;
 }
 const BANNER_ID = "aladdin-bg-warning-banner";
 const DISMISSED_KEY = "aladdin-bg-warning-dismissed";
@@ -3788,6 +4274,7 @@ const BACKGROUND_UNRELIABLE_PLATFORMS = ["workday"];
 const PLATFORM_LABELS = { workday: "Workday" };
 let _lockRelease = null;
 let _visibilityHandler = null;
+let _autoAdvanceEnabled = false;
 let _panel = null;
 let _profile = null;
 let _jobTitle = "";
@@ -3825,6 +4312,9 @@ function setJobMeta(jobTitle2, company2) {
   _jobTitle = jobTitle2;
   _company = company2;
 }
+function setAutoAdvanceEnabled(enabled) {
+  _autoAdvanceEnabled = !!enabled;
+}
 function pause() {
   isPaused = true;
 }
@@ -3841,6 +4331,126 @@ function _cleanupBackgroundSession() {
     _visibilityHandler = null;
   }
   hideBackgroundWarningBanner();
+}
+function isMandatoryField(el, labelText = "") {
+  if (el.required || el.getAttribute("aria-required") === "true") return true;
+  if (/\*/.test(labelText) || /\(required\)/i.test(labelText)) return true;
+  if (el.closest('[data-automation-id="formField--required"]')) return true;
+  if (el.closest('.required, [class*="required"], [class*="mandatory"]')) return true;
+  return false;
+}
+const NEXT_BUTTON_MAP = {
+  workday: [
+    '[data-automation-id="nextButton"]',
+    '[data-automation-id="bottom-navigation-next-button"]',
+    'button[data-automation-id*="next"]'
+  ],
+  icims: [
+    'button[id*="next" i]',
+    'input[value="Next"]',
+    ".icims-button-next",
+    'a[class*="btn-next"]'
+  ],
+  taleo: [
+    "#btn_next",
+    'a[id*="next" i]',
+    'input[name*="next" i]',
+    'button[id*="Next"]'
+  ],
+  lever: [],
+  // single-page form — no advance needed
+  greenhouse: []
+  // single-page form — no advance needed
+};
+const NEXT_TEXT_PATTERNS = [
+  "save and continue",
+  "next step",
+  "continue",
+  "next",
+  "proceed",
+  "go to next"
+];
+function _isVisibleBtn(el) {
+  const s = window.getComputedStyle(el);
+  if (s.display === "none" || s.visibility === "hidden") return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+}
+function findNextButton(platform2) {
+  if (platform2 === "workday") {
+    const wd = findWorkdaySaveAndContinue();
+    if (wd) return wd;
+  }
+  const selectors = NEXT_BUTTON_MAP[platform2] ?? [];
+  for (const sel of selectors) {
+    try {
+      const btn = document.querySelector(sel);
+      if (btn && _isVisibleBtn(btn)) return btn;
+    } catch {
+    }
+  }
+  const candidates = Array.from(document.querySelectorAll(
+    'button:not([disabled]), input[type="button"]:not([disabled]), input[type="submit"]:not([disabled]), a[role="button"], [role="button"]:not([disabled])'
+  ));
+  let bestBtn = null;
+  let bestRank = Infinity;
+  for (const btn of candidates) {
+    if (!_isVisibleBtn(btn)) continue;
+    const text = (btn.textContent || btn.value || btn.getAttribute("aria-label") || "").toLowerCase().trim();
+    const rank = NEXT_TEXT_PATTERNS.findIndex((p) => text.includes(p));
+    if (rank !== -1 && rank < bestRank) {
+      bestRank = rank;
+      bestBtn = btn;
+    }
+  }
+  return bestBtn;
+}
+async function _tryAutoAdvance() {
+  const unfilled = fieldsToFill.filter((f) => {
+    var _a;
+    if (!((_a = f.element) == null ? void 0 : _a.isConnected)) return false;
+    if (isFieldAnswered(f)) return false;
+    if (f.type === "file") return false;
+    return true;
+  });
+  const mandatoryUnfilled = unfilled.filter((f) => {
+    const mandatory = isMandatoryField(f.element, f.label);
+    return mandatory || !f.element.getAttribute("aria-required");
+  });
+  if (mandatoryUnfilled.length > 0) {
+    _panel == null ? void 0 : _panel.addLog(
+      `Auto-advance blocked — ${mandatoryUnfilled.length} required field(s) still need attention.`
+    );
+    for (const f of mandatoryUnfilled) {
+      try {
+        const orig = f.element.style.outline;
+        f.element.style.outline = "2px solid #ef4444";
+        setTimeout(() => {
+          try {
+            f.element.style.outline = orig;
+          } catch {
+          }
+        }, 4e3);
+      } catch {
+      }
+    }
+    return;
+  }
+  const nextBtn = findNextButton(_platform);
+  if (!nextBtn) {
+    _panel == null ? void 0 : _panel.addLog("Auto-advance: could not locate a Next/Continue button on this step.");
+    return;
+  }
+  _panel == null ? void 0 : _panel.addLog("Auto-advancing to the next step…");
+  await sleep(500 + Math.random() * 300);
+  try {
+    nextBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+    await sleep(200);
+    nextBtn.click();
+    nextBtn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  } catch (e) {
+    _panel == null ? void 0 : _panel.addLog("Auto-advance click failed — please click Next manually.");
+  }
 }
 function normalizeText$1(value) {
   return typeof value === "string" ? value : "";
@@ -4048,6 +4658,9 @@ async function processField(field) {
     const groupProfileValue = matchFieldToProfile(
       { label: groupLabel, placeholder: "", name: element.name || "", ariaLabel: "" },
       _profile
+    ) ?? fuzzyMatchFieldToProfile(
+      { label: groupLabel, placeholder: "", name: element.name || "", ariaLabel: "" },
+      _profile
     );
     if (groupProfileValue !== null) {
       const ok = await fillRadioGroupOption(groupOptions, String(groupProfileValue));
@@ -4093,7 +4706,7 @@ async function processField(field) {
     _panel == null ? void 0 : _panel.addLog(`Skipped: ${groupLabel} — please review manually.`);
     return;
   }
-  const profileValue = matchFieldToProfile({ label, placeholder, name, ariaLabel }, _profile);
+  const profileValue = matchFieldToProfile({ label, placeholder, name, ariaLabel }, _profile) ?? fuzzyMatchFieldToProfile({ label, placeholder, name, ariaLabel }, _profile);
   if (profileValue !== null) {
     _panel == null ? void 0 : _panel.addLog(`Filling ${fieldLabel}.`);
     let success = false;
@@ -4324,6 +4937,11 @@ async function runFillLoop() {
     if (!isStopped && isContextValid()) {
       await runVerificationPass();
     }
+    const shouldAdvance = _autoAdvanceEnabled || _platform === "workday";
+    if (!isStopped && isContextValid() && shouldAdvance && fieldsToFill.length > 0) {
+      await _tryAutoAdvance();
+      return;
+    }
     if (!isStopped && isContextValid()) {
       if (fieldsToFill.length === 0) {
         _panel == null ? void 0 : _panel.addLog("No fillable questions were detected on this page.");
@@ -4417,9 +5035,38 @@ async function startFill({ source = "panel" } = {}) {
   }
   fieldsToFill = scanFields(_platform, handleNewFields);
   syncExistingAnswers(fieldsToFill);
-  _panel.addLog(
-    fieldsToFill.length ? `Detected ${fieldsToFill.length} fillable questions.` : "Scanning the page for fillable questions."
-  );
+  const atsIframes = collectAtsIframes(document);
+  const hasEmbeddedForm = atsIframes.length > 0;
+  let iframeFillPromise = Promise.resolve(null);
+  if (hasEmbeddedForm) {
+    iframeFillPromise = fillAllAtsIframes({
+      profile: _profile,
+      jobTitle: _jobTitle,
+      company: _company,
+      panel: _panel
+    }).catch(() => null);
+  }
+  if (fieldsToFill.length) {
+    _panel.addLog(`Detected ${fieldsToFill.length} fillable questions.`);
+  } else if (!hasEmbeddedForm) {
+    _panel.addLog("Scanning the page for fillable questions.");
+  }
+  if (fieldsToFill.length === 0 && hasEmbeddedForm) {
+    iframeFillPromise.then((result) => {
+      var _a2;
+      if (!isContextValid()) return;
+      if (result && (result.filled > 0 || result.replied > 0)) {
+        _panel.setState("done");
+        (_a2 = _panel.celebrateSuccess) == null ? void 0 : _a2.call(_panel);
+      } else {
+        _panel.setState("idle");
+      }
+    }).finally(() => {
+      isRunning = false;
+      _cleanupBackgroundSession();
+    });
+    return { success: true };
+  }
   runFillLoop().catch((error) => {
     console.error("Auto fill failed:", error);
     _panel.addLog("Autofill stopped because of an unexpected error.");
@@ -4722,6 +5369,9 @@ function getOrCreatePanel(platform2, jobTitle2, company2, onStartFill, forceGene
         panel.addLog("Resume preview failed — could not reach Aladdin.");
       }
     };
+    panel.onAutoAdvanceChange = (enabled) => {
+      setAutoAdvanceEnabled(enabled);
+    };
     panel.onSaveSettings = async (draft) => {
       panel.setSettingsSaving(true);
       panel.setSettingsMessage("Saving your Aladdin application profile...", "info");
@@ -4744,21 +5394,200 @@ function getPanel() {
   return panel;
 }
 installErrorBoundary();
+const IS_SUBFRAME = (() => {
+  try {
+    return window !== window.top;
+  } catch {
+    return true;
+  }
+})();
+if (IS_SUBFRAME) {
+  try {
+    const host2 = location.hostname;
+    if (isAtsIframeHost(host2)) {
+      bootHeadlessFrame();
+    }
+  } catch {
+  }
+} else {
+  initIframeCoordinator();
+}
 let platform = null;
+let strength = null;
 let jobTitle = "";
 let company = "";
-async function boot() {
+let lastLocationHref = location.href;
+let panelEverInjected = false;
+let mutationObserver = null;
+let mutationDebounceTimer = null;
+let dormancyTimer = null;
+let detectionPaused = false;
+let applyClickRetryTimer = null;
+let applyClickRetriesLeft = 0;
+const MUTATION_DEBOUNCE_MS = 500;
+const DORMANCY_MS = 3e4;
+const APPLY_CLICK_RETRY_INTERVAL_MS = 500;
+const APPLY_CLICK_RETRY_COUNT = 10;
+const APPLY_BUTTON_TEXTS = /* @__PURE__ */ new Set([
+  "apply",
+  "apply now",
+  "apply for this job",
+  "apply for job",
+  "start application",
+  "submit application",
+  "easy apply",
+  "begin application"
+]);
+async function runInitialBoot() {
   if (!isContextValid()) return;
-  if (window !== window.top) return;
-  platform = detectJobApplicationPage();
-  if (!shouldActivate(platform)) {
+  runDetection();
+  installReDetectionTriggers();
+}
+function installReDetectionTriggers() {
+  try {
+    const _push = history.pushState;
+    const _replace = history.replaceState;
+    history.pushState = function(...args) {
+      const r = _push.apply(this, args);
+      scheduleDetection("pushstate");
+      return r;
+    };
+    history.replaceState = function(...args) {
+      const r = _replace.apply(this, args);
+      scheduleDetection("replacestate");
+      return r;
+    };
+  } catch {
+  }
+  window.addEventListener("popstate", () => scheduleDetection());
+  window.addEventListener("hashchange", () => scheduleDetection());
+  startMutationObserver();
+  document.addEventListener("click", onDocumentClickCapture, true);
+  document.addEventListener("click", onDocumentClickCapture, false);
+  armDormancyTimer();
+}
+function startMutationObserver() {
+  if (mutationObserver) return;
+  try {
+    mutationObserver = new MutationObserver(() => {
+      if (detectionPaused) return;
+      if (mutationDebounceTimer) clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => {
+        mutationDebounceTimer = null;
+        scheduleDetection("mutation");
+      }, MUTATION_DEBOUNCE_MS);
+    });
+    mutationObserver.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: false
+    });
+  } catch {
+  }
+}
+function stopMutationObserver() {
+  try {
+    mutationObserver == null ? void 0 : mutationObserver.disconnect();
+  } catch {
+  }
+  mutationObserver = null;
+  if (mutationDebounceTimer) {
+    clearTimeout(mutationDebounceTimer);
+    mutationDebounceTimer = null;
+  }
+}
+function armDormancyTimer() {
+  if (dormancyTimer) clearTimeout(dormancyTimer);
+  dormancyTimer = setTimeout(() => {
+    if (!platform) {
+      detectionPaused = true;
+      stopMutationObserver();
+    }
+  }, DORMANCY_MS);
+}
+function wakeFromDormancy() {
+  if (!detectionPaused) return;
+  detectionPaused = false;
+  startMutationObserver();
+  armDormancyTimer();
+}
+function onDocumentClickCapture(e) {
+  var _a, _b;
+  try {
+    const el = (_b = (_a = e.target) == null ? void 0 : _a.closest) == null ? void 0 : _b.call(_a, 'a, button, [role="button"], input[type="submit"], input[type="button"]');
+    if (!el) return;
+    const text = (el.textContent || el.value || el.getAttribute("aria-label") || "").trim().toLowerCase();
+    if (!text || text.length > 40) return;
+    if (!APPLY_BUTTON_TEXTS.has(text)) return;
+    wakeFromDormancy();
+    startApplyClickRetry();
+  } catch {
+  }
+}
+function startApplyClickRetry() {
+  applyClickRetriesLeft = APPLY_CLICK_RETRY_COUNT;
+  if (applyClickRetryTimer) clearInterval(applyClickRetryTimer);
+  applyClickRetryTimer = setInterval(() => {
+    applyClickRetriesLeft -= 1;
+    scheduleDetection();
+    if (applyClickRetriesLeft <= 0 || platform) {
+      clearInterval(applyClickRetryTimer);
+      applyClickRetryTimer = null;
+    }
+  }, APPLY_CLICK_RETRY_INTERVAL_MS);
+}
+let pendingDetectionTimer = null;
+function scheduleDetection(reason) {
+  wakeFromDormancy();
+  if (pendingDetectionTimer) return;
+  pendingDetectionTimer = setTimeout(() => {
+    pendingDetectionTimer = null;
+    runDetection();
+  }, 150);
+}
+async function runDetection(reason) {
+  if (!isContextValid()) return;
+  const urlChanged = location.href !== lastLocationHref;
+  lastLocationHref = location.href;
+  const detection = detectJobApplicationPageDetailed();
+  const nextPlatform = detection.platform;
+  const nextStrength = detection.strength;
+  const transitionedToMatch = !platform && !!nextPlatform;
+  const strengthChanged = nextStrength !== strength;
+  const platformChanged = nextPlatform !== platform;
+  platform = nextPlatform;
+  strength = nextStrength;
+  if (!platform) {
     return;
   }
+  armDormancyTimer();
   const meta = getJobMeta();
-  jobTitle = meta.jobTitle;
-  company = meta.company;
-  const panel2 = getOrCreatePanel(platform, jobTitle, company, startFillWrapper);
+  const titleChanged = meta.jobTitle && meta.jobTitle !== jobTitle;
+  const companyChanged = meta.company && meta.company !== company;
+  jobTitle = meta.jobTitle || jobTitle;
+  company = meta.company || company;
+  if (transitionedToMatch || !panelEverInjected) {
+    await attachPanelForFirstTime();
+    return;
+  }
+  if (urlChanged || titleChanged || companyChanged || platformChanged || strengthChanged) {
+    const panel2 = getPanel();
+    if (panel2) {
+      panel2.setJobMeta(jobTitle, company, platform);
+      if (urlChanged) {
+        panel2.addLog("New job detected — click Start to fill this application.");
+      }
+      if (urlChanged) pause();
+    }
+    if (strength === "strong" && panel2) {
+      panel2.show();
+    }
+  }
+}
+async function attachPanelForFirstTime(reason) {
+  const panel2 = getOrCreatePanel(platform, jobTitle, company, startFillWrapper, true);
   if (!panel2) return;
+  panelEverInjected = true;
   panel2.setJobMeta(jobTitle, company, platform);
   panel2.setState("idle");
   init({
@@ -4771,11 +5600,12 @@ async function boot() {
     saveLearnedAnswer,
     syncPanelProfileData
   });
+  panel2.show();
   ensureProfile().catch(() => {
   });
 }
 async function startFillWrapper(opts) {
-  const currentPanel = getOrCreatePanel(platform, jobTitle, company, startFillWrapper);
+  const currentPanel = getOrCreatePanel(platform, jobTitle, company, startFillWrapper, true);
   if (!currentPanel) {
     return { success: false, error: "This page is not a supported job application." };
   }
@@ -4784,7 +5614,7 @@ async function startFillWrapper(opts) {
   setJobMeta(jobTitle, company);
   return startFill(opts);
 }
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+if (!IS_SUBFRAME) chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "SESSION_EXPIRED") {
     pause();
     clearProfile();
@@ -4844,19 +5674,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         await ensureProfile(true);
         currentPanel.show();
         currentPanel.open();
-        return { success: true, supported: currentPlatform !== "generic", snapshot: currentPanel.getSnapshot() };
+        return {
+          success: true,
+          supported: currentPlatform !== "generic",
+          snapshot: currentPanel.getSnapshot()
+        };
       }
       case "HIDE_AUTO_APPLY_PANEL": {
         const panel2 = getPanel();
         if (!panel2) {
-          return { success: false, error: "The AutoApply panel is not open on this page.", supported: platform !== "generic" };
+          return {
+            success: false,
+            error: "The AutoApply panel is not open on this page.",
+            supported: !!platform && platform !== "generic"
+          };
         }
         panel2.hide();
-        return { success: true, supported: platform !== "generic", snapshot: panel2.getSnapshot() };
+        return {
+          success: true,
+          supported: !!platform && platform !== "generic",
+          snapshot: panel2.getSnapshot()
+        };
       }
       case "START_AUTO_APPLY": {
         const result = await startFillWrapper({ source: "popup" });
-        const currentPanel = getOrCreatePanel(platform || "generic", jobTitle, company, startFillWrapper);
+        const currentPanel = getOrCreatePanel(
+          platform || "generic",
+          jobTitle,
+          company,
+          startFillWrapper,
+          true
+        );
         return { ...result, supported: true, snapshot: (currentPanel == null ? void 0 : currentPanel.getSnapshot()) ?? null };
       }
       default:
@@ -4868,9 +5716,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   });
   return true;
 });
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", boot);
-} else {
-  boot();
+if (!IS_SUBFRAME) {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", runInitialBoot);
+  } else {
+    runInitialBoot();
+  }
 }
 //# sourceMappingURL=content.js.map

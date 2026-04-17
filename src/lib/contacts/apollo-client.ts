@@ -14,20 +14,32 @@ export class ApolloNotFoundError extends Error {
 export class ApolloServiceError extends Error {
   constructor(msg: string) { super(msg); this.name = 'ApolloServiceError'; }
 }
+export class ApolloPlanError extends Error {
+  constructor(msg = 'This Apollo.io endpoint requires a paid plan.') { super(msg); this.name = 'ApolloPlanError'; }
+}
 
-function getHeaders(): Record<string, string> {
+function getApiKey(): string {
   const key = process.env.APOLLO_API_KEY;
   if (!key) throw new ApolloAuthError('APOLLO_API_KEY is not set');
+  return key;
+}
+
+function getHeaders(key: string): Record<string, string> {
   return { 'X-Api-Key': key, 'Content-Type': 'application/json' };
 }
 
 function handleAxiosError(err: unknown): never {
-  const status = (err as { response?: { status?: number } })?.response?.status;
-  if (status !== undefined) {
-    if (status === 401) throw new ApolloAuthError('Invalid Apollo API key');
-    if (status === 429) throw new ApolloRateLimitError();
-    if (status === 404) throw new ApolloNotFoundError();
-    throw new ApolloServiceError(`Apollo API error: ${status}`);
+  const resp = (err as { response?: { status?: number; data?: unknown } })?.response;
+  if (resp?.status !== undefined) {
+    console.error(`[apollo-client] HTTP ${resp.status}`, resp.data);
+    if (resp.status === 401) throw new ApolloAuthError('Invalid Apollo API key');
+    if (resp.status === 403) {
+      const msg = (resp.data as { error?: string })?.error ?? 'Apollo plan does not allow this endpoint';
+      throw new ApolloPlanError(msg);
+    }
+    if (resp.status === 429) throw new ApolloRateLimitError();
+    if (resp.status === 404) throw new ApolloNotFoundError();
+    throw new ApolloServiceError(`Apollo API error: ${resp.status}`);
   }
   throw err;
 }
@@ -56,10 +68,12 @@ export interface ApolloSearchResponse {
 }
 
 export async function searchPeople(params: ApolloSearchParams): Promise<ApolloSearchResponse> {
+  const key = getApiKey();
   try {
     const { data } = await axios.post(
-      `${APOLLO_BASE}/mixed_people/search`,
+      `${APOLLO_BASE}/people/search`,
       {
+        api_key: key,
         q_organization_domains_list: [params.companyDomain],
         ...(params.jobFunction     ? { person_titles:      [params.jobFunction]     } : {}),
         ...(params.managementLevel ? { person_seniorities: [params.managementLevel] } : {}),
@@ -67,7 +81,7 @@ export async function searchPeople(params: ApolloSearchParams): Promise<ApolloSe
         page: params.page,
         per_page: 25,
       },
-      { headers: getHeaders() },
+      { headers: getHeaders(key) },
     );
     return data as ApolloSearchResponse;
   } catch (err) {
@@ -81,11 +95,12 @@ export interface ApolloPersonDetail {
 }
 
 export async function enrichPerson(apolloPersonId: string): Promise<ApolloPersonDetail> {
+  const key = getApiKey();
   try {
     const { data } = await axios.post(
       `${APOLLO_BASE}/people/match`,
-      { id: apolloPersonId, reveal_personal_emails: true },
-      { headers: getHeaders() },
+      { api_key: key, id: apolloPersonId, reveal_personal_emails: true },
+      { headers: getHeaders(key) },
     );
     return data.person as ApolloPersonDetail;
   } catch (err) {

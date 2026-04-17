@@ -52,3 +52,45 @@ describe('matchFieldToProfile — get-hired Yes defaults', () => {
     expect(matchFieldToProfile(field('Are you legally authorized to work in the United States?'), profile)).toBe('Yes');
   });
 });
+
+// ─── Workday / ATS referral & employment ─────────────────────────────────────
+
+describe('matchFieldToProfile — Workday referral & prior employment', () => {
+  const base = {
+    user: { firstName: 'A', lastName: 'B', email: 'a@b.com' },
+    onboardingAnswers: [],
+    userContext: {},
+  };
+
+  it('selects Other for "How Did You Hear About Us?"', () => {
+    expect(matchFieldToProfile(field('How Did You Hear About Us?'), base)).toBe('Other');
+    expect(matchFieldToProfile(field('How did you hear about this job?'), base)).toBe('Other');
+  });
+
+  it('fills referral follow-up free-text with "aladdin" (literal brand answer)', () => {
+    expect(
+      matchFieldToProfile(
+        field('If Other, please specify how you heard about this opportunity'),
+        base
+      )
+    ).toBe('aladdin');
+  });
+
+  it('returns No for "previously been employed by <company>"', () => {
+    expect(
+      matchFieldToProfile(
+        field("Have you previously been employed by Owen's & Minor? CURRENT TEAMMATES: Please apply via internal Workday."),
+        base
+      )
+    ).toBe('No');
+  });
+
+  it('maps Phone Device Type from Apply Pilot userContext', () => {
+    const p = {
+      ...base,
+      userContext: { aa_phone_device_type: 'Mobile' },
+    };
+    expect(matchFieldToProfile(field('Phone Device Type'), p)).toBe('Mobile');
+    expect(matchFieldToProfile(field('Phone device type (Required)'), p)).toBe('Mobile');
+  });
+});

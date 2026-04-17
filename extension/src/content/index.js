@@ -1,19 +1,34 @@
 /**
- * index.js — The Orchestrator
+ * index.js — The Orchestrator + Detection Engine
  *
- * This file is intentionally thin. It wires together the three domain modules:
- *   - detector.js  → Platform detection & global error boundary
- *   - automation.js → Core fill loop & field processing
- *   - ui-bridge.js  → Panel management & profile syncing
+ * Architecture (Branches 2-7):
+ *   - In every sub-frame: if the frame's origin is a known ATS embed
+ *     (boards.greenhouse.io, jobs.lever.co, apply.workable.com, iCIMS, Taleo,
+ *     Workday, Ashby, …), boot the headless fill engine. Otherwise exit.
+ *   - In the top frame: run a continuous Detection Engine that re-evaluates
+ *     the page whenever anything plausibly changed:
+ *         * SPA navigation (pushState/replaceState/popstate/hashchange)
+ *         * Large DOM mutations (debounced)
+ *         * Clicks on "Apply" buttons (retry window)
+ *         * First page paint (DOMContentLoaded / idle)
+ *     Engine automatically goes dormant after 30s of no positive detection,
+ *     and wakes up on the next navigation / hashchange.
  *
- * It handles:
- *   1. Installing the global error boundary (first thing, before anything else).
- *   2. Booting: detecting platform, parsing job meta, creating the panel.
- *   3. Chrome message routing.
- *   4. Session expiration handling.
+ *   - First detection of a supported page → attach panel (collapsed for
+ *     weak matches, opened for strong) and never auto-restart fill on later
+ *     SPA nav within that tab (Q5.3 B). Dismissal is not persisted (Q5.2 C).
  */
 
-import { detectJobApplicationPage, getJobMeta, shouldActivate, installErrorBoundary } from './detector.js';
+import {
+  detectJobApplicationPageDetailed,
+  getJobMeta,
+  shouldActivate,
+  shouldAnchor,
+  isAtsIframeHost,
+  installErrorBoundary,
+} from './detector.js';
+import { bootHeadlessFrame } from './iframe-bridge.js';
+import { initIframeCoordinator } from './iframe-coordinator.js';
 import { isContextValid } from '../utils/contextGuard.js';
 import {
   init as initAutomation,
@@ -22,11 +37,6 @@ import {
   setJobMeta as setAutomationJobMeta,
   startFill,
   pause as pauseAutomation,
-  resume as resumeAutomation,
-  getIsRunning,
-  handleNewFields,
-  getFieldsToFill,
-  getCompletedCount
 } from './automation.js';
 import {
   getOrCreatePanel,
@@ -35,46 +45,293 @@ import {
   syncPanelProfileData,
   saveLearnedAnswer,
   getProfile,
-  setProfile,
-  clearProfile
+  clearProfile,
 } from './ui-bridge.js';
 
 // ─── Step 1: Install the Error Boundary IMMEDIATELY ────────────────────────────
-// This MUST be the first thing that runs so zombie-script errors
-// are caught before any other code has a chance to throw.
+// Must be first so zombie-script errors are caught before any other code throws.
 installErrorBoundary();
 
-// ─── Module-level State ────────────────────────────────────────────────────────
+// ─── Sub-frame Short-Circuit ──────────────────────────────────────────────────
+//
+// With `all_frames: true`, content.js is injected into every iframe on every
+// page (ad iframes, chat widgets, etc). We exit fast unless the frame's origin
+// is one we know we need to fill into.
+const IS_SUBFRAME = (() => {
+  try { return window !== window.top; } catch { return true; }
+})();
+
+if (IS_SUBFRAME) {
+  try {
+    const host = location.hostname;
+    if (isAtsIframeHost(host)) {
+      bootHeadlessFrame();
+    }
+    // For non-ATS iframes, do nothing. No observers, no detectors. This keeps
+    // per-page content-script overhead close to what it was before `all_frames`.
+  } catch {
+    /* cross-origin access error — safe to ignore */
+  }
+} else {
+  // Top frame: install the iframe coordinator IMMEDIATELY so we don't miss
+  // FRAME_READY pings from fast-booting child iframes (e.g. Greenhouse
+  // embeds that were prerendered in the DOM before we finished parsing).
+  initIframeCoordinator();
+}
+
+// ─── Module-level state ───────────────────────────────────────────────────────
 
 let platform = null;
+let strength = null; // 'strong' | 'weak' | null
 let jobTitle = '';
 let company = '';
+let lastLocationHref = location.href;
 
-// ─── Boot ──────────────────────────────────────────────────────────────────────
+/** True once the panel has been injected at least once for this tab. */
+let panelEverInjected = false;
 
-async function boot() {
-  // Context guard: if the extension has been unloaded, stop immediately.
+/** Detection-engine lifecycle state */
+let mutationObserver = null;
+let mutationDebounceTimer = null;
+let dormancyTimer = null;
+let detectionPaused = false;
+let applyClickRetryTimer = null;
+let applyClickRetriesLeft = 0;
+
+const MUTATION_DEBOUNCE_MS = 500;
+const DORMANCY_MS = 30_000;
+const APPLY_CLICK_RETRY_INTERVAL_MS = 500;
+const APPLY_CLICK_RETRY_COUNT = 10;
+
+// Strict match: only these exact (trimmed, lowercased) texts trigger the
+// "user probably just opened an apply form" retry window. Prevents "Apply
+// coupon", "Apply filter", etc. from firing this.
+const APPLY_BUTTON_TEXTS = new Set([
+  'apply',
+  'apply now',
+  'apply for this job',
+  'apply for job',
+  'start application',
+  'submit application',
+  'easy apply',
+  'begin application',
+]);
+
+// ─── Public boot ──────────────────────────────────────────────────────────────
+
+async function runInitialBoot() {
   if (!isContextValid()) return;
-  if (window !== window.top) return;
 
-  platform = detectJobApplicationPage();
-  if (!shouldActivate(platform)) {
-    // Silent exit — Aladdin only loads on supported job boards.
+  // First detection pass
+  runDetection('boot');
+
+  // Wire up all re-detection triggers, regardless of whether the first pass
+  // succeeded. SPA apps commonly render the form AFTER the initial paint.
+  installReDetectionTriggers();
+}
+
+// ─── Detection Engine: triggers ───────────────────────────────────────────────
+
+function installReDetectionTriggers() {
+  // (1) History API patching for SPA navigation
+  try {
+    const _push = history.pushState;
+    const _replace = history.replaceState;
+    history.pushState = function (...args) {
+      const r = _push.apply(this, args);
+      scheduleDetection('pushstate');
+      return r;
+    };
+    history.replaceState = function (...args) {
+      const r = _replace.apply(this, args);
+      scheduleDetection('replacestate');
+      return r;
+    };
+  } catch { /* ignore — history API frozen by a weird site */ }
+
+  window.addEventListener('popstate', () => scheduleDetection('popstate'));
+  window.addEventListener('hashchange', () => scheduleDetection('hashchange'));
+
+  // (2) Debounced MutationObserver on <body> — fires when forms appear/disappear
+  startMutationObserver();
+
+  // (3) Delegated "Apply" click listener (bubble phase, on document)
+  document.addEventListener('click', onDocumentClickCapture, true);
+  document.addEventListener('click', onDocumentClickCapture, false);
+
+  // (4) Safety net: periodic re-check for the first 30s after DOM is ready
+  //     (handles sites that don't fire any of the above when the form mounts).
+  armDormancyTimer();
+}
+
+function startMutationObserver() {
+  if (mutationObserver) return;
+  try {
+    mutationObserver = new MutationObserver(() => {
+      if (detectionPaused) return;
+      if (mutationDebounceTimer) clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => {
+        mutationDebounceTimer = null;
+        scheduleDetection('mutation');
+      }, MUTATION_DEBOUNCE_MS);
+    });
+    mutationObserver.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: false,
+    });
+  } catch { /* body not ready or observer disallowed */ }
+}
+
+function stopMutationObserver() {
+  try { mutationObserver?.disconnect(); } catch { /* ignore */ }
+  mutationObserver = null;
+  if (mutationDebounceTimer) {
+    clearTimeout(mutationDebounceTimer);
+    mutationDebounceTimer = null;
+  }
+}
+
+function armDormancyTimer() {
+  if (dormancyTimer) clearTimeout(dormancyTimer);
+  dormancyTimer = setTimeout(() => {
+    // 30s of no positive detection → go dormant (stop burning CPU on
+    // mutation observers). History events still wake us up.
+    if (!platform) {
+      detectionPaused = true;
+      stopMutationObserver();
+    }
+  }, DORMANCY_MS);
+}
+
+function wakeFromDormancy() {
+  if (!detectionPaused) return;
+  detectionPaused = false;
+  startMutationObserver();
+  armDormancyTimer();
+}
+
+function onDocumentClickCapture(e) {
+  try {
+    const el = e.target?.closest?.('a, button, [role="button"], input[type="submit"], input[type="button"]');
+    if (!el) return;
+    const text = (
+      el.textContent
+      || el.value
+      || el.getAttribute('aria-label')
+      || ''
+    ).trim().toLowerCase();
+    if (!text || text.length > 40) return;
+    if (!APPLY_BUTTON_TEXTS.has(text)) return;
+    // The user just clicked an apply-style button. Run a short retry loop —
+    // even if detection fails now, the form might mount within ~5s.
+    wakeFromDormancy();
+    startApplyClickRetry();
+  } catch { /* ignore */ }
+}
+
+function startApplyClickRetry() {
+  applyClickRetriesLeft = APPLY_CLICK_RETRY_COUNT;
+  if (applyClickRetryTimer) clearInterval(applyClickRetryTimer);
+  applyClickRetryTimer = setInterval(() => {
+    applyClickRetriesLeft -= 1;
+    scheduleDetection('apply-click-retry');
+    if (applyClickRetriesLeft <= 0 || platform) {
+      clearInterval(applyClickRetryTimer);
+      applyClickRetryTimer = null;
+    }
+  }, APPLY_CLICK_RETRY_INTERVAL_MS);
+}
+
+/**
+ * Coalesce multiple near-simultaneous triggers into a single detection pass.
+ */
+let pendingDetectionReason = null;
+let pendingDetectionTimer = null;
+function scheduleDetection(reason) {
+  wakeFromDormancy();
+  if (pendingDetectionTimer) return;
+  pendingDetectionReason = reason;
+  pendingDetectionTimer = setTimeout(() => {
+    pendingDetectionTimer = null;
+    const r = pendingDetectionReason;
+    pendingDetectionReason = null;
+    runDetection(r);
+  }, 150);
+}
+
+// ─── Detection Engine: body ───────────────────────────────────────────────────
+
+async function runDetection(reason) {
+  if (!isContextValid()) return;
+
+  const urlChanged = location.href !== lastLocationHref;
+  lastLocationHref = location.href;
+
+  const detection = detectJobApplicationPageDetailed();
+  const nextPlatform = detection.platform;
+  const nextStrength = detection.strength;
+
+  const transitionedToMatch = !platform && !!nextPlatform;
+  const strengthChanged = nextStrength !== strength;
+  const platformChanged = nextPlatform !== platform;
+
+  platform = nextPlatform;
+  strength = nextStrength;
+
+  if (!platform) {
+    // No match yet. Engine stays active unless it times out via dormancy.
     return;
   }
 
-  const meta = getJobMeta();
-  jobTitle = meta.jobTitle;
-  company = meta.company;
+  // Reset dormancy timer — we got a hit.
+  armDormancyTimer();
 
-  // Create the panel and wire it to the automation engine
-  const panel = getOrCreatePanel(platform, jobTitle, company, startFillWrapper);
+  // Refresh job meta regardless (works for SPA navigation too).
+  const meta = getJobMeta();
+  const titleChanged = meta.jobTitle && meta.jobTitle !== jobTitle;
+  const companyChanged = meta.company && meta.company !== company;
+  jobTitle = meta.jobTitle || jobTitle;
+  company = meta.company || company;
+
+  // Case 1 — first-ever positive detection in this tab.
+  if (transitionedToMatch || !panelEverInjected) {
+    await attachPanelForFirstTime(reason);
+    return;
+  }
+
+  // Case 2 — same platform, but SPA navigation changed the URL/meta. Refresh
+  // meta in the panel, DO NOT auto-restart fill (Q5.3 B).
+  if (urlChanged || titleChanged || companyChanged || platformChanged || strengthChanged) {
+    const panel = getPanel();
+    if (panel) {
+      panel.setJobMeta(jobTitle, company, platform);
+      if (urlChanged) {
+        panel.addLog('New job detected — click Start to fill this application.');
+      }
+      // If fill is running on the OLD URL, stop it before user confirms.
+      if (urlChanged) pauseAutomation();
+    }
+
+    // If we were previously only on a weak match but this page is now a strong
+    // match, promote the panel: show it openly.
+    if (strength === 'strong' && panel) {
+      panel.show();
+    }
+  }
+}
+
+// ─── Panel attach (first-ever detection) ──────────────────────────────────────
+
+async function attachPanelForFirstTime(reason) {
+  const panel = getOrCreatePanel(platform, jobTitle, company, startFillWrapper, true);
   if (!panel) return;
+
+  panelEverInjected = true;
 
   panel.setJobMeta(jobTitle, company, platform);
   panel.setState('idle');
 
-  // Initialise the automation engine with references
   initAutomation({
     panel,
     profile: getProfile(),
@@ -83,35 +340,42 @@ async function boot() {
     platform,
     ensureProfile,
     saveLearnedAnswer,
-    syncPanelProfileData
+    syncPanelProfileData,
   });
 
-  // Kick off a background profile fetch (non-blocking)
+  // Weak match: keep collapsed (just the ★ grip floats). User clicks to open.
+  // Strong match: leave collapsed as well but add a ready-to-go log line.
+  // (We intentionally don't auto-open the panel on strong matches — that would
+  // be too aggressive. Users see the grip, click it to start.)
+  panel.show();
+
+  // Non-blocking profile fetch
   ensureProfile().catch(() => {});
+
+  // Diagnostic
+  if (reason && reason !== 'boot') {
+    // intentionally quiet — no panel log on re-detection bootstraps
+  }
 }
 
-/**
- * Thin wrapper around startFill that syncs the latest profile
- * into the automation engine before starting.
- */
+// ─── startFill wrapper (unchanged logic, slimmed) ─────────────────────────────
+
 async function startFillWrapper(opts) {
-  const currentPanel = getOrCreatePanel(platform, jobTitle, company, startFillWrapper);
+  const currentPanel = getOrCreatePanel(platform, jobTitle, company, startFillWrapper, true);
   if (!currentPanel) {
     return { success: false, error: 'This page is not a supported job application.' };
   }
-
-  // Sync latest references into the automation engine
   setPanel(currentPanel);
   setAutomationProfile(getProfile());
   setAutomationJobMeta(jobTitle, company);
-
   return startFill(opts);
 }
 
-// ─── Chrome Message Router ─────────────────────────────────────────────────────
+// ─── Chrome message router ────────────────────────────────────────────────────
+// Installed only in the top frame — sub-frames are orchestrated via postMessage
+// (see iframe-bridge.js), not chrome.runtime messages.
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  // ── Session Expiration (broadcast from background.js) ──
+if (!IS_SUBFRAME) chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === 'SESSION_EXPIRED') {
     pauseAutomation();
     clearProfile();
@@ -122,22 +386,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  // ── Session Updated (user just signed in) ──
   if (message.action === 'SESSION_UPDATED') {
-    ensureProfile(true).then((freshProfile) => {
-      if (freshProfile) {
-        setAutomationProfile(freshProfile);
-        const panel = getPanel();
-        panel?.addLog('Signed in to Aladdin. Ready to auto-fill.');
-        panel?.setState('idle');
-      }
-    }).catch(() => {});
+    ensureProfile(true)
+      .then((freshProfile) => {
+        if (freshProfile) {
+          setAutomationProfile(freshProfile);
+          const panel = getPanel();
+          panel?.addLog('Signed in to Aladdin. Ready to auto-fill.');
+          panel?.setState('idle');
+        }
+      })
+      .catch(() => {});
     sendResponse({ success: true });
     return true;
   }
 
   const handle = async () => {
-    // ── Dead Man's Switch: if context is dead, respond with error and bail ──
     if (!isContextValid()) {
       return { error: 'The extension was reloaded or updated. Please refresh the page and try again.' };
     }
@@ -158,9 +422,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             profileAnswered: 0,
             aiAnswered: 0,
             manualAnswered: 0,
-            pendingQuestions: 0
+            pendingQuestions: 0,
           },
-          requiresInput: false
+          requiresInput: false,
         };
         return { supported: !!platform, snapshot };
       }
@@ -168,31 +432,49 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case 'SHOW_AUTO_APPLY_PANEL':
       case 'OPEN_AUTO_APPLY_PANEL':
       case 'OPEN_PANEL': {
-        // If the panel wasn't created because it's a generic page, create it now
+        // Popup-triggered: force-create the panel even on unsupported pages
+        // (user explicitly asked for it).
         const currentPlatform = platform || 'generic';
         const currentPanel = getOrCreatePanel(currentPlatform, jobTitle, company, startFillWrapper, true);
         if (!currentPanel) {
           return { success: false, error: 'Could not create panel on this page.', supported: false };
         }
-
         await ensureProfile(true);
         currentPanel.show();
         currentPanel.open();
-        return { success: true, supported: currentPlatform !== 'generic', snapshot: currentPanel.getSnapshot() };
+        return {
+          success: true,
+          supported: currentPlatform !== 'generic',
+          snapshot: currentPanel.getSnapshot(),
+        };
       }
 
       case 'HIDE_AUTO_APPLY_PANEL': {
         const panel = getPanel();
         if (!panel) {
-          return { success: false, error: 'The AutoApply panel is not open on this page.', supported: platform !== 'generic' };
+          return {
+            success: false,
+            error: 'The AutoApply panel is not open on this page.',
+            supported: !!platform && platform !== 'generic',
+          };
         }
         panel.hide();
-        return { success: true, supported: platform !== 'generic', snapshot: panel.getSnapshot() };
+        return {
+          success: true,
+          supported: !!platform && platform !== 'generic',
+          snapshot: panel.getSnapshot(),
+        };
       }
 
       case 'START_AUTO_APPLY': {
         const result = await startFillWrapper({ source: 'popup' });
-        const currentPanel = getOrCreatePanel(platform || 'generic', jobTitle, company, startFillWrapper);
+        const currentPanel = getOrCreatePanel(
+          platform || 'generic',
+          jobTitle,
+          company,
+          startFillWrapper,
+          true
+        );
         return { ...result, supported: true, snapshot: currentPanel?.getSnapshot() ?? null };
       }
 
@@ -201,16 +483,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
   };
 
-  handle().then(sendResponse).catch((error) => {
-    sendResponse({ error: error?.message ?? String(error) });
-  });
+  handle()
+    .then(sendResponse)
+    .catch((error) => {
+      sendResponse({ error: error?.message ?? String(error) });
+    });
   return true;
 });
 
-// ─── Boot Trigger ──────────────────────────────────────────────────────────────
+// ─── Boot trigger ─────────────────────────────────────────────────────────────
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot);
-} else {
-  boot();
+if (!IS_SUBFRAME) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runInitialBoot);
+  } else {
+    runInitialBoot();
+  }
 }
+
+// Voluntary exports for tests (no-op at runtime in production)
+export const __test__ = { scheduleDetection, runDetection };

@@ -11,7 +11,7 @@
 
 import { injectPanel } from './shadow-root.js';
 import { safeSendMessage } from '../utils/contextGuard.js';
-import { stop as stopAutofill } from './automation.js';
+import { stop as stopAutofill, setAutoAdvanceEnabled } from './automation.js';
 
 // ─── Module State ──────────────────────────────────────────────────────────────
 
@@ -372,6 +372,9 @@ export function getOrCreatePanel(platform, jobTitle, company, onStartFill, force
         panel.setSettingsMessage('Could not open the resume preview. Please try again.', 'error');
         panel.addLog('Resume preview failed — could not reach Aladdin.');
       }
+    };
+    panel.onAutoAdvanceChange = (enabled) => {
+      setAutoAdvanceEnabled(enabled);
     };
     panel.onSaveSettings = async (draft) => {
       panel.setSettingsSaving(true);

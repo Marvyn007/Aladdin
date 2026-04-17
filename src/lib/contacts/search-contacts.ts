@@ -10,6 +10,9 @@ export interface ContactSearchResult {
   companyDomain: string | null;
   linkedinUrl: string | null;
   emailRevealed: boolean;
+  /** Populated when the email is already stored in DB (emailRevealed === true) */
+  email: string | null;
+  emailStatus: string | null;
   location: { city: string | null; country: string | null } | null;
 }
 
@@ -123,6 +126,7 @@ function toSearchResult(c: {
   companyDomain: string | null;
   linkedinUrl: string | null;
   email: string | null;
+  emailStatus: string | null;
   location: string | null;
 }): ContactSearchResult {
   return {
@@ -133,6 +137,8 @@ function toSearchResult(c: {
     companyDomain: c.companyDomain,
     linkedinUrl: c.linkedinUrl,
     emailRevealed: c.email !== null,
+    email: c.email,
+    emailStatus: c.emailStatus,
     location: decodeLocation(c.location),
   };
 }

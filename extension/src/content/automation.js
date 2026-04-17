@@ -9,7 +9,7 @@
  *      the loop self-terminates silently without crashing the page.
  */
 
-import { matchFieldToProfile, inferSelectHintFromProfile } from '../utils/fieldMatcher.js';
+import { matchFieldToProfile, inferSelectHintFromProfile, fuzzyMatchFieldToProfile } from '../utils/fieldMatcher.js';
 import {
   fillTextInput,
   fillSelect,
@@ -25,6 +25,8 @@ import {
   fillLocationWithAutocomplete,
 } from '../utils/formFiller.js';
 import { scanFields, stopObserver, scrollFieldIntoView, retryFailedFields } from '../utils/platformDrivers.js';
+import { findWorkdaySaveAndContinue } from '../utils/workdayNav.js';
+import { collectAtsIframes, fillAllAtsIframes } from './iframe-coordinator.js';
 import { isContextValid } from '../utils/contextGuard.js';
 import { safeSendMessage } from '../utils/contextGuard.js';
 import {
@@ -55,6 +57,7 @@ const PLATFORM_LABELS = { workday: 'Workday' };
 
 let _lockRelease = null;        // resolves the Web Lock promise when fill ends
 let _visibilityHandler = null;  // stored so we can removeEventListener on stop
+let _autoAdvanceEnabled = false; // toggled by the panel Auto-Advance setting
 
 // These are injected by the orchestrator via `init()`
 let _panel = null;
@@ -102,6 +105,7 @@ export function setPanel(panel) { _panel = panel; }
 export function setProfile(profile) { _profile = profile; }
 export function setJobMeta(jobTitle, company) { _jobTitle = jobTitle; _company = company; }
 
+export function setAutoAdvanceEnabled(enabled) { _autoAdvanceEnabled = !!enabled; }
 export function pause() { isPaused = true; }
 export function resume() { isPaused = false; }
 export function stop() {
@@ -131,6 +135,181 @@ function _cleanupBackgroundSession() {
   hideBackgroundWarningBanner();
 }
 export function getCompletedCount() { return completedElements.size; }
+
+// ─── Mandatory Field Detection ────────────────────────────────────────────────
+
+/**
+ * Conservative mandatory-field heuristic (Branch 6 decision).
+ * Returns true if any signal suggests the field is required.
+ * If no signal is found, returns false — the caller (auto-advance) defaults
+ * to treating unknown fields as required per decision 6b.
+ *
+ * @param {HTMLElement} el
+ * @param {string} [labelText]
+ * @returns {boolean}
+ */
+function isMandatoryField(el, labelText = '') {
+  // 1. Standard HTML attributes
+  if (el.required || el.getAttribute('aria-required') === 'true') return true;
+
+  // 2. Label text contains * or (required)
+  if (/\*/.test(labelText) || /\(required\)/i.test(labelText)) return true;
+
+  // 3. Workday data attribute on the field's container
+  if (el.closest('[data-automation-id="formField--required"]')) return true;
+
+  // 4. Common class-name patterns used by iCIMS, Taleo, and generic ATSes
+  if (el.closest('.required, [class*="required"], [class*="mandatory"]')) return true;
+
+  return false;
+}
+
+// ─── Auto-Advance: Next Button Detection ──────────────────────────────────────
+
+/**
+ * Platform-specific selector maps for the Next/Continue button.
+ * Tried in order; first visible match wins.
+ */
+const NEXT_BUTTON_MAP = {
+  workday: [
+    '[data-automation-id="nextButton"]',
+    '[data-automation-id="bottom-navigation-next-button"]',
+    'button[data-automation-id*="next"]',
+  ],
+  icims: [
+    'button[id*="next" i]',
+    'input[value="Next"]',
+    '.icims-button-next',
+    'a[class*="btn-next"]',
+  ],
+  taleo: [
+    '#btn_next',
+    'a[id*="next" i]',
+    'input[name*="next" i]',
+    'button[id*="Next"]',
+  ],
+  lever:      [], // single-page form — no advance needed
+  greenhouse: [], // single-page form — no advance needed
+};
+
+/** Text patterns ranked by preference (lower index = higher priority). */
+const NEXT_TEXT_PATTERNS = [
+  'save and continue',
+  'next step',
+  'continue',
+  'next',
+  'proceed',
+  'go to next',
+];
+
+function _isVisibleBtn(el) {
+  const s = window.getComputedStyle(el);
+  if (s.display === 'none' || s.visibility === 'hidden') return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+}
+
+/**
+ * Finds the Next/Continue button for the current step.
+ * Tries platform-specific selectors first, then scores visible buttons by text.
+ *
+ * @param {string} platform
+ * @returns {Element|null}
+ */
+function findNextButton(platform) {
+  // Workday: primary control is often a div[role="button"] in the footer, not <button>.
+  if (platform === 'workday') {
+    const wd = findWorkdaySaveAndContinue();
+    if (wd) return wd;
+  }
+
+  // 1. Platform-specific selectors
+  const selectors = NEXT_BUTTON_MAP[platform] ?? [];
+  for (const sel of selectors) {
+    try {
+      const btn = document.querySelector(sel);
+      if (btn && _isVisibleBtn(btn)) return btn;
+    } catch { /* invalid selector — skip */ }
+  }
+
+  // 2. Text-scoring fallback: search all clickable elements
+  const candidates = Array.from(document.querySelectorAll(
+    'button:not([disabled]), input[type="button"]:not([disabled]), input[type="submit"]:not([disabled]), a[role="button"], [role="button"]:not([disabled])'
+  ));
+
+  let bestBtn = null;
+  let bestRank = Infinity;
+
+  for (const btn of candidates) {
+    if (!_isVisibleBtn(btn)) continue;
+    const text = (btn.textContent || btn.value || btn.getAttribute('aria-label') || '')
+      .toLowerCase().trim();
+    const rank = NEXT_TEXT_PATTERNS.findIndex(p => text.includes(p));
+    if (rank !== -1 && rank < bestRank) {
+      bestRank = rank;
+      bestBtn = btn;
+    }
+  }
+
+  return bestBtn;
+}
+
+/**
+ * Attempts to auto-advance to the next form step.
+ * Blocks if any mandatory field is still unfilled (highlights in red).
+ * Called at the end of runFillLoop() when _autoAdvanceEnabled is true.
+ */
+async function _tryAutoAdvance() {
+  // Collect all connected, unfilled fields
+  const unfilled = fieldsToFill.filter(f => {
+    if (!f.element?.isConnected) return false;
+    if (isFieldAnswered(f)) return false;
+    if (f.type === 'file') return false; // file uploads handled separately
+    return true;
+  });
+
+  // Check which unfilled fields are mandatory (or unknown — treated as mandatory per 6b)
+  const mandatoryUnfilled = unfilled.filter(f => {
+    const mandatory = isMandatoryField(f.element, f.label);
+    // Decision 6b: if we can't determine, default to blocking
+    return mandatory || !f.element.getAttribute('aria-required');
+  });
+
+  if (mandatoryUnfilled.length > 0) {
+    _panel?.addLog(
+      `Auto-advance blocked — ${mandatoryUnfilled.length} required field(s) still need attention.`
+    );
+    // Highlight each blocking field in red for 4 seconds
+    for (const f of mandatoryUnfilled) {
+      try {
+        const orig = f.element.style.outline;
+        f.element.style.outline = '2px solid #ef4444';
+        setTimeout(() => { try { f.element.style.outline = orig; } catch { /* ignore */ } }, 4000);
+      } catch { /* ignore */ }
+    }
+    return;
+  }
+
+  const nextBtn = findNextButton(_platform);
+  if (!nextBtn) {
+    _panel?.addLog('Auto-advance: could not locate a Next/Continue button on this step.');
+    return;
+  }
+
+  _panel?.addLog('Auto-advancing to the next step…');
+  // Brief human-like pause before clicking
+  await sleep(500 + Math.random() * 300);
+  try {
+    nextBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await sleep(200);
+    nextBtn.click();
+    nextBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  } catch (e) {
+    _panel?.addLog('Auto-advance click failed — please click Next manually.');
+  }
+  // Do NOT set state to 'done' — the MutationObserver / step-change detector
+  // in platformDrivers.js will fire handleNewFields() when new fields appear.
+}
 
 // ─── Field Utilities ───────────────────────────────────────────────────────────
 
@@ -422,11 +601,17 @@ async function processField(field) {
 
     _panel?.addLog(`Processing: ${groupLabel}.`);
 
-    // Profile match using GROUP label (not individual option label)
-    const groupProfileValue = matchFieldToProfile(
-      { label: groupLabel, placeholder: '', name: element.name || '', ariaLabel: '' },
-      _profile
-    );
+    // Profile match using GROUP label (not individual option label).
+    // Fuzzy multi-token AND fires as fallback if explicit match returns null.
+    const groupProfileValue =
+      matchFieldToProfile(
+        { label: groupLabel, placeholder: '', name: element.name || '', ariaLabel: '' },
+        _profile
+      ) ??
+      fuzzyMatchFieldToProfile(
+        { label: groupLabel, placeholder: '', name: element.name || '', ariaLabel: '' },
+        _profile
+      );
 
     if (groupProfileValue !== null) {
       const ok = await fillRadioGroupOption(groupOptions, String(groupProfileValue));
@@ -475,7 +660,10 @@ async function processField(field) {
   }
 
   // ═══ PROFILE MATCH (non-radio fields) ═══
-  const profileValue = matchFieldToProfile({ label, placeholder, name, ariaLabel }, _profile);
+  // Explicit pattern list first; fuzzy multi-token AND as fallback (Branch 9).
+  const profileValue =
+    matchFieldToProfile({ label, placeholder, name, ariaLabel }, _profile) ??
+    fuzzyMatchFieldToProfile({ label, placeholder, name, ariaLabel }, _profile);
   if (profileValue !== null) {
     _panel?.addLog(`Filling ${fieldLabel}.`);
     let success = false;
@@ -819,6 +1007,16 @@ export async function runFillLoop() {
       await runVerificationPass();
     }
 
+    // ── Auto-Advance: click Next / Save and Continue when enabled, or always on Workday
+    //     (user asked for less manual paging on multi-step Workday flows).
+    const shouldAdvance = _autoAdvanceEnabled || _platform === 'workday';
+    if (!isStopped && isContextValid() && shouldAdvance && fieldsToFill.length > 0) {
+      await _tryAutoAdvance();
+      // If auto-advance fired, the MutationObserver will restart the loop for
+      // the new step — don't set terminal state here.
+      return;
+    }
+
     // ── Auto-stop: always finish in 'done' state after verification ──
     if (!isStopped && isContextValid()) {
       if (fieldsToFill.length === 0) {
@@ -931,11 +1129,56 @@ export async function startFill({ source = 'panel' } = {}) {
   fieldsToFill = scanFields(_platform, handleNewFields);
   syncExistingAnswers(fieldsToFill);
 
-  _panel.addLog(
-    fieldsToFill.length
-      ? `Detected ${fieldsToFill.length} fillable questions.`
-      : 'Scanning the page for fillable questions.'
-  );
+  // ── ATS iframe coordination ─────────────────────────────────────────────
+  // Many career sites (DataDog, Stripe, Figma, …) embed the real application
+  // form inside a cross-origin iframe. Top-frame `scanFields` finds zero
+  // inputs, so without this block the loop would "shut up" instantly.
+  // We postMessage FILL_FRAME into every known ATS iframe; its content script
+  // replies with a FILL_RESULT summary that the coordinator routes to the
+  // panel log.
+  const atsIframes = collectAtsIframes(document);
+  const hasEmbeddedForm = atsIframes.length > 0;
+
+  // Kick off the iframe fill in parallel with the top-frame loop. The
+  // coordinator logs its own "Form lives inside…" + "Embedded form: filled X"
+  // messages to the panel.
+  let iframeFillPromise = Promise.resolve(null);
+  if (hasEmbeddedForm) {
+    iframeFillPromise = fillAllAtsIframes({
+      profile: _profile,
+      jobTitle: _jobTitle,
+      company: _company,
+      panel: _panel,
+    }).catch(() => null);
+  }
+
+  if (fieldsToFill.length) {
+    _panel.addLog(`Detected ${fieldsToFill.length} fillable questions.`);
+  } else if (!hasEmbeddedForm) {
+    _panel.addLog('Scanning the page for fillable questions.');
+  }
+
+  // Special case: 0 top-frame fields + embedded iframe form.
+  // We shouldn't run `runFillLoop` because its 0-fields branch would log the
+  // misleading "No fillable questions were detected on this page." — wait
+  // on the iframe coordinator instead.
+  if (fieldsToFill.length === 0 && hasEmbeddedForm) {
+    iframeFillPromise
+      .then((result) => {
+        if (!isContextValid()) return;
+        if (result && (result.filled > 0 || result.replied > 0)) {
+          _panel.setState('done');
+          _panel.celebrateSuccess?.();
+        } else {
+          _panel.setState('idle');
+        }
+      })
+      .finally(() => {
+        isRunning = false;
+        _cleanupBackgroundSession();
+      });
+    return { success: true };
+  }
 
   runFillLoop().catch((error) => {
     console.error('Auto fill failed:', error);

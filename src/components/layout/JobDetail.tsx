@@ -14,9 +14,55 @@ import Link from 'next/link';
 import DOMPurify from 'isomorphic-dompurify';
 import he from 'he';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
-import { ApplyPilotButton } from '@/components/shared/ApplyPilotButton';
-import { ApplyPilotModal } from '@/components/shared/ApplyPilotModal';
-import { Plane } from 'lucide-react';
+import { ReferralTeaser } from '@/components/layout/ReferralTeaser';
+
+/** Extract domain from a logo.dev CDN URL (direct or behind /api/proxy-image). */
+function extractDomainFromLogoDevUrl(logoUrl: string | null | undefined): string | null {
+  if (!logoUrl) return null;
+  let candidate = logoUrl.trim();
+
+  if (candidate.startsWith('/api/proxy-image')) {
+    try {
+      const u = new URL(candidate, 'http://localhost');
+      const inner = u.searchParams.get('url');
+      if (inner) candidate = decodeURIComponent(inner);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!candidate.startsWith('http')) return null;
+
+  try {
+    const u = new URL(candidate);
+    const host = u.hostname.toLowerCase();
+    if (host === 'img.logo.dev' || host === 'logo.dev') {
+      const seg = u.pathname.replace(/^\//, '').split('/')[0]?.split('?')[0];
+      if (seg && seg.includes('.')) return seg;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** Last resort: single-token names often match `{name}.com` (Cloudflare → cloudflare.com). */
+function guessDomainFromCompanyName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const t = name.trim();
+  if (!t || /\s/.test(t)) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(t)) return null;
+  return `${t.toLowerCase()}.com`;
+}
+
+/** Prefer DB companies.domain; then logo.dev URL; then a cautious name→.com guess. */
+function resolveCompanyDomain(job: Job): string | null {
+  const fromDb = job.company_domain?.trim().toLowerCase();
+  if (fromDb && fromDb.includes('.')) return fromDb;
+  const fromLogo = extractDomainFromLogoDevUrl(job.company_logo_url);
+  if (fromLogo) return fromLogo;
+  return guessDomainFromCompanyName(job.company);
+}
 
 // Get dynamic color based on company name
 export function getCompanyColor(companyName: string | null): string {
@@ -562,7 +608,6 @@ export function JobDetail({
     const [isGeneratingResume, setIsGeneratingResume] = useState(false);
     const [hasTailoredResume, setHasTailoredResume] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [applyPilotSessionId, setApplyPilotSessionId] = useState<string | null>(null);
     const { toggleJobStatus } = useStoreActions();
     const { status: resumeStatus } = useResumeGeneration();
 
@@ -715,6 +760,8 @@ export function JobDetail({
         <span style={{ position: 'absolute', top: -7, right: -7, fontSize: 9, lineHeight: 1, fontWeight: 700 }}>LOCK</span>
     );
 
+    const referralCompanyDomain = resolveCompanyDomain(job);
+
     return (
         <div
             className={`job-detail-container ${isMobileVisible ? 'mobile-visible' : ''}`}
@@ -731,17 +778,6 @@ export function JobDetail({
 
             {/* Relative wrapper — gives the inline ApplyPilot overlay a positioning context */}
             <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-
-            {/* Apply Pilot inline overlay — sits above job-detail-scroll, same size */}
-            {applyPilotSessionId && job && (
-                <ApplyPilotModal
-                    sessionId={applyPilotSessionId}
-                    jobTitle={job.title}
-                    company={job.company ?? ''}
-                    onClose={() => setApplyPilotSessionId(null)}
-                    inline
-                />
-            )}
 
             <div className="job-detail-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {/* Header Info (Static) */}
@@ -819,6 +855,16 @@ export function JobDetail({
                             </span>
                         </div>
                     </div>
+
+                    {/* Referral CTA — header (same band as title / company / meta) */}
+                    {job.company && referralCompanyDomain && (
+                        <div style={{ marginTop: '14px' }}>
+                            <ReferralTeaser
+                                companyDomain={referralCompanyDomain}
+                                companyName={job.company}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Action Buttons (Sticky) */}
@@ -848,13 +894,6 @@ export function JobDetail({
                             </svg>
                             View Original
                         </a>
-
-                        {isAuthenticated && (
-                            <ApplyPilotButton
-                                jobId={job.id}
-                                onSessionStart={(sid) => setApplyPilotSessionId(sid)}
-                            />
-                        )}
 
                         {isAuthenticated && (
                             <button
@@ -1025,7 +1064,6 @@ export function JobDetail({
                 {/* Content */}
                 <div style={{ flex: 1, padding: '24px' }}>
 
-
                     {/* Why explanation */}
                     {
                     }
@@ -1082,8 +1120,6 @@ export function JobDetail({
                     onSave={handleEditSave}
                 />
             )}
-
-            {/* Apply Pilot modal is now rendered inline above the scroll area — see above */}
         </div >
     );
 }

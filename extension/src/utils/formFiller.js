@@ -941,6 +941,16 @@ function highlightField(el, status = 'success') {
  * @returns {boolean}
  */
 export function isConditionalFollowUp(el, fieldLabel) {
+  const combined = `${fieldLabel || ''} ${el?.placeholder || ''} ${el?.getAttribute?.('aria-label') || ''}`.toLowerCase();
+  // Referral-source free-text that appears after choosing "Other" is NOT a
+  // radio follow-up — always allow the matcher / filler to run.
+  if (
+    /\b(specify|please explain|please describe|if other|additional detail|please enter)\b/.test(combined)
+    && /\b(hear|heard|referral|source|opening|opportunity|position|job|find us|about us)\b/.test(combined)
+  ) {
+    return false;
+  }
+
   // Find the nearest container that holds radio/checkbox inputs
   const container =
     el.closest('fieldset, [role="group"]') ??

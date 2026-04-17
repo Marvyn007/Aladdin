@@ -34,11 +34,13 @@ export class AutoApplyPanel {
     this.captchaAlert = false;
     this.fileAlert = null;
     this.askingQuestion = null;
+    this.autoAdvance = false;
     this.onStart = null;
     this.onPause = null;
     this.onResume = null;
     this.onSkip = null;
     this.onSaveSettings = null;
+    this.onAutoAdvanceChange = null;
     this.onSignIn = null;
     this.onDisconnect = null;
     this.onConnectPat = null;
@@ -67,11 +69,11 @@ export class AutoApplyPanel {
       }
     };
     this.settingsDraft = cloneDraft(this.profileData);
-    /** Which viewport edge the grip snaps to: left | right | top | bottom */
+    /** Bookmark is always docked to the right viewport edge; only Y is user-adjustable. */
     this.snappedEdge = 'right';
     const initBm = this._bmSize();
     this.position = {
-      x: window.innerWidth - initBm.w - GUTTER,
+      x: this._bookmarkRightX(initBm.w),
       y: clamp(108, GUTTER, window.innerHeight - initBm.h - GUTTER)
     };
     this._dragState = null;
@@ -79,10 +81,14 @@ export class AutoApplyPanel {
   }
 
   _bmSize() {
-    if (this.snappedEdge === 'top' || this.snappedEdge === 'bottom') {
-      return { w: WHITE_SIDE, h: WHITE_SIDE + GRIP };
-    }
+    // Horizontal strip: logo + grip — always used (right-wall dock only).
     return { w: WHITE_SIDE + GRIP, h: WHITE_SIDE };
+  }
+
+  /** Fixed X for the bookmark so it stays flush to the right edge of the viewport. */
+  _bookmarkRightX(bookmarkWidth) {
+    const w = bookmarkWidth ?? this._bmSize().w;
+    return Math.max(GUTTER, window.innerWidth - w - GUTTER);
   }
 
   _applyBookmarkLayout() {
@@ -326,8 +332,9 @@ export class AutoApplyPanel {
       const dy = event.clientY - this._dragState.startY;
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) this._dragState.moved = true;
       const { w, h } = this._bmSize();
+      // Right wall only: ignore horizontal drag; move bookmark vertically along the edge.
       this.position = {
-        x: clamp(this._dragState.originX + dx, GUTTER, window.innerWidth - w - GUTTER),
+        x: this._bookmarkRightX(w),
         y: clamp(this._dragState.originY + dy, GUTTER, window.innerHeight - h - GUTTER)
       };
       this._place();
@@ -337,13 +344,13 @@ export class AutoApplyPanel {
       const dragState = this._dragState;
       this._dragState = null;
       if (dragState.source === 'grip') {
-        this._snapBookmarkToNearestEdge();
+        this._snapBookmarkToRightWall();
       }
     };
     this._onResize = () => {
       const { w, h } = this._bmSize();
       this.position = {
-        x: clamp(this.position.x, GUTTER, window.innerWidth - w - GUTTER),
+        x: this._bookmarkRightX(w),
         y: clamp(this.position.y, GUTTER, window.innerHeight - h - GUTTER)
       };
       this._place();
@@ -387,51 +394,21 @@ export class AutoApplyPanel {
     return answers + custom;
   }
 
-  _snapBookmarkToNearestEdge() {
-    const W = window.innerWidth;
+  _snapBookmarkToRightWall() {
     const H = window.innerHeight;
-    const horiz = { w: WHITE_SIDE + GRIP, h: WHITE_SIDE };
-    const vert = { w: WHITE_SIDE, h: WHITE_SIDE + GRIP };
-    const rect = this.bookmarkEl?.getBoundingClientRect();
-    const cx = rect ? rect.left + rect.width / 2 : this.position.x + horiz.w / 2;
-    const cy = rect ? rect.top + rect.height / 2 : this.position.y + horiz.h / 2;
-    const candidates = [
-      { edge: 'left', dist: cx, dims: horiz },
-      { edge: 'right', dist: W - cx, dims: horiz },
-      { edge: 'top', dist: cy, dims: vert },
-      { edge: 'bottom', dist: H - cy, dims: vert }
-    ];
-    candidates.sort((a, b) => a.dist - b.dist);
-    const best = candidates[0];
-    this.snappedEdge = best.edge;
-    const { w, h } = best.dims;
-    let x;
-    let y;
-    if (best.edge === 'left') {
-      x = GUTTER;
-      y = clamp(this.position.y, GUTTER, H - h - GUTTER);
-    } else if (best.edge === 'right') {
-      x = W - w - GUTTER;
-      y = clamp(this.position.y, GUTTER, H - h - GUTTER);
-    } else if (best.edge === 'top') {
-      y = GUTTER;
-      x = clamp(this.position.x, GUTTER, W - w - GUTTER);
-    } else {
-      y = H - h - GUTTER;
-      x = clamp(this.position.x, GUTTER, W - w - GUTTER);
-    }
-    this.position = { x, y };
-    this.bookmarkEl.style.transition = 'left 0.22s cubic-bezier(0.22,1,0.36,1), top 0.22s cubic-bezier(0.22,1,0.36,1)';
+    const { w, h } = this._bmSize();
+    this.snappedEdge = 'right';
+    this.position = {
+      x: this._bookmarkRightX(w),
+      y: clamp(this.position.y, GUTTER, H - h - GUTTER)
+    };
     this._applyBookmarkLayout();
     this._place();
-    window.setTimeout(() => {
-      if (this.bookmarkEl) this.bookmarkEl.style.transition = '';
-    }, 240);
   }
 
   _place() {
     const { w: bmW, h: bmH } = this._bmSize();
-    const bx = clamp(this.position.x, GUTTER, window.innerWidth - bmW - GUTTER);
+    const bx = this._bookmarkRightX(bmW);
     const by = clamp(this.position.y, GUTTER, window.innerHeight - bmH - GUTTER);
     this.position = { x: bx, y: by };
     this.bookmarkEl.style.left = `${bx}px`;
@@ -636,6 +613,16 @@ export class AutoApplyPanel {
         </div>
         <p class="bento-kicker">Profile Settings</p>
         <h2 class="bento-title">Customize Flow</h2>
+        <div class="aa-section">
+          <h3 class="headline" style="font-size:16px;margin:0 0 12px">Automation</h3>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
+            <span style="font-size:13px;color:var(--text);flex:1;line-height:1.4">
+              <strong>Auto-Advance</strong><br>
+              <span style="color:var(--text-muted)">Automatically click Next after all fields on a step are filled. Blocks if mandatory fields are empty.</span>
+            </span>
+            <input type="checkbox" id="aa-auto-advance-toggle" ${this.autoAdvance ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--brand,#6366f1);cursor:pointer;flex-shrink:0">
+          </label>
+        </div>
         <div class="aa-section">
           <h3 class="headline" style="font-size:16px;margin:0 0 12px">Aladdin account</h3>
           ${this.profileData.user ? `
@@ -924,6 +911,14 @@ export class AutoApplyPanel {
       this.setSettingsMessage('Settings reloaded.', 'info');
       this._renderPanel();
     });
+
+    const autoAdvanceToggle = this.panelEl.querySelector('#aa-auto-advance-toggle');
+    if (autoAdvanceToggle) {
+      autoAdvanceToggle.addEventListener('change', () => {
+        this.autoAdvance = autoAdvanceToggle.checked;
+        this.onAutoAdvanceChange?.(this.autoAdvance);
+      });
+    }
 
     this.panelEl.querySelector('#aa-generate-cover-letter')?.addEventListener('click', () => {
       this.addLog('Generate cover letter — coming soon.');

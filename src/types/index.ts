@@ -28,6 +28,8 @@ export interface Job {
   original_posted_source?: string | null;
   location_display?: string | null;
   company_logo_url?: string | null;
+  /** Canonical website domain from companies row (for referrals / logo.dev), e.g. cloudflare.com */
+  company_domain?: string | null;
   logo_cached_at?: string | null;
   import_tag?: string | null;
   raw_description_html?: string | null;

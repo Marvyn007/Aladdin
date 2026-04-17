@@ -1,9 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import {
-  Search, Users, Mail, Linkedin, Lock, Eye, Loader2, MapPin, X,
+  Search, Users, Mail, Lock, Eye, Loader2, MapPin, X, ChevronDown, Send,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 
 interface ContactLocation {
   city: string | null;
@@ -18,6 +21,8 @@ interface Contact {
   companyDomain: string | null;
   linkedinUrl: string | null;
   emailRevealed: boolean;
+  email: string | null;
+  emailStatus: string | null;
   location: ContactLocation | null;
 }
 
@@ -32,6 +37,9 @@ interface RevealResult {
   emailStatus: string | null;
   fromCache: boolean;
 }
+
+const LINKEDIN_LOGO_SRC =
+  'https://img.logo.dev/linkedin.com?token=pk_b-8PjthySeKn8CjgOa7NeA&retina=true';
 
 // ── Seniority inference ────────────────────────────────────────────────────
 
@@ -52,6 +60,27 @@ function inferSeniority(title: string | null): string {
   }
   return 'Other';
 }
+
+const SENIORITY_BADGE_CLASS: Record<string, string> = {
+  'C-Suite': 'referrals-seniority-badge--c-suite',
+  'VP': 'referrals-seniority-badge--vp',
+  'Director': 'referrals-seniority-badge--director',
+  'Manager': 'referrals-seniority-badge--manager',
+  'Senior': 'referrals-seniority-badge--senior',
+  'Executive': 'referrals-seniority-badge--executive',
+  'Entry': 'referrals-seniority-badge--entry',
+  'Other': 'referrals-seniority-badge--other',
+};
+
+// ── Animated placeholder text ──────────────────────────────────────────────
+
+const SEARCH_PLACEHOLDERS = [
+  'stripe.com',
+  'google.com',
+  'airbnb.com',
+  'netflix.com',
+  'openai.com',
+];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -87,14 +116,167 @@ function buildCounts<T extends string>(items: T[]): Record<T, number> {
   return counts;
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
+// ── Animated search input ──────────────────────────────────────────────────
+
+function ReferralsSearchInput({
+  value,
+  onChange,
+  onSubmit,
+  isSearching,
+  compact,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  isSearching: boolean;
+  compact: boolean;
+}) {
+  const [isActive, setIsActive] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Cycle placeholder when inactive
+  useEffect(() => {
+    if (isActive || value) return;
+    const interval = setInterval(() => {
+      setShowPlaceholder(false);
+      setTimeout(() => {
+        setPlaceholderIndex(prev => (prev + 1) % SEARCH_PLACEHOLDERS.length);
+        setShowPlaceholder(true);
+      }, 350);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isActive, value]);
+
+  // Click outside to deactivate
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        if (!value) setIsActive(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [value]);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && value.trim()) onSubmit();
+  }
+
+  const placeholderLetterVariants = {
+    initial: { opacity: 0, filter: 'blur(10px)', y: 8 },
+    animate: {
+      opacity: 1, filter: 'blur(0px)', y: 0,
+      transition: { opacity: { duration: 0.2 }, filter: { duration: 0.35 }, y: { type: 'spring' as const, stiffness: 80, damping: 20 } },
+    },
+    exit: {
+      opacity: 0, filter: 'blur(10px)', y: -8,
+      transition: { opacity: { duration: 0.15 }, filter: { duration: 0.25 }, y: { type: 'spring' as const, stiffness: 80, damping: 20 } },
+    },
+  };
+
+  return (
+    <motion.div
+      ref={wrapperRef}
+      className="referrals-ai-search"
+      animate={{
+        height: (!compact && (isActive || value)) ? 118 : 60,
+      }}
+      transition={{ type: 'spring', stiffness: 130, damping: 20 }}
+      onClick={() => { setIsActive(true); inputRef.current?.focus(); }}
+    >
+      {/* Input row */}
+      <div className="referrals-ai-search-row">
+        <Search size={16} className="referrals-ai-search-icon" />
+
+        {/* Input + animated placeholder */}
+        <div className="referrals-ai-search-field">
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsActive(true)}
+            className="referrals-ai-search-input"
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="Search by company domain or name"
+          />
+          {/* Animated placeholder */}
+          <AnimatePresence mode="wait">
+            {showPlaceholder && !isActive && !value && (
+              <motion.span
+                key={placeholderIndex}
+                className="referrals-ai-search-placeholder"
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                variants={{
+                  initial: {},
+                  animate: { transition: { staggerChildren: 0.025 } },
+                  exit: { transition: { staggerChildren: 0.015, staggerDirection: -1 } },
+                }}
+              >
+                {SEARCH_PLACEHOLDERS[placeholderIndex].split('').map((char, i) => (
+                  <motion.span
+                    key={i}
+                    variants={placeholderLetterVariants}
+                    style={{ display: 'inline-block' }}
+                  >
+                    {char === ' ' ? '\u00A0' : char}
+                  </motion.span>
+                ))}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Send/Search button */}
+        <button
+          type="button"
+          className="referrals-ai-search-send"
+          disabled={isSearching || !value.trim()}
+          onClick={e => { e.stopPropagation(); if (value.trim()) onSubmit(); }}
+        >
+          {isSearching
+            ? <Loader2 size={16} className="referrals-spin" />
+            : <Send size={16} />
+          }
+        </button>
+      </div>
+
+      {/* Expanded hint — only in non-compact (hero) mode */}
+      {!compact && (
+        <motion.div
+          className="referrals-ai-search-hint"
+          variants={{
+            hidden: { opacity: 0, y: 10, pointerEvents: 'none' as const },
+            visible: { opacity: 1, y: 0, pointerEvents: 'auto' as const, transition: { duration: 0.3, delay: 0.08 } },
+          }}
+          initial="hidden"
+          animate={(isActive || value) ? 'visible' : 'hidden'}
+        >
+          <span>Enter a company URL - like google.com or stripe.com</span>
+          <span className="referrals-ai-search-hint-kbd">↵ Search</span>
+        </motion.div>
+      )}
+    </motion.div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 
 export function ReferralsView() {
-  const [companyInput, setCompanyInput] = useState('');
+  const searchParams = useSearchParams();
+  const initialDomain = searchParams.get('domain') ?? '';
+
+  const [companyInput, setCompanyInput] = useState(initialDomain);
   const [isSearching, setIsSearching] = useState(false);
   const [allContacts, setAllContacts] = useState<Contact[] | null>(null);
   const [totalEntries, setTotalEntries] = useState(0);
-  const [isCached, setIsCached] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revealedMap, setRevealedMap] = useState<Record<string, RevealResult>>({});
   const [revealingIds, setRevealingIds] = useState<Set<string>>(new Set());
@@ -103,7 +285,19 @@ export function ReferralsView() {
   const [activeCountries, setActiveCountries] = useState<Set<string>>(new Set());
   const [activeCities, setActiveCities] = useState<Set<string>>(new Set());
 
-  // ── Filter options derived from full result set ──
+  // Auto-search when navigated here from a job detail with ?domain=
+  useEffect(() => {
+    if (initialDomain) {
+      // Slight delay so the component fully mounts before the search runs
+      const t = setTimeout(() => {
+        handleSearch();
+      }, 120);
+      return () => clearTimeout(t);
+    }
+  // handleSearch is defined below — this effect must only run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const filterOptions = useMemo(() => {
     if (!allContacts) return null;
     const seniorities = allContacts.map(c => inferSeniority(c.title));
@@ -116,7 +310,6 @@ export function ReferralsView() {
     };
   }, [allContacts]);
 
-  // ── Filtered display list ──
   const filteredContacts = useMemo(() => {
     if (!allContacts) return [];
     return allContacts.filter(c => {
@@ -141,9 +334,7 @@ export function ReferralsView() {
     return next;
   }
 
-  // ── Search ──
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSearch() {
     if (!companyInput.trim()) return;
     setIsSearching(true);
     setError(null);
@@ -165,7 +356,21 @@ export function ReferralsView() {
       const data = await res.json() as SearchResult;
       setAllContacts(data.contacts);
       setTotalEntries(data.totalEntries);
-      setIsCached(data.cached);
+
+      // Pre-populate revealedMap for contacts whose emails are already stored in DB
+      const preRevealed: Record<string, RevealResult> = {};
+      for (const contact of data.contacts) {
+        if (contact.email !== null) {
+          preRevealed[contact.id] = {
+            email: contact.email,
+            emailStatus: contact.emailStatus,
+            fromCache: true,
+          };
+        }
+      }
+      if (Object.keys(preRevealed).length > 0) {
+        setRevealedMap(preRevealed);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed. Please try again.');
     } finally {
@@ -173,7 +378,6 @@ export function ReferralsView() {
     }
   }
 
-  // ── Reveal ──
   async function handleReveal(contactId: string) {
     if (revealingIds.has(contactId)) return;
     setRevealingIds(prev => new Set(prev).add(contactId));
@@ -184,6 +388,7 @@ export function ReferralsView() {
         throw new Error((data as { error?: string }).error ?? 'Failed to reveal');
       }
       const data = await res.json() as RevealResult;
+      // Always store the result — even email:null marks the attempt as complete
       setRevealedMap(prev => ({ ...prev, [contactId]: data }));
     } catch (err) {
       console.error('[referrals] reveal error:', err);
@@ -192,145 +397,177 @@ export function ReferralsView() {
     }
   }
 
-  const hasSearched = allContacts !== null;
+  const hasSearched = allContacts !== null || isSearching;
   void totalEntries;
 
-  // ── Render ──
   return (
     <div className="referrals-view">
 
-      {/* Header */}
-      <div className="referrals-header">
-        <div className="referrals-header-inner">
-          <div className="referrals-heading-block">
-            <div className="referrals-heading-icon"><Users size={16} strokeWidth={2.5} /></div>
-            <div>
-              <h1 className="referrals-heading">Find Referrals</h1>
-              <p className="referrals-heading-sub">Discover professionals at any company who can refer you</p>
-            </div>
-          </div>
-          {hasSearched && allContacts && (
-            <div className="referrals-header-meta">
-              <span className="referrals-count-pill">{allContacts.length} contacts loaded</span>
-              {isCached && <span className="referrals-cached-pill">cached</span>}
-            </div>
+      {/* ── Hero / Top search area ── */}
+      <motion.div
+        className="referrals-hero"
+        initial={hasSearched ? 'compact' : 'hero'}
+        animate={hasSearched ? 'compact' : 'hero'}
+        variants={{
+          hero: {
+            paddingTop: '0px',
+            paddingBottom: '0px',
+            justifyContent: 'center',
+          },
+          compact: {
+            paddingTop: '28px',
+            paddingBottom: '0px',
+            justifyContent: 'flex-start',
+          },
+        }}
+        transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+      >
+        {/* Title block (landing) */}
+        <AnimatePresence>
+          {!hasSearched && (
+            <motion.div
+              className="referrals-hero-text"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } }}
+              exit={{ opacity: 0, y: -20, transition: { duration: 0.3, ease: 'easeIn' } }}
+            >
+              <h1 className="referrals-hero-title">Find Referrals</h1>
+              <p className="referrals-hero-subtitle">
+                Get referred at any company - discover employees, unlock their emails, reach out and land the job.
+              </p>
+            </motion.div>
           )}
-        </div>
-      </div>
+        </AnimatePresence>
 
-      {/* Search form — single input */}
-      <form onSubmit={handleSearch} className="referrals-search-panel referrals-search-panel--simple">
-        <div className="referrals-input-wrap referrals-input-wrap--full">
-          <Search size={14} className="referrals-input-prefix-icon" />
-          <input
-            type="text"
-            className="referrals-input"
-            placeholder="Company name or URL — e.g. stripe, zerodha.com, https://google.com"
+        {/* Compact header (shown after search) */}
+        <AnimatePresence>
+          {hasSearched && (
+            <motion.div
+              className="referrals-compact-header"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { delay: 0.15, duration: 0.3 } }}
+              exit={{ opacity: 0 }}
+            >
+              <h1 className="referrals-compact-title">Find Referrals</h1>
+              <p className="referrals-compact-subtitle">Discover and reach out to the employees who can refer you</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Search bar — shared between hero and compact */}
+        <div className="referrals-hero-search-wrap">
+          <ReferralsSearchInput
             value={companyInput}
-            onChange={e => setCompanyInput(e.target.value)}
-            required
+            onChange={setCompanyInput}
+            onSubmit={handleSearch}
+            isSearching={isSearching}
+            compact={hasSearched}
           />
         </div>
-        <button
-          type="submit"
-          className="referrals-search-btn"
-          disabled={isSearching || !companyInput.trim()}
-        >
-          {isSearching ? <Loader2 size={14} className="referrals-spin" /> : <Search size={14} strokeWidth={2.5} />}
-          {isSearching ? 'Searching…' : 'Search'}
-        </button>
-      </form>
+      </motion.div>
 
-      {/* Error bar */}
-      {error && <div className="referrals-error-bar">{error}</div>}
-
-      {/* Body */}
-      <div className="referrals-body">
-
-        {/* Landing state */}
-        {!hasSearched && !isSearching && (
-          <div className="referrals-landing">
-            <div className="referrals-landing-graphic"><Users size={28} strokeWidth={1.5} /></div>
-            <h2 className="referrals-landing-title">Search for professionals</h2>
-            <p className="referrals-landing-desc">
-              Enter a company name or URL to find up to 75 contacts. Filter by seniority, country, or city once results load — no extra API calls needed.
-            </p>
-            <div className="referrals-landing-chips">
-              <span className="referrals-chip"><Search size={12} /> Type any company name or URL</span>
-              <span className="referrals-chip"><Eye size={12} /> Filter results client-side</span>
-              <span className="referrals-chip"><Mail size={12} /> Reveal emails on demand</span>
-            </div>
-          </div>
+      {/* ── Error bar ── */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            className="referrals-error-bar"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            {error}
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* Skeleton */}
-        {isSearching && (
-          <div className="referrals-table-shell">
-            <table className="referrals-table">
-              <thead>
-                <tr><th>Person</th><th>Title</th><th>Location</th><th>LinkedIn</th><th>Email</th><th></th></tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i} className="referrals-row">
-                    <td><div className="referrals-person-cell"><div className="referrals-skel referrals-skel--avatar" /><div className="referrals-skel referrals-skel--name" /></div></td>
-                    <td><div className="referrals-skel referrals-skel--text" /></td>
-                    <td><div className="referrals-skel referrals-skel--short" /></td>
-                    <td><div className="referrals-skel referrals-skel--short" /></td>
-                    <td><div className="referrals-skel referrals-skel--text" /></td>
-                    <td><div className="referrals-skel referrals-skel--btn" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      {/* ── Results area ── */}
+      <AnimatePresence>
+        {hasSearched && (
+          <motion.div
+            className="referrals-results"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.1 } }}
+            exit={{ opacity: 0, y: 16 }}
+          >
 
-        {/* Results */}
-        {hasSearched && !isSearching && allContacts && (
-          <>
-            {allContacts.length === 0 ? (
-              <div className="referrals-no-results">
-                <Users size={24} strokeWidth={1.5} />
-                <p>No contacts found for this company. Try a different domain or company name.</p>
-              </div>
-            ) : (
-              <>
-                {/* Filter chip panel */}
-                {filterOptions && (
-                  <div className="referrals-filter-panel">
-                    <FilterGroup
-                      label="Seniority"
-                      counts={filterOptions.seniority}
-                      active={activeSeniorities}
-                      onToggle={v => setActiveSeniorities(prev => toggleSet(prev, v))}
-                    />
-                    <FilterGroup
-                      label="Country"
-                      counts={filterOptions.country}
-                      active={activeCountries}
-                      onToggle={v => setActiveCountries(prev => toggleSet(prev, v))}
-                    />
-                    <FilterGroup
-                      label="City"
-                      counts={filterOptions.city}
-                      active={activeCities}
-                      onToggle={v => setActiveCities(prev => toggleSet(prev, v))}
-                    />
-                    {hasFilters && (
-                      <button className="referrals-clear-filters" onClick={clearFilters}>
-                        <X size={12} /> Clear filters
-                      </button>
-                    )}
-                  </div>
+            {/* Filter panel */}
+            {filterOptions && allContacts && allContacts.length > 0 && (
+              <div className="referrals-filter-panel">
+                {Object.keys(filterOptions.seniority).length > 0 && (
+                  <FilterDropdown
+                    label="Seniority"
+                    counts={filterOptions.seniority}
+                    active={activeSeniorities}
+                    onToggle={v => setActiveSeniorities(prev => toggleSet(prev, v))}
+                    onClear={() => setActiveSeniorities(new Set())}
+                  />
                 )}
+                {Object.keys(filterOptions.country).length > 0 && (
+                  <FilterDropdown
+                    label="Country"
+                    counts={filterOptions.country}
+                    active={activeCountries}
+                    onToggle={v => setActiveCountries(prev => toggleSet(prev, v))}
+                    onClear={() => setActiveCountries(new Set())}
+                  />
+                )}
+                {Object.keys(filterOptions.city).length > 0 && (
+                  <FilterDropdown
+                    label="City"
+                    counts={filterOptions.city}
+                    active={activeCities}
+                    onToggle={v => setActiveCities(prev => toggleSet(prev, v))}
+                    onClear={() => setActiveCities(new Set())}
+                  />
+                )}
+                {hasFilters && (
+                  <button className="referrals-clear-all-filters" onClick={clearFilters}>
+                    <X size={12} /> Clear All
+                  </button>
+                )}
+              </div>
+            )}
 
-                {/* Table or filter-empty state */}
-                {filteredContacts.length === 0 ? (
+            {/* Skeleton */}
+            {isSearching && (
+              <div className="referrals-table-shell">
+                <table className="referrals-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th><th>Title</th><th>Seniority</th>
+                      <th>Location</th><th>LinkedIn</th><th>Email</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i} className="referrals-row">
+                        <td><div className="referrals-person-cell"><div className="referrals-skel referrals-skel--avatar" /><div className="referrals-skel referrals-skel--name" /></div></td>
+                        <td><div className="referrals-skel referrals-skel--text" /></td>
+                        <td><div className="referrals-skel referrals-skel--badge" /></td>
+                        <td><div className="referrals-skel referrals-skel--short" /></td>
+                        <td><div className="referrals-skel referrals-skel--short" /></td>
+                        <td><div className="referrals-skel referrals-skel--text" /></td>
+                        <td><div className="referrals-skel referrals-skel--btn" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Results table */}
+            {!isSearching && allContacts && (
+              <>
+                {allContacts.length === 0 ? (
+                  <div className="referrals-no-results">
+                    <Users size={24} strokeWidth={1.5} />
+                    <p>No contacts found. Try a different domain or company name.</p>
+                  </div>
+                ) : filteredContacts.length === 0 ? (
                   <div className="referrals-no-results">
                     <Users size={24} strokeWidth={1.5} />
                     <p>No contacts match the selected filters.</p>
-                    <button className="referrals-clear-filters referrals-clear-filters--standalone" onClick={clearFilters}>
+                    <button className="referrals-clear-filters" onClick={clearFilters}>
                       <X size={12} /> Clear filters
                     </button>
                   </div>
@@ -339,12 +576,13 @@ export function ReferralsView() {
                     <table className="referrals-table">
                       <thead>
                         <tr>
-                          <th>Person</th>
+                          <th>Name</th>
                           <th>Title</th>
+                          <th>Seniority</th>
                           <th>Location</th>
                           <th>LinkedIn</th>
                           <th>Email</th>
-                          <th>Action</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -353,7 +591,12 @@ export function ReferralsView() {
                           const isRevealing = revealingIds.has(contact.id);
                           const initials = getInitials(contact.firstName, contact.lastName);
                           const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || 'Unknown';
-                          const locationStr = [contact.location?.city, contact.location?.country].filter(Boolean).join(', ') || '—';
+                          const locationStr = [contact.location?.city, contact.location?.country].filter(Boolean).join(', ') || null;
+                          const seniority = inferSeniority(contact.title);
+                          const badgeClass = SENIORITY_BADGE_CLASS[seniority] ?? 'referrals-seniority-badge--other';
+                          // revealed !== undefined means the reveal was attempted (email may still be null if not found)
+                          const hasAttempted = revealed !== undefined;
+                          const isRevealed = hasAttempted && revealed.email !== null;
 
                           return (
                             <tr key={contact.id} className="referrals-row">
@@ -363,93 +606,162 @@ export function ReferralsView() {
                                   <span className="referrals-person-name">{fullName}</span>
                                 </div>
                               </td>
-                              <td><span className="referrals-cell-secondary">{contact.title || '—'}</span></td>
                               <td>
-                                <div className="referrals-location-cell">
-                                  {locationStr !== '—' && <MapPin size={12} className="referrals-location-icon" />}
-                                  <span className="referrals-cell-secondary">{locationStr}</span>
+                                <div className="referrals-title-cell">
+                                  <span className="referrals-title-primary">{contact.title || '—'}</span>
+                                  {contact.companyDomain && <span className="referrals-title-company">{contact.companyDomain}</span>}
                                 </div>
+                              </td>
+                              <td>
+                                <span className={`referrals-seniority-badge ${badgeClass}`}>{seniority}</span>
+                              </td>
+                              <td>
+                                {locationStr ? (
+                                  <div className="referrals-location-cell">
+                                    <MapPin size={12} className="referrals-location-icon" />
+                                    {locationStr}
+                                  </div>
+                                ) : <span className="referrals-empty-cell">—</span>}
                               </td>
                               <td>
                                 {contact.linkedinUrl ? (
                                   <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="referrals-linkedin-btn">
-                                    <Linkedin size={13} strokeWidth={2} />View
+                                    <Image
+                                      src={LINKEDIN_LOGO_SRC}
+                                      alt=""
+                                      width={14}
+                                      height={14}
+                                      className="referrals-linkedin-logo"
+                                    />
+                                    View
                                   </a>
-                                ) : (
-                                  <span className="referrals-empty-cell">—</span>
-                                )}
+                                ) : <span className="referrals-empty-cell">—</span>}
                               </td>
                               <td>
-                                {revealed?.email ? (
+                                {isRevealed ? (
                                   <div className="referrals-email-revealed">
-                                    <Mail size={13} strokeWidth={2} />
+                                    <Mail size={12} strokeWidth={2} />
                                     <span>{revealed.email}</span>
                                     {revealed.emailStatus === 'VALID' && <span className="referrals-verified-dot" title="Valid" />}
                                   </div>
+                                ) : hasAttempted ? (
+                                  <div className="referrals-email-not-found">
+                                    <Lock size={11} strokeWidth={2} />
+                                    <span>Not available</span>
+                                  </div>
                                 ) : (
                                   <div className="referrals-email-locked">
-                                    <Lock size={12} strokeWidth={2} />
+                                    <Lock size={11} strokeWidth={2} />
                                     <span className="referrals-blur-text">j.doe@company.com</span>
                                   </div>
                                 )}
                               </td>
                               <td>
-                                {revealed?.email ? (
-                                  <span className="referrals-revealed-tag"><Eye size={12} strokeWidth={2} />Revealed</span>
-                                ) : (
-                                  <button className="referrals-reveal-btn" onClick={() => handleReveal(contact.id)} disabled={isRevealing}>
-                                    {isRevealing ? <Loader2 size={12} className="referrals-spin" /> : <Eye size={12} strokeWidth={2} />}
-                                    {isRevealing ? 'Loading…' : 'Reveal Email'}
-                                  </button>
-                                )}
+                                <div className={`referrals-action-cell ${(isRevealed || hasAttempted) ? 'referrals-action-cell--revealed' : ''}`}>
+                                  {isRevealed ? (
+                                    <span className="referrals-revealed-tag"><Eye size={12} strokeWidth={2} />Revealed</span>
+                                  ) : hasAttempted ? (
+                                    <span className="referrals-not-found-tag">Not found</span>
+                                  ) : (
+                                    <button className="referrals-reveal-btn" onClick={() => handleReveal(contact.id)} disabled={isRevealing}>
+                                      {isRevealing ? <Loader2 size={12} className="referrals-spin" /> : <Eye size={12} strokeWidth={2} />}
+                                      {isRevealing ? 'Loading…' : 'Reveal Email'}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
+                    <div className="referrals-table-footer">
+                      <span className="referrals-table-footer-label">
+                        Showing {filteredContacts.length}{hasFilters ? ` of ${allContacts.length}` : ''} contacts
+                      </span>
+                    </div>
                   </div>
                 )}
               </>
             )}
-          </>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }
 
-// ── FilterGroup sub-component ──────────────────────────────────────────────
+// ── FilterDropdown ─────────────────────────────────────────────────────────
 
-function FilterGroup({
+function FilterDropdown({
   label,
   counts,
   active,
   onToggle,
+  onClear,
 }: {
   label: string;
   counts: Record<string, number>;
   active: Set<string>;
   onToggle: (value: string) => void;
+  onClear: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const activeCount = active.size;
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
   if (entries.length === 0) return null;
 
   return (
-    <div className="referrals-filter-group">
-      <span className="referrals-filter-group-label">{label}</span>
-      <div className="referrals-filter-chips">
-        {entries.map(([value, count]) => (
-          <button
-            key={value}
-            className={`referrals-filter-chip ${active.has(value) ? 'referrals-filter-chip--active' : ''}`}
-            onClick={() => onToggle(value)}
+    <div className="referrals-dropdown-wrap" ref={ref}>
+      <button
+        className={`referrals-dropdown-pill ${activeCount > 0 ? 'referrals-dropdown-pill--active' : ''}`}
+        onClick={() => setOpen(v => !v)}
+        type="button"
+      >
+        {label}
+        {activeCount > 0 && <span className="referrals-dropdown-pill-count">{activeCount}</span>}
+        <ChevronDown size={13} className={`referrals-dropdown-chevron ${open ? 'referrals-dropdown-chevron--open' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="referrals-dropdown-panel"
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: 0.15, ease: 'easeOut' } }}
+            exit={{ opacity: 0, y: -4, scale: 0.97, transition: { duration: 0.1 } }}
           >
-            {value}
-            <span className="referrals-filter-chip-count">{count}</span>
-          </button>
-        ))}
-      </div>
+            <div className="referrals-dropdown-chips">
+              {entries.map(([value, count]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`referrals-filter-chip ${active.has(value) ? 'referrals-filter-chip--active' : ''}`}
+                  onClick={() => onToggle(value)}
+                >
+                  {value}
+                  <span className="referrals-filter-chip-count">{count}</span>
+                </button>
+              ))}
+            </div>
+            {activeCount > 0 && (
+              <button type="button" className="referrals-dropdown-clear" onClick={() => { onClear(); setOpen(false); }}>
+                <X size={11} /> Clear {label}
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

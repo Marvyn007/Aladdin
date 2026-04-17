@@ -1,7 +1,6 @@
 import { serve } from 'inngest/next'
 import { inngest } from '@/lib/inngest'
 import { crawlerTick, crawlerProcessTask } from '@/inngest/crawler'
-import { runAutoApplySession } from '@/inngest/auto-apply'
 
 /**
  * Inngest serve endpoint — /api/inngest
@@ -23,5 +22,5 @@ export const maxDuration = 300
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [crawlerTick, crawlerProcessTask, runAutoApplySession],
+  functions: [crawlerTick, crawlerProcessTask],
 })

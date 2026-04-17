@@ -30,7 +30,34 @@ export function matchFieldToProfile(fieldMeta, profile) {
   };
 
   if (isPhoneCountryCodeFieldText(text)) return getAA('aa_phone_country_code');
+  // Workday: "Phone Device Type" must win over generic "phone" (Apply Pilot).
+  if (matches(text, ['phone device', 'device type', 'type of phone', 'phone type'])) {
+    return getAA('aa_phone_device_type');
+  }
   if (matches(text, ['phone', 'mobile', 'telephone', 'cell'])) return getAA('aa_phone');
+
+  // Referral / source — always pick "Other" + optional free-text "aladdin" (Workday, Greenhouse, etc.)
+  if (
+    matches(text, ['how did you hear', 'hear about us', 'how did you find', 'where did you hear', 'source of hire', 'referral source', 'how did you learn', 'about this job', 'about this role', 'about this position'])
+    && !matches(text, ['specify', 'explain', 'describe', 'detail', 'if other', 'please list'])
+  ) {
+    return 'Other';
+  }
+  if (
+    matches(text, ['if other', 'please specify', 'please explain', 'please describe', 'additional detail'])
+    && matches(text, ['hear', 'referral', 'source', 'opening', 'opportunity', 'position', 'job', 'about'])
+  ) {
+    return getAA('aa_hear_about_other_detail') || 'aladdin';
+  }
+
+  // Prior / current employment with THIS employer — default No (not a returning employee)
+  if (
+    matches(text, ['previously been employed', 'previously employed', 'ever been employed by', 'ever worked for', 'have you ever worked for', 'have you worked for'])
+    || (matches(text, ['previously']) && matches(text, ['employ']))
+    || matches(text, ['current teammate', 'current teammates', 'internal workday', 'internal jobs report', 'apply via your internal'])
+  ) {
+    if (matches(text, ['employ', 'company', 'minor', 'teammate', 'internal', 'worked', 'by', '?'])) return 'No';
+  }
   if (matches(text, ['linkedin', 'linkedin url', 'linkedin profile', 'urls[LinkedIn]'])) return getAA('aa_linkedin_url');
   if (matches(text, ['github', 'github url', 'github profile', 'urls[GitHub]'])) return getAA('aa_github_url');
   if (matches(text, ['portfolio', 'website', 'personal site', 'portfolio url', 'urls[Portfolio]'])) return getAA('aa_portfolio_url');
@@ -152,6 +179,71 @@ function getAAField(profile, key) {
 }
 
 /**
+ * Fuzzy multi-token AND matching — fires ONLY when matchFieldToProfile() returns null.
+ *
+ * For each entry in FUZZY_TOKEN_MAP, all listed tokens must appear (in any order)
+ * in the combined field text (label + placeholder + name + ariaLabel).
+ * No edit-distance / Levenshtein to avoid false positives (Branch 9 decision).
+ *
+ * @param {{ label: string, placeholder: string, name: string, ariaLabel: string }} fieldMeta
+ * @param {{ user: object, onboardingAnswers: Array, userContext: object }} profile
+ * @returns {string|null}
+ */
+export function fuzzyMatchFieldToProfile(fieldMeta, profile) {
+  const text = buildFieldText(fieldMeta);
+
+  // Each entry: tokens[] must ALL appear in text (order-independent).
+  // key: aa_ profile key to look up; value: hardcoded answer when no key.
+  const FUZZY_TOKEN_MAP = [
+    { tokens: ['phone', 'device'],                 key: 'aa_phone_device_type' },
+    { tokens: ['years', 'experience'],             key: 'aa_years_experience' },
+    { tokens: ['current', 'title'],                key: 'aa_current_title' },
+    { tokens: ['current', 'company'],              key: 'aa_current_company' },
+    { tokens: ['current', 'employer'],             key: 'aa_current_company' },
+    { tokens: ['highest', 'degree'],               key: 'aa_education_level' },
+    { tokens: ['highest', 'education'],            key: 'aa_education_level' },
+    { tokens: ['linkedin', 'profile'],             key: 'aa_linkedin_url' },
+    { tokens: ['linkedin', 'url'],                 key: 'aa_linkedin_url' },
+    { tokens: ['github', 'profile'],               key: 'aa_github_url' },
+    { tokens: ['github', 'url'],                   key: 'aa_github_url' },
+    { tokens: ['phone', 'number'],                 key: 'aa_phone' },
+    { tokens: ['mobile', 'number'],                key: 'aa_phone' },
+    { tokens: ['zip', 'code'],                     key: 'aa_zip' },
+    { tokens: ['postal', 'code'],                  key: 'aa_zip' },
+    { tokens: ['street', 'address'],               key: 'aa_address' },
+    { tokens: ['work', 'authorization'],           value: 'Yes' },
+    { tokens: ['authorized', 'work'],              value: 'Yes' },
+    { tokens: ['visa', 'sponsorship'],             value: 'No' },
+    { tokens: ['require', 'sponsorship'],          value: 'No' },
+    { tokens: ['willing', 'relocate'],             value: 'Yes' },
+    { tokens: ['open', 'relocation'],              value: 'Yes' },
+    { tokens: ['willing', 'travel'],               value: 'Yes' },
+    { tokens: ['background', 'check'],             value: 'Yes' },
+    { tokens: ['drug', 'test'],                    value: 'Yes' },
+    { tokens: ['portfolio', 'url'],                key: 'aa_portfolio_url' },
+    { tokens: ['portfolio', 'website'],            key: 'aa_portfolio_url' },
+    { tokens: ['gender', 'identity'],              key: 'aa_gender' },
+    { tokens: ['race', 'ethnicity'],               key: 'aa_ethnicity' },
+    { tokens: ['veteran', 'status'],               key: 'aa_veteran_status' },
+    { tokens: ['disability', 'status'],            key: 'aa_disability' },
+    { tokens: ['citizenship', 'country'],          key: 'aa_citizenship_country' },
+    { tokens: ['security', 'clearance'],           key: 'aa_clearance' },
+  ];
+
+  for (const { tokens, key, value } of FUZZY_TOKEN_MAP) {
+    if (tokens.every(t => text.includes(t))) {
+      if (value !== undefined) return value;
+      if (key) {
+        const v = getAAField(profile, key);
+        if (v) return v;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Best-effort school / university name from profile (onboarding, userContext, resume JSON).
  * @param {object} profile
  * @returns {string|null}
@@ -233,6 +325,13 @@ export function inferSelectHintFromProfile(fieldMeta, profile) {
     return getAAField(profile, 'aa_willing_to_relocate');
   }
   if (matches(text, ['clearance'])) return getAAField(profile, 'aa_clearance');
+
+  if (
+    matches(text, ['how did you hear', 'hear about us', 'referral source', 'where did you hear'])
+    && !matches(text, ['specify', 'explain', 'describe', 'if other'])
+  ) {
+    return 'Other';
+  }
 
   return null;
 }

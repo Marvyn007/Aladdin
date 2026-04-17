@@ -8,6 +8,6 @@ describe('shouldSkipLocalHostCanonicalRedirect', () => {
 
   it('does not skip normal API routes', () => {
     expect(shouldSkipLocalHostCanonicalRedirect('/api/jobs')).toBe(false);
-    expect(shouldSkipLocalHostCanonicalRedirect('/api/auto-apply/start')).toBe(false);
+    expect(shouldSkipLocalHostCanonicalRedirect('/api/onboarding')).toBe(false);
   });
 });

@@ -8,13 +8,19 @@
  *      and cleans up the Ghost UI (Shadow DOM panel) when the context dies.
  */
 
-import { detectJobApplicationPage, parseJobMeta } from '../utils/pageDetector.js';
+import {
+  detectJobApplicationPage,
+  detectJobApplicationPageDetailed,
+  parseJobMeta,
+  isAtsIframeHost,
+  isSuppressedPage,
+} from '../utils/pageDetector.js';
 import { isContextValid, isFatalExtensionError } from '../utils/contextGuard.js';
 import { removePanel } from './shadow-root.js';
 
-// Re-export detectJobApplicationPage as the single, canonical platform detection function.
-// This is the ONLY function that should be used to determine the current page's platform.
-export { detectJobApplicationPage };
+// Re-export the detector(s) so orchestrator / re-detection engine uses a
+// single canonical entry point.
+export { detectJobApplicationPage, detectJobApplicationPageDetailed, isAtsIframeHost, isSuppressedPage };
 
 /**
  * Parse job title and company from the current page.
@@ -25,13 +31,22 @@ export function getJobMeta() {
 }
 
 /**
- * Returns true if Aladdin should boot and auto-show the panel on this page.
- * 'generic'      → detected via DOM signals (2+) → auto-show
- * 'generic-weak' → only 1 DOM signal → popup/manual trigger only, don't auto-show
- * null           → no activation at all
+ * Returns true if Aladdin should auto-open the panel (full UI) on this page.
+ * Strong match → panel visible with grip + can auto-show log.
+ * generic-weak → only a floating ★ grip is rendered; panel stays collapsed
+ *                and the user must click to activate (Branch 2 D).
+ * null         → no activation at all.
  */
 export function shouldActivate(platform) {
   return !!platform && platform !== 'generic-weak';
+}
+
+/**
+ * Should Aladdin render ANY UI on this page? True for both strong and weak
+ * matches — weak just renders the grip, not the auto-opening panel.
+ */
+export function shouldAnchor(platform) {
+  return !!platform;
 }
 
 /**
