@@ -1,342 +1,140 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import NumberFlow from '@number-flow/react';
-import { ArrowLeft, Check, Zap, Star, Rocket, Shield } from 'lucide-react';
+import {
+  ArrowLeft, CheckCheck, Briefcase, Mail, AtSign,
+  Map, LayoutDashboard, MessageSquare, Shield,
+} from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
+import { cn } from '@/lib/utils';
 
-const PLANS = [
+const plans = [
   {
     id: 'LITE' as const,
     name: 'Aladdin Lite',
-    tagline: 'Start your job search',
-    monthlyPrice: 0,
-    yearlyMonthlyPrice: 0,
-    yearlyTotal: 0,
-    Icon: Star,
+    description:
+      'Explore hundreds of openings, track every application, and prep for interviews — completely free.',
+    price: 0,
+    yearlyPrice: 0,
+    buttonText: 'Get started free',
+    buttonVariant: 'outline' as const,
     priceId: null as string | null,
     features: [
-      'Jobs Map & Listings',
-      'Application Tracker & Heatmap',
-      'Interview Prep & Tech Questions',
-      'Static Resume Editor',
+      { text: 'Jobs Map & Live Listings', icon: <Map size={18} /> },
+      { text: 'Application Tracker & Heatmap', icon: <LayoutDashboard size={18} /> },
+      { text: 'Interview Prep & Tech Questions', icon: <MessageSquare size={18} /> },
     ],
-    includesLabel: 'Free forever includes:',
+    includes: [
+      'Free includes:',
+      'Static Resume Editor',
+      'Unlimited job saves',
+      'Career heatmap analytics',
+    ],
   },
   {
     id: 'COPILOT' as const,
     name: 'Co-Pilot',
-    tagline: 'AI-assisted job hunting',
-    monthlyPrice: 6.99,
-    yearlyMonthlyPrice: 5.59,
-    yearlyTotal: 67,
-    Icon: Zap,
+    description:
+      "Let AI rewrite your resume for every role, draft cover letters, and reveal who can refer you.",
+    price: 6.99,
+    yearlyPrice: 5.59,
+    buttonText: 'Start Co-Pilot',
+    buttonVariant: 'default' as const,
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_COPILOT ?? null,
     popular: true,
     features: [
-      'Everything in Lite',
-      '15 AI Resume Tailorings / mo',
-      '30 Cover Letters / mo',
-      '60 LinkedIn Profile Views / mo',
-      '30 Email Reveals / mo',
+      { text: '15 AI Resume Tailorings / mo', icon: <Briefcase size={18} /> },
+      { text: '30 Cover Letters / mo', icon: <Mail size={18} /> },
+      { text: '30 Email Reveals / mo', icon: <AtSign size={18} /> },
     ],
-    includesLabel: 'Co-Pilot includes:',
+    includes: [
+      'Everything in Lite, plus:',
+      '60 LinkedIn Profile Views / mo',
+      'AI resume scoring & suggestions',
+      'Company contact discovery',
+    ],
   },
   {
     id: 'CAPTAIN' as const,
     name: 'Captain',
-    tagline: 'Maximum output, no limits',
-    monthlyPrice: 16.99,
-    yearlyMonthlyPrice: 13.59,
-    yearlyTotal: 163,
-    Icon: Rocket,
+    description:
+      'Maximum output for serious job seekers — high-volume AI tools that keep you ahead of every competitor.',
+    price: 16.99,
+    yearlyPrice: 13.59,
+    buttonText: 'Become Captain',
+    buttonVariant: 'outline' as const,
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_CAPTAIN ?? null,
     features: [
-      'Everything in Co-Pilot',
-      '60 AI Resume Tailorings / mo',
-      'Unlimited Cover Letters*',
-      'Unlimited LinkedIn Profiles*',
-      '150 Email Reveals / mo',
+      { text: '60 AI Resume Tailorings / mo', icon: <Briefcase size={18} /> },
+      { text: 'Unlimited Cover Letters*', icon: <Mail size={18} /> },
+      { text: '150 Email Reveals / mo', icon: <AtSign size={18} /> },
     ],
-    includesLabel: 'Captain includes:',
+    includes: [
+      'Everything in Co-Pilot, plus:',
+      'Unlimited LinkedIn Profiles*',
+      '4× the output of Co-Pilot',
+      'Priority feature access',
+    ],
   },
 ];
 
-function PricingToggle({ yearly, onToggle }: { yearly: boolean; onToggle: () => void }) {
+const PricingSwitch = ({ isYearly, onSwitch }: { isYearly: boolean; onSwitch: (v: string) => void }) => {
   return (
-    <div
-      onClick={onToggle}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '4px',
-        borderRadius: '99px',
-        border: '1px solid var(--border)',
-        background: 'var(--background)',
-        cursor: 'pointer',
-        userSelect: 'none',
-      }}
-    >
-      {(['Monthly', 'Yearly'] as const).map((label) => {
-        const isActive = (label === 'Yearly') === yearly;
-        return (
-          <div key={label} style={{ position: 'relative' }}>
-            {isActive && (
-              <motion.div
-                layoutId="pricing-toggle"
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'var(--foreground)',
-                  borderRadius: '99px',
-                  zIndex: 0,
-                }}
-                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-              />
-            )}
-            <span
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                fontSize: '13px',
-                fontWeight: 500,
-                color: isActive ? 'white' : 'var(--text-secondary)',
-                borderRadius: '99px',
-                transition: 'color 0.2s',
-              }}
-            >
-              {label}
-              {label === 'Yearly' && (
-                <span
-                  style={{
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    padding: '1px 6px',
-                    borderRadius: '99px',
-                    background: isActive ? 'rgba(255,255,255,0.2)' : 'var(--accent-muted)',
-                    color: isActive ? 'white' : 'var(--accent)',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  −20%
-                </span>
-              )}
+    <div className="flex justify-center">
+      <div className="relative z-50 mx-auto flex w-fit rounded-full bg-white border border-gray-200 p-1 shadow-sm">
+        <button
+          onClick={() => onSwitch('0')}
+          className={cn(
+            'relative z-10 w-fit h-10 sm:h-11 rounded-full px-5 sm:px-6 py-1 sm:py-2 font-medium transition-colors text-sm',
+            !isYearly ? 'text-white' : 'text-gray-500 hover:text-gray-900',
+          )}
+        >
+          {!isYearly && (
+            <motion.span
+              layoutId="billing-switch"
+              className="absolute top-0 left-0 h-10 sm:h-11 w-full rounded-full border-[3px] shadow-md shadow-blue-500/40 border-blue-500 bg-gradient-to-b from-blue-400 to-blue-600"
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          )}
+          <span className="relative">Monthly</span>
+        </button>
+
+        <button
+          onClick={() => onSwitch('1')}
+          className={cn(
+            'relative z-10 w-fit h-10 sm:h-11 flex-shrink-0 rounded-full px-5 sm:px-6 py-1 sm:py-2 font-medium transition-colors text-sm',
+            isYearly ? 'text-white' : 'text-gray-500 hover:text-gray-900',
+          )}
+        >
+          {isYearly && (
+            <motion.span
+              layoutId="billing-switch"
+              className="absolute top-0 left-0 h-10 sm:h-11 w-full rounded-full border-[3px] shadow-md shadow-blue-500/40 border-blue-500 bg-gradient-to-b from-blue-400 to-blue-600"
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          )}
+          <span className="relative flex items-center gap-2">
+            Yearly
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+              Save 20%
             </span>
-          </div>
-        );
-      })}
+          </span>
+        </button>
+      </div>
     </div>
   );
-}
-
-function PlanCard({
-  plan,
-  yearly,
-  currentPlan,
-  onUpgrade,
-  onManage,
-  loading,
-  index,
-}: {
-  plan: typeof PLANS[0];
-  yearly: boolean;
-  currentPlan: string;
-  onUpgrade: (priceId: string) => void;
-  onManage: () => void;
-  loading: string | null;
-  index: number;
-}) {
-  const isCurrent = currentPlan === plan.id;
-  const isLite = plan.id === 'LITE';
-  const displayPrice = yearly ? plan.yearlyMonthlyPrice : plan.monthlyPrice;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        borderRadius: '16px',
-        border: plan.popular
-          ? '2px solid var(--accent)'
-          : '1px solid var(--border)',
-        background: 'var(--background)',
-        overflow: 'hidden',
-        position: 'relative',
-        boxShadow: plan.popular
-          ? '0 4px 24px rgba(var(--accent-rgb), 0.10)'
-          : '0 1px 4px rgba(0,0,0,0.04)',
-      }}
-    >
-      {plan.popular && (
-        <div
-          style={{
-            background: 'var(--accent)',
-            padding: '6px 0',
-            textAlign: 'center',
-            fontSize: '11px',
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            color: 'white',
-            textTransform: 'uppercase',
-          }}
-        >
-          Most Popular
-        </div>
-      )}
-
-      <div style={{ padding: '24px', flex: 1 }}>
-        {/* Header */}
-        <div style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <plan.Icon
-              size={16}
-              style={{ color: plan.popular ? 'var(--accent)' : 'var(--text-secondary)' }}
-              strokeWidth={2}
-            />
-            <span
-              style={{
-                fontSize: '13px',
-                fontWeight: 600,
-                color: plan.popular ? 'var(--accent)' : 'var(--text-secondary)',
-                letterSpacing: '0.02em',
-                textTransform: 'uppercase',
-              }}
-            >
-              {plan.name}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px', marginBottom: '4px' }}>
-            {isLite ? (
-              <span style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-                Free
-              </span>
-            ) : (
-              <>
-                <span style={{ fontSize: '20px', fontWeight: 500, color: 'var(--text-secondary)', alignSelf: 'flex-start', marginTop: '6px' }}>$</span>
-                <NumberFlow
-                  value={displayPrice}
-                  format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
-                  style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
-                />
-                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', marginLeft: '2px' }}>/mo</span>
-              </>
-            )}
-          </div>
-
-          {!isLite && yearly && (
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
-              ${plan.yearlyTotal} billed yearly
-            </p>
-          )}
-
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 0' }}>
-            {plan.tagline}
-          </p>
-        </div>
-
-        {/* Divider */}
-        <div style={{ height: '1px', background: 'var(--border)', marginBottom: '16px' }} />
-
-        {/* Features */}
-        <p style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-tertiary)', margin: '0 0 10px' }}>
-          {plan.includesLabel}
-        </p>
-        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {plan.features.map((feature) => (
-            <li key={feature} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <Check
-                size={13}
-                strokeWidth={2.5}
-                style={{
-                  marginTop: '2px',
-                  flexShrink: 0,
-                  color: plan.popular ? 'var(--accent)' : 'var(--text-secondary)',
-                }}
-              />
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                {feature}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* CTA */}
-      <div style={{ padding: '0 24px 24px' }}>
-        {isCurrent ? (
-          <div
-            style={{
-              padding: '11px',
-              borderRadius: '10px',
-              border: '1px solid var(--border)',
-              background: 'var(--background-secondary)',
-              textAlign: 'center',
-              fontSize: '13px',
-              fontWeight: 500,
-              color: 'var(--text-secondary)',
-            }}
-          >
-            Current plan
-          </div>
-        ) : currentPlan !== 'LITE' && !plan.priceId ? null : plan.priceId ? (
-          <button
-            onClick={() => {
-              if (currentPlan !== 'LITE') {
-                onManage();
-              } else {
-                onUpgrade(plan.priceId!);
-              }
-            }}
-            disabled={loading !== null}
-            style={{
-              width: '100%',
-              padding: '11px',
-              borderRadius: '10px',
-              border: 'none',
-              cursor: loading !== null ? 'wait' : 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: 'white',
-              background: plan.popular
-                ? 'linear-gradient(180deg, var(--accent) 0%, color-mix(in oklch, var(--accent), black 15%) 100%)'
-                : 'linear-gradient(180deg, var(--text-primary) 0%, color-mix(in oklch, var(--text-primary), black 20%) 100%)',
-              opacity: loading !== null ? 0.7 : 1,
-              transition: 'opacity 0.15s, transform 0.15s',
-              boxShadow: plan.popular
-                ? '0 1px 3px rgba(var(--accent-rgb), 0.3), inset 0 1px 0 rgba(255,255,255,0.15)'
-                : '0 1px 3px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.1)',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.88'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
-            onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.98)'; }}
-            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-          >
-            {loading === plan.priceId ? 'Redirecting…' :
-              currentPlan === 'LITE' ? `Get ${plan.name}` :
-              isCurrent ? 'Current plan' : 'Manage plan'}
-          </button>
-        ) : null}
-      </div>
-    </motion.div>
-  );
-}
+};
 
 export default function UpgradePage() {
   const router = useRouter();
   const sub = useSubscription();
-  const [yearly, setYearly] = useState(false);
+  const [isYearly, setIsYearly] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
+
+  const togglePricingPeriod = (value: string) => setIsYearly(parseInt(value) === 1);
 
   const handleUpgrade = async (priceId: string) => {
     setLoading(priceId);
@@ -364,153 +162,212 @@ export default function UpgradePage() {
     }
   };
 
+  const revealVariants = {
+    visible: (i: number) => ({
+      y: 0,
+      opacity: 1,
+      filter: 'blur(0px)',
+      transition: { delay: i * 0.12, duration: 0.5 },
+    }),
+    hidden: { filter: 'blur(8px)', y: -16, opacity: 0 },
+  };
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--background)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Top nav bar */}
+    <div className="relative min-h-screen bg-neutral-100 px-4 pt-8 pb-20 overflow-x-hidden">
+      {/* Blue radial glow overlay */}
       <div
+        className="pointer-events-none absolute top-0 left-[5%] right-[5%] w-[90%] h-[70vh] z-0"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border)',
-          position: 'sticky',
-          top: 0,
-          background: 'var(--background)',
-          zIndex: 10,
+          backgroundImage: 'radial-gradient(ellipse at 50% 0%, #3b82f6 0%, transparent 68%)',
+          opacity: 0.55,
+          mixBlendMode: 'multiply',
         }}
-      >
+      />
+
+      {/* Back button */}
+      <div className="relative z-10 mb-6">
         <button
           onClick={() => router.back()}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--text-secondary)',
-            fontSize: '13px',
-            padding: '6px 0',
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
         >
-          <ArrowLeft size={15} strokeWidth={2} />
+          <ArrowLeft size={14} strokeWidth={2} />
           Back
         </button>
       </div>
 
-      {/* Page content */}
-      <div
-        style={{
-          flex: 1,
-          maxWidth: '960px',
-          width: '100%',
-          margin: '0 auto',
-          padding: '56px 24px 80px',
-        }}
-      >
-        {/* Hero text */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          style={{ textAlign: 'center', marginBottom: '40px' }}
+      {/* Hero text */}
+      <div className="relative z-10 text-center mb-8 max-w-3xl mx-auto">
+        <motion.h2
+          custom={0}
+          initial="hidden"
+          animate="visible"
+          variants={revealVariants}
+          className="text-4xl sm:text-5xl md:text-6xl font-semibold text-gray-900 mb-4 tracking-tight leading-tight"
         >
-          <p
-            style={{
-              fontSize: '12px',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--accent)',
-              marginBottom: '12px',
-            }}
+          Plans that work best for your{' '}
+          <motion.span
+            custom={1}
+            initial="hidden"
+            animate="visible"
+            variants={revealVariants}
+            className="border border-dashed border-blue-500 px-3 py-1 rounded-xl bg-blue-100 inline-block"
           >
-            Pricing
-          </p>
-          <h1
-            style={{
-              fontSize: '36px',
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.025em',
-              margin: '0 0 12px',
-              lineHeight: 1.15,
-            }}
-          >
-            Plans for every stage
-            <br />of your job search
-          </h1>
-          <p
-            style={{
-              fontSize: '15px',
-              color: 'var(--text-secondary)',
-              maxWidth: '420px',
-              margin: '0 auto 28px',
-              lineHeight: 1.6,
-            }}
-          >
-            Start free, upgrade when you need AI-powered tools to stand out.
-          </p>
+            job search
+          </motion.span>
+        </motion.h2>
 
-          <PricingToggle yearly={yearly} onToggle={() => setYearly((v) => !v)} />
-        </motion.div>
-
-        {/* Cards */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '16px',
-          }}
+        <motion.p
+          custom={2}
+          initial="hidden"
+          animate="visible"
+          variants={revealVariants}
+          className="text-sm sm:text-base text-gray-600 w-[80%] sm:w-[60%] mx-auto"
         >
-          {PLANS.map((plan, index) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              yearly={yearly}
-              currentPlan={sub.planType}
-              onUpgrade={handleUpgrade}
-              onManage={handleManage}
-              loading={loading}
-              index={index}
-            />
-          ))}
-        </div>
-
-        {/* Footer notes */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5, duration: 0.4 }}
-          style={{
-            marginTop: '40px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-            <Shield size={13} strokeWidth={2} />
-            <span style={{ fontSize: '12px' }}>
-              Cancel anytime · Billed securely via Stripe · No hidden fees
-            </span>
-          </div>
-          <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', margin: 0, textAlign: 'center' }}>
-            * Unlimited subject to fair use policy (500/mo). Usage resets on your billing date.
-          </p>
-        </motion.div>
+          From your first application to your last offer — Aladdin has a plan that grows with your ambition.
+        </motion.p>
       </div>
+
+      {/* Toggle */}
+      <motion.div
+        custom={3}
+        initial="hidden"
+        animate="visible"
+        variants={revealVariants}
+        className="relative z-10 mb-8"
+      >
+        <PricingSwitch isYearly={isYearly} onSwitch={togglePricingPeriod} />
+      </motion.div>
+
+      {/* Cards */}
+      <div className="relative z-10 grid md:grid-cols-3 max-w-5xl gap-4 mx-auto">
+        {plans.map((plan, index) => {
+          const isCurrent = sub.planType === plan.id;
+          const isLite = plan.id === 'LITE';
+
+          return (
+            <motion.div
+              key={plan.id}
+              custom={4 + index}
+              initial="hidden"
+              animate="visible"
+              variants={revealVariants}
+              className={cn(
+                'relative rounded-2xl border bg-white flex flex-col',
+                plan.popular
+                  ? 'ring-2 ring-blue-500 border-blue-200 bg-blue-50/40'
+                  : 'border-neutral-200',
+              )}
+            >
+              {/* Card header */}
+              <div className="p-6 pb-4">
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-2xl sm:text-3xl font-semibold text-gray-900">{plan.name}</h3>
+                  {plan.popular && (
+                    <span className="bg-blue-500 text-white text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0 ml-2 mt-1">
+                      Popular
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-sm text-gray-500 mb-4 leading-relaxed">{plan.description}</p>
+
+                <div className="flex items-baseline gap-0.5 mb-1">
+                  {isLite ? (
+                    <span className="text-4xl font-semibold text-gray-900">Free</span>
+                  ) : (
+                    <>
+                      <span className="text-4xl font-semibold text-gray-900">$</span>
+                      <NumberFlow
+                        value={isYearly ? plan.yearlyPrice : plan.price}
+                        format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                        className="text-4xl font-semibold text-gray-900"
+                      />
+                      <span className="text-gray-500 ml-1 text-sm">
+                        /month{isYearly ? ', billed yearly' : ''}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* CTA button */}
+              <div className="px-6 pb-4">
+                {isCurrent ? (
+                  <div className="w-full py-3.5 rounded-xl bg-gray-100 text-gray-500 text-sm font-semibold text-center border border-gray-200">
+                    Current plan
+                  </div>
+                ) : isLite ? (
+                  <div className="w-full py-3.5 rounded-xl bg-gray-100 text-gray-400 text-sm font-semibold text-center border border-gray-200">
+                    Free forever
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => sub.planType === 'LITE' ? handleUpgrade(plan.priceId!) : handleManage()}
+                    disabled={loading !== null}
+                    className={cn(
+                      'w-full py-3.5 text-sm font-semibold rounded-xl text-white transition-opacity',
+                      plan.popular
+                        ? 'bg-gradient-to-b from-blue-400 to-blue-600 shadow-lg shadow-blue-400/30 border border-blue-400/50'
+                        : 'bg-gradient-to-b from-neutral-700 to-neutral-900 shadow-lg shadow-neutral-900/30 border border-neutral-700/50',
+                      loading !== null ? 'opacity-60 cursor-wait' : 'hover:opacity-90',
+                    )}
+                  >
+                    {loading === plan.priceId
+                      ? 'Redirecting…'
+                      : sub.planType !== 'LITE'
+                      ? 'Manage plan'
+                      : plan.buttonText}
+                  </button>
+                )}
+              </div>
+
+              {/* Usage features */}
+              <div className="px-6 pb-4">
+                <ul className="space-y-2.5">
+                  {plan.features.map((feature, fi) => (
+                    <li key={fi} className="flex items-center gap-3">
+                      <span className="text-neutral-700 flex-shrink-0">{feature.icon}</span>
+                      <span className="text-sm text-gray-600">{feature.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Includes section */}
+              <div className="px-6 pb-6 pt-2 border-t border-neutral-200 mt-auto">
+                <h4 className="font-semibold text-sm text-gray-900 mb-3 mt-3">{plan.includes[0]}</h4>
+                <ul className="space-y-2.5">
+                  {plan.includes.slice(1).map((feature, fi) => (
+                    <li key={fi} className="flex items-center gap-3">
+                      <span className="h-5 w-5 rounded-full bg-blue-50 border border-blue-400 flex items-center justify-center flex-shrink-0">
+                        <CheckCheck className="h-3 w-3 text-blue-500" />
+                      </span>
+                      <span className="text-sm text-gray-600">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <motion.div
+        custom={8}
+        initial="hidden"
+        animate="visible"
+        variants={revealVariants}
+        className="relative z-10 mt-10 flex flex-col items-center gap-2"
+      >
+        <div className="flex items-center gap-2 text-gray-500">
+          <Shield size={13} strokeWidth={2} />
+          <span className="text-xs">Cancel anytime · Billed securely via Stripe · No hidden fees</span>
+        </div>
+        <p className="text-[11px] text-gray-400">
+          * Unlimited subject to fair use policy (500/mo). Usage resets on your billing date.
+        </p>
+      </motion.div>
     </div>
   );
 }
