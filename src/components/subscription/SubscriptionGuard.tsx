@@ -2,15 +2,16 @@
 
 import { ReactNode, useState } from 'react';
 import { Lock } from 'lucide-react';
-import { useSubscription, isFeatureLocked, SubscriptionState } from '@/hooks/useSubscription';
-import { PricingModal } from './PricingModal';
+import { useSubscription, isFeatureLocked } from '@/hooks/useSubscription';
+import { UpgradeCTAModal } from './UpgradeCTAModal';
 
 interface SubscriptionGuardProps {
-  feature: keyof SubscriptionState['usage'];
+  feature: keyof ReturnType<typeof useSubscription>['usage'];
   children: ReactNode;
+  reason?: string;
 }
 
-export function SubscriptionGuard({ feature, children }: SubscriptionGuardProps) {
+export function SubscriptionGuard({ feature, children, reason }: SubscriptionGuardProps) {
   const sub = useSubscription();
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -42,10 +43,10 @@ export function SubscriptionGuard({ feature, children }: SubscriptionGuardProps)
         </div>
       </div>
       {modalOpen && (
-        <PricingModal
+        <UpgradeCTAModal
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
-          sub={sub}
+          reason={reason}
         />
       )}
     </>

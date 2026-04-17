@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Lock, Zap } from 'lucide-react';
-import { useSubscription, isUnlimited, SubscriptionState } from '@/hooks/useSubscription';
+import { useSubscription, isUnlimited } from '@/hooks/useSubscription';
+import { UpgradeCTAModal } from './UpgradeCTAModal';
 import { PricingModal } from './PricingModal';
 
 interface UsageBarProps {
@@ -57,7 +58,8 @@ const PLAN_LABELS: Record<string, string> = {
 
 export function UsageTab() {
   const sub = useSubscription();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const isLite = sub.planType === 'LITE';
 
   if (sub.isLoading) {
@@ -83,7 +85,7 @@ export function UsageTab() {
           )}
         </div>
         <button
-          onClick={() => setModalOpen(true)}
+          onClick={() => isLite ? setUpgradeOpen(true) : setManageOpen(true)}
           style={{
             display: 'flex', alignItems: 'center', gap: '6px',
             padding: '8px 14px', borderRadius: '8px', border: 'none',
@@ -129,8 +131,11 @@ export function UsageTab() {
         </p>
       )}
 
-      {modalOpen && (
-        <PricingModal isOpen={modalOpen} onClose={() => setModalOpen(false)} sub={sub} />
+      {upgradeOpen && (
+        <UpgradeCTAModal isOpen={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      )}
+      {manageOpen && (
+        <PricingModal isOpen={manageOpen} onClose={() => setManageOpen(false)} sub={sub} />
       )}
     </div>
   );

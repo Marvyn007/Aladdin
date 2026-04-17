@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSubscription, isFeatureLocked } from '@/hooks/useSubscription';
-import { PricingModal } from '@/components/subscription/PricingModal';
+import { UpgradeCTAModal } from '@/components/subscription/UpgradeCTAModal';
 
 interface ContactLocation {
   city: string | null;
@@ -277,6 +277,7 @@ export function ReferralsView() {
   const sub = useSubscription();
   const linkedinLocked = isFeatureLocked('linkedinRetrieved', sub);
   const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [viewingLinkedinIds, setViewingLinkedinIds] = useState<Set<string>>(new Set());
 
   const [companyInput, setCompanyInput] = useState(initialDomain);
   const [isSearching, setIsSearching] = useState(false);
@@ -399,6 +400,21 @@ export function ReferralsView() {
       console.error('[referrals] reveal error:', err);
     } finally {
       setRevealingIds(prev => { const n = new Set(prev); n.delete(contactId); return n; });
+    }
+  }
+
+  async function handleLinkedinView(contactId: string, linkedinUrl: string) {
+    if (viewingLinkedinIds.has(contactId)) return;
+    setViewingLinkedinIds(prev => new Set(prev).add(contactId));
+    try {
+      const res = await fetch(`/api/contacts/${contactId}/linkedin-view`, { method: 'POST' });
+      if (!res.ok) {
+        setPricingModalOpen(true);
+        return;
+      }
+      window.open(linkedinUrl, '_blank', 'noopener,noreferrer');
+    } finally {
+      setViewingLinkedinIds(prev => { const n = new Set(prev); n.delete(contactId); return n; });
     }
   }
 
@@ -640,10 +656,19 @@ export function ReferralsView() {
                                       <Lock size={11} strokeWidth={2} />
                                     </button>
                                   ) : (
-                                    <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="referrals-linkedin-btn">
-                                      <Image src={LINKEDIN_LOGO_SRC} alt="" width={14} height={14} className="referrals-linkedin-logo" />
+                                    <button
+                                      type="button"
+                                      className="referrals-linkedin-btn"
+                                      onClick={() => handleLinkedinView(contact.id, contact.linkedinUrl!)}
+                                      disabled={viewingLinkedinIds.has(contact.id)}
+                                    >
+                                      {viewingLinkedinIds.has(contact.id) ? (
+                                        <Loader2 size={12} className="referrals-spin" />
+                                      ) : (
+                                        <Image src={LINKEDIN_LOGO_SRC} alt="" width={14} height={14} className="referrals-linkedin-logo" />
+                                      )}
                                       View
-                                    </a>
+                                    </button>
                                   )
                                 ) : <span className="referrals-empty-cell">—</span>}
                               </td>
@@ -699,7 +724,11 @@ export function ReferralsView() {
       </AnimatePresence>
 
       {pricingModalOpen && (
-        <PricingModal isOpen={pricingModalOpen} onClose={() => setPricingModalOpen(false)} sub={sub} />
+        <UpgradeCTAModal
+          isOpen={pricingModalOpen}
+          onClose={() => setPricingModalOpen(false)}
+          reason="Unlock LinkedIn profiles"
+        />
       )}
     </div>
   );
