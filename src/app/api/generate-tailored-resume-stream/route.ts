@@ -18,6 +18,7 @@ import { getDefaultResume, getAllLinkedInProfiles } from "@/lib/db";
 import { generateTailoredResume } from "@/lib/resume-generation/pipeline";
 import { getS3Client } from "@/lib/s3";
 import { toPlainText } from "@/lib/plain-text";
+import { checkAndIncrement } from "@/lib/subscription/check-usage";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -36,6 +37,14 @@ function createSSEStream(req: Request) {
         const { userId } = await auth();
         if (!userId) {
           sendEvent("error", { message: "Unauthorized" });
+          controller.close();
+          return;
+        }
+
+        // ── Subscription guard ─────────────────────────────────────
+        const usageGuard = await checkAndIncrement(userId, 'resumesGenerated');
+        if (!usageGuard.allowed) {
+          sendEvent("error", { message: "Resume generation limit reached. Please upgrade your plan." });
           controller.close();
           return;
         }

@@ -13,12 +13,18 @@ import { performCoverLetterGeneration, queueCoverLetterGeneration } from '@/lib/
 import { toPlainText } from '@/lib/plain-text';
 
 import { auth } from '@clerk/nextjs/server';
+import { checkAndIncrement } from '@/lib/subscription/check-usage';
 
 export async function POST(request: NextRequest) {
     try {
         const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const usageGuard = await checkAndIncrement(userId, 'coverLettersGenerated');
+        if (!usageGuard.allowed) {
+            return NextResponse.json({ error: 'Cover letter generation limit reached. Please upgrade your plan.' }, { status: 403 });
         }
         const { job_id, resume_id, queue, job_description } = await request.json();
         const normalizedJobDescription = toPlainText(job_description);

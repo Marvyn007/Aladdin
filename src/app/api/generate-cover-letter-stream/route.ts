@@ -13,6 +13,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { getJobById, getDefaultResume, getResumeById, updateResume, getLinkedInProfile } from "@/lib/db";
+import { checkAndIncrement } from "@/lib/subscription/check-usage";
 import { parseResumeFromPdf } from "@/lib/openai";
 import { callLLM } from "@/lib/resume-generation/utils";
 import { MASTER_PROFILE_SYSTEM_PROMPT, buildMasterProfileUserPrompt } from "@/lib/resume-generation/prompts";
@@ -36,6 +37,13 @@ function createSSEStream(req: Request) {
         const { userId } = await auth();
         if (!userId) {
           sendEvent("error", { message: "Unauthorized" });
+          controller.close();
+          return;
+        }
+
+        const usageGuard = await checkAndIncrement(userId, 'coverLettersGenerated');
+        if (!usageGuard.allowed) {
+          sendEvent("error", { message: "Cover letter generation limit reached. Please upgrade your plan." });
           controller.close();
           return;
         }
