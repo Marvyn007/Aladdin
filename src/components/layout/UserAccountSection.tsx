@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { Settings, Zap, ChevronUp } from 'lucide-react';
+import { Settings, CircleArrowUp, ChevronUp } from 'lucide-react';
 import { AccountSettingsModal } from './AccountSettingsModal';
 import { useSubscription } from '@/hooks/useSubscription';
 
@@ -181,58 +181,17 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
                         .user-popover-item:hover { background: var(--background-secondary) !important; }
                     `}</style>
 
-                    {/* User info header */}
+                    {/* Email header */}
                     <div style={{
-                        padding: '14px 16px',
+                        padding: '10px 14px',
                         borderBottom: '1px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
                     }}>
-                        {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                                src={avatarUrl}
-                                alt={displayName}
-                                style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                            />
-                        ) : (
-                            <div style={{
-                                width: '34px', height: '34px', borderRadius: '50%',
-                                background: 'var(--accent-muted)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: 'var(--accent)', fontWeight: 600, fontSize: '13px', flexShrink: 0,
-                            }}>
-                                {initials}
-                            </div>
-                        )}
-                        <div style={{ minWidth: 0 }}>
-                            <div style={{
-                                fontSize: '13px', fontWeight: 600, color: 'var(--text)',
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                                {displayName}
-                            </div>
-                            <div style={{
-                                fontSize: '11px', color: 'var(--text-secondary)',
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>
-                                {displayEmail}
-                            </div>
-                        </div>
-                        {/* Plan badge */}
-                        <span style={{
-                            marginLeft: 'auto',
-                            fontSize: '10px', fontWeight: 600,
-                            padding: '3px 8px', borderRadius: '99px',
-                            background: isPaid ? 'var(--accent-muted)' : 'var(--background-secondary)',
-                            color: isPaid ? 'var(--accent)' : 'var(--text-secondary)',
-                            border: isPaid ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            whiteSpace: 'nowrap',
-                            flexShrink: 0,
+                        <div style={{
+                            fontSize: '12px', color: 'var(--text-secondary)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>
-                            {planLabel}
-                        </span>
+                            {displayEmail}
+                        </div>
                     </div>
 
                     {/* Menu items */}
@@ -258,14 +217,12 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
                             style={{
                                 width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                                 padding: '10px 12px', borderRadius: '8px',
-                                background: isPaid ? 'transparent' : 'var(--accent-muted)',
-                                border: 'none', cursor: 'pointer',
-                                fontSize: '13px', fontWeight: 600,
-                                color: isPaid ? 'var(--text)' : 'var(--accent)',
+                                background: 'transparent', border: 'none', cursor: 'pointer',
+                                fontSize: '13px', fontWeight: 500, color: 'var(--text)',
                                 textAlign: 'left', transition: 'background 0.12s',
                             }}
                         >
-                            <Zap size={15} strokeWidth={2} color={isPaid ? 'var(--text-secondary)' : 'var(--accent)'} />
+                            <CircleArrowUp size={15} strokeWidth={1.75} color="var(--text-secondary)" />
                             {isPaid ? 'Manage plan' : 'Upgrade plan'}
                         </button>
                     </div>
@@ -311,7 +268,7 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
                     </div>
                 )}
 
-                {/* Name & Email */}
+                {/* Name & Plan */}
                 {!collapsed && (
                     <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                         <div style={{
@@ -324,7 +281,7 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
                             fontSize: '11px', color: 'var(--text-tertiary)',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>
-                            {displayEmail}
+                            {planLabel} plan
                         </div>
                     </div>
                 )}
