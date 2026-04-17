@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { ensureUserWithUsername, getUserProfile } from '@/lib/db';
 import { generateUsername } from '@/lib/username';
+import { prisma } from '@/lib/prisma';
 
 export async function POST() {
     try {
@@ -15,6 +16,13 @@ export async function POST() {
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        // Ensure LITE subscription row exists (idempotent — safe to call on every sign-in)
+        await prisma.subscription.upsert({
+            where: { userId },
+            create: { userId, planType: 'LITE', status: 'active' },
+            update: {},
+        });
 
         // Check if user already has a username
         const existingProfile = await getUserProfile(userId);
