@@ -83,7 +83,7 @@ export function UpgradeCTAModal({ isOpen, onClose, reason }: UpgradeCTAModalProp
 
   function handleContinue() {
     onClose();
-    router.push('/pricing');
+    router.push('/upgrade');
   }
 
   const contextTitle = reason ?? 'Unlock this feature';

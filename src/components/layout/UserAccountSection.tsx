@@ -179,7 +179,7 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
 
                     <button
                         className="user-menu-item"
-                        onClick={() => { setPopoverOpen(false); router.push('/pricing'); }}
+                        onClick={() => { setPopoverOpen(false); router.push('/upgrade'); }}
                         style={{
                             width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                             padding: '9px 10px', borderRadius: '7px',
