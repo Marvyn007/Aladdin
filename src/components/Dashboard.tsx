@@ -15,6 +15,7 @@ import { InterviewExperiencesView } from '@/components/layout/InterviewExperienc
 import { ReferralsView } from '@/components/layout/ReferralsView';
 import { InterviewExperienceDetailView } from '@/components/layout/InterviewExperienceDetailView';
 import { PracticeView } from '@/components/layout/PracticeView';
+import { UpgradePlans } from '@/components/upgrade/UpgradePlans';
 import { CompanyQuestionsTable } from '@/components/layout/CompanyQuestionsTable';
 import { CoverLetterModal } from '@/components/modals/CoverLetterModal';
 import { CoverLetterSetupModal } from '@/components/modals/CoverLetterSetupModal';
@@ -29,6 +30,11 @@ import { FilterModal } from '@/components/modals/FilterModal';
 import { AuthModal } from '@/components/modals/AuthModal';
 import { useStore, useStoreActions } from '@/store/useStore';
 import { useResumeGeneration } from '@/contexts/ResumeGenerationContext';
+import { useSubscription } from '@/hooks/useSubscription';
+import { LiteUpgradeModal } from '@/components/subscription/LiteUpgradeModal';
+import { LimitReachedModal } from '@/components/subscription/LimitReachedModal';
+import { CaptainLimitModal } from '@/components/subscription/CaptainLimitModal';
+import type { UsageFeature } from '@/lib/subscription/tier-config';
 import { useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -327,7 +333,7 @@ function DroppableColumn({
 }
 
 interface DashboardProps {
-    defaultActiveView?: 'jobs' | 'tracker' | 'referrals' | 'interview-experiences' | 'practice';
+    defaultActiveView?: 'jobs' | 'tracker' | 'referrals' | 'interview-experiences' | 'practice' | 'upgrade';
     defaultJobMode?: 'list' | 'map';
     selectedCompany?: string; // New prop for detail view
 }
@@ -363,13 +369,14 @@ export function Dashboard({
         viewMode,
         setViewMode,
     } = useStore();
-    const { setPagination, setSorting, toggleJobStatus } = useStoreActions();
+    const { setPagination, setSorting, toggleJobStatus, setCachedJobs, clearJobCache } = useStoreActions();
 
     const { isSignedIn, isLoaded: isAuthLoaded, userId } = useAuth();
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
-    const { openModal: openResumeModal } = useResumeGeneration();
+    const { openModal: openResumeModal, blockedBy: resumeBlockedBy, clearBlockedBy: clearResumeBlockedBy } = useResumeGeneration();
+    const sub = useSubscription();
 
     // Derive active state mainly from props/URL
     const isJobBoard = defaultActiveView === 'jobs';
@@ -377,10 +384,13 @@ export function Dashboard({
     const isReferrals = defaultActiveView === 'referrals';
     const isInterviewExperiences = defaultActiveView === 'interview-experiences';
     const isPracticeView = defaultActiveView === 'practice';
+    const isUpgrade = defaultActiveView === 'upgrade';
     const isMapMode = defaultJobMode === 'map';
 
     // We keep these for internal logic, but they should sync with props
-    const [activeView, setActiveView] = useState<'jobs' | 'tracker' | 'referrals' | 'interview-experiences' | 'practice'>(defaultActiveView ?? 'jobs');
+    const [activeView, setActiveView] = useState<
+        'jobs' | 'tracker' | 'referrals' | 'interview-experiences' | 'practice' | 'upgrade'
+    >(defaultActiveView ?? 'jobs');
     const [applicationStatus, setApplicationStatus] = useState<Record<string, 'none' | 'applied' | 'loading'>>({});
     const [applications, setApplications] = useState<ApplicationWithJob[]>([]);
 
@@ -416,6 +426,8 @@ export function Dashboard({
         jobUrl: null,
         initialDescription: '',
     });
+
+    const [gateModal, setGateModal] = useState<{ type: 'lite' | 'limit'; feature: UsageFeature; resetDate: string | null } | null>(null);
 
     const [coverLetterModal, setCoverLetterModal] = useState<{
         isOpen: boolean;
@@ -494,6 +506,7 @@ export function Dashboard({
     // Initialize from URL on mount
     useEffect(() => {
         if (!isAuthLoaded) return;
+        if (defaultActiveView === 'upgrade') return;
 
         const page = parseInt(searchParams.get('page') || '1', 10);
         const limit = parseInt(searchParams.get('limit') || '25', 10);
@@ -504,7 +517,7 @@ export function Dashboard({
         setSorting({ by: sortBy, dir: sortDir });
 
         // Initial fetch handled by the dependency effect below
-    }, [isAuthLoaded, setPagination, setSorting, searchParams]);
+    }, [isAuthLoaded, setPagination, setSorting, searchParams, defaultActiveView]);
 
     // Track if initial load has completed
     const hasInitializedRef = React.useRef(false);
@@ -515,6 +528,7 @@ export function Dashboard({
     // Sync state to URL and Load Jobs - only when page/limit/sorting ACTUALLY changes
     useEffect(() => {
         if (!isAuthLoaded) return;
+        if (defaultActiveView === 'upgrade') return;
 
         // Skip if nothing actually changed (prevents loops from setPagination({ total, totalPages }))
         const paginationChanged =
@@ -580,7 +594,7 @@ export function Dashboard({
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthLoaded, isSignedIn, pagination.page, pagination.limit, sorting.by, sorting.dir, jobStatus]);
+    }, [isAuthLoaded, isSignedIn, pagination.page, pagination.limit, sorting.by, sorting.dir, jobStatus, defaultActiveView]);
 
     useEffect(() => {
         useStore.getState().initializeFilters();
@@ -593,6 +607,15 @@ export function Dashboard({
         const { page, limit } = useStore.getState().pagination;
         const { by, dir } = useStore.getState().sorting;
         const status = useStore.getState().jobStatus;
+        const cacheKey = `${status}:${page}`;
+
+        // Cache hit — serve from memory, skip DB call
+        const cached = useStore.getState().jobCache.get(cacheKey);
+        if (cached) {
+            setJobs(cached.jobs);
+            setPagination(cached.pagination);
+            return;
+        }
 
         setIsLoadingJobs(true);
         try {
@@ -609,7 +632,7 @@ export function Dashboard({
             if (res.ok) {
                 const data = await res.json();
                 let loadedJobs = data.jobs || [];
-                
+
                 // Defensive client-side check to guarantee strictly sorted listing on the frontend
                 if (by === 'time') {
                     loadedJobs.sort((a: Job, b: Job) => {
@@ -618,15 +641,24 @@ export function Dashboard({
                         return dir === 'desc' ? timeB - timeA : timeA - timeB;
                     });
                 }
-                
+
+                const paginationUpdate = { total: data.total, totalPages: data.totalPages };
                 setJobs(loadedJobs);
-                setPagination({ total: data.total, totalPages: data.totalPages });
+                setPagination(paginationUpdate);
                 setLastUpdated(data.lastUpdated);
+
+                // Write to cache after successful fetch
+                setCachedJobs(cacheKey, {
+                    jobs: loadedJobs,
+                    pagination: { ...useStore.getState().pagination, ...paginationUpdate },
+                });
             } else {
                 console.error("Failed to fetch jobs");
+                // Do not write to cache on error
             }
         } catch (error) {
             console.error('Error loading jobs:', error);
+            // Do not write to cache on error
         } finally {
             setIsLoadingJobs(false);
         }
@@ -919,6 +951,14 @@ export function Dashboard({
 
     const handleConfirmGenerateCoverLetter = async (jobId: string, jobDescription: string, queue: boolean = false) => {
         if (!isSignedIn) return;
+        if (!sub.isLoading && sub.planType === 'LITE') {
+            setGateModal({ type: 'lite', feature: 'coverLettersGenerated', resetDate: null });
+            return;
+        }
+        if (!sub.isLoading && sub.usage.coverLettersGenerated >= sub.limits.coverLettersGenerated) {
+            setGateModal({ type: 'limit', feature: 'coverLettersGenerated', resetDate: sub.currentPeriodEnd });
+            return;
+        }
         const job = jobs.find(j => j.id === jobId) || (selectedJob?.id === jobId ? selectedJob : null);
         const normalizedJobDescription = toPlainText(jobDescription || getPlainTextJobDescription(job));
 
@@ -934,6 +974,14 @@ export function Dashboard({
                     }),
                 });
                 const data = await res.json();
+                if (res.status === 403) {
+                    setGateModal({
+                        type: data.error === 'UNAUTHORIZED' ? 'lite' : 'limit',
+                        feature: 'coverLettersGenerated',
+                        resetDate: data.resetDate ?? null,
+                    });
+                    return;
+                }
                 if (data.success) {
                     alert("Cover letter generation queued successfully.");
                 } else {
@@ -983,7 +1031,16 @@ export function Dashboard({
             });
 
             if (!response.ok) {
-                const errData = await response.json();
+                const errData = await response.json().catch(() => ({})) as { error?: string; message?: string; resetDate?: string };
+                if (response.status === 403) {
+                    setCoverLetterModal(prev => ({ ...prev, isOpen: false, isGenerating: false }));
+                    setGateModal({
+                        type: errData.error === 'UNAUTHORIZED' ? 'lite' : 'limit',
+                        feature: 'coverLettersGenerated',
+                        resetDate: errData.resetDate ?? null,
+                    });
+                    return;
+                }
                 throw new Error(errData.message || `Server error: ${response.status}`);
             }
 
@@ -1552,7 +1609,11 @@ export function Dashboard({
                     </div>
                 )}
 
-                {isReferrals && <ReferralsView />}
+                {isReferrals && (
+                    isSignedIn
+                        ? <ReferralsView />
+                        : <AuthModal isOpen={true} onClose={() => router.push('/')} />
+                )}
 
                 {isInterviewExperiences && (
                     selectedCompany ? (
@@ -1568,6 +1629,12 @@ export function Dashboard({
                     ) : (
                         <PracticeView />
                     )
+                )}
+
+                {isUpgrade && (
+                    <div className="content-area content-area--pricing">
+                        <UpgradePlans />
+                    </div>
                 )}
             </div>
 
@@ -1647,6 +1714,46 @@ export function Dashboard({
                 isOpen={isFilterModalOpen}
                 onClose={() => setIsFilterModalOpen(false)}
             />
+
+            {/* Cover letter gate modals */}
+            <LiteUpgradeModal
+                open={gateModal?.type === 'lite'}
+                onClose={() => setGateModal(null)}
+            />
+            {sub.planType === 'CAPTAIN' ? (
+                <CaptainLimitModal
+                    open={gateModal?.type === 'limit'}
+                    onClose={() => setGateModal(null)}
+                    resetDate={gateModal?.resetDate ?? null}
+                />
+            ) : (
+                <LimitReachedModal
+                    open={gateModal?.type === 'limit'}
+                    onClose={() => setGateModal(null)}
+                    feature={gateModal?.feature ?? 'coverLettersGenerated'}
+                    resetDate={gateModal?.resetDate ?? null}
+                />
+            )}
+
+            {/* Resume generation gate modals */}
+            <LiteUpgradeModal
+                open={resumeBlockedBy?.reason === 'UNAUTHORIZED'}
+                onClose={clearResumeBlockedBy}
+            />
+            {sub.planType === 'CAPTAIN' ? (
+                <CaptainLimitModal
+                    open={resumeBlockedBy?.reason === 'LIMIT_REACHED'}
+                    onClose={clearResumeBlockedBy}
+                    resetDate={resumeBlockedBy?.resetDate ?? null}
+                />
+            ) : (
+                <LimitReachedModal
+                    open={resumeBlockedBy?.reason === 'LIMIT_REACHED'}
+                    onClose={clearResumeBlockedBy}
+                    feature={resumeBlockedBy?.feature ?? 'resumesGenerated'}
+                    resetDate={resumeBlockedBy?.resetDate ?? null}
+                />
+            )}
         </div>
     );
 }
