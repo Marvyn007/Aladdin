@@ -33,14 +33,38 @@ const DEFAULT_STATE: SubscriptionState = {
   isLoading: true,
 };
 
+function fetchSubscription(): Promise<Partial<SubscriptionState>> {
+  return fetch('/api/user/subscription')
+    .then((r) => r.json())
+    .then((data) => data as Partial<SubscriptionState>);
+}
+
 export function useSubscription(): SubscriptionState {
   const [state, setState] = useState<SubscriptionState>(DEFAULT_STATE);
 
   useEffect(() => {
-    fetch('/api/user/subscription')
-      .then((r) => r.json())
-      .then((data) => setState({ ...data, isLoading: false }))
-      .catch(() => setState((s) => ({ ...s, isLoading: false })));
+    let cancelled = false;
+    setState((s) => ({ ...s, isLoading: true }));
+    fetchSubscription()
+      .then((data) => {
+        if (!cancelled) setState({ ...DEFAULT_STATE, ...data, isLoading: false });
+      })
+      .catch(() => {
+        if (!cancelled) setState((s) => ({ ...s, isLoading: false }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      fetchSubscription()
+        .then((data) => setState((prev) => ({ ...prev, ...data, isLoading: false })))
+        .catch(() => setState((s) => ({ ...s, isLoading: false })));
+    };
+    window.addEventListener('aladdin:subscription-refresh', onRefresh);
+    return () => window.removeEventListener('aladdin:subscription-refresh', onRefresh);
   }, []);
 
   return state;

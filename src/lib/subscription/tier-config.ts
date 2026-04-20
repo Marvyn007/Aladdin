@@ -5,9 +5,12 @@ export type UsageFeature =
   | 'emailsRetrieved'
   | 'linkedinRetrieved';
 
+const copilotPrice = process.env.STRIPE_PRICE_COPILOT ?? '';
+const captainPrice = process.env.STRIPE_PRICE_CAPTAIN ?? '';
+
 export const STRIPE_PRICE_TO_PLAN: Record<string, PlanType> = {
-  [process.env.STRIPE_PRICE_COPILOT ?? '']: 'COPILOT',
-  [process.env.STRIPE_PRICE_CAPTAIN ?? '']: 'CAPTAIN',
+  ...(copilotPrice ? { [copilotPrice]: 'COPILOT' as const } : {}),
+  ...(captainPrice ? { [captainPrice]: 'CAPTAIN' as const } : {}),
 };
 
 export const UNLIMITED = 999999;

@@ -1,0 +1,182 @@
+.page {
+  min-height: 100vh;
+  background: #f4f5f7;
+  color: #0f172a;
+}
+
+.inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.grid {
+  display: grid;
+  gap: 0;
+  align-items: stretch;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.05fr);
+  }
+}
+
+.summary {
+  padding: 1.75rem 1.75rem 2rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 40%);
+}
+
+@media (min-width: 900px) {
+  .summary {
+    border-bottom: none;
+    border-right: 1px solid #e2e8f0;
+  }
+}
+
+.checkoutCol {
+  padding: 1.25rem 1.25rem 1.75rem;
+  background: #fff;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  text-decoration: none;
+  margin-bottom: 1.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+.back:hover {
+  color: #0f172a;
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.brandName {
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.headline {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  margin: 0 0 0.5rem;
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.price {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.interval {
+  font-size: 0.9rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.tagline {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0 0 1.25rem;
+  line-height: 1.45;
+}
+
+.features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.feature {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: #334155;
+}
+
+.checkIcon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: #0d9488;
+}
+
+.footnote {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.errorBox {
+  max-width: 520px;
+  margin: 3rem auto;
+  padding: 1.25rem 1.5rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  color: #991b1b;
+  font-size: 0.9rem;
+}
+
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 40vh;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid #e2e8f0;
+  border-top-color: #0d9488;
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

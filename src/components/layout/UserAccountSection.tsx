@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { Settings, CircleArrowUp, ChevronUp } from 'lucide-react';
@@ -21,8 +22,8 @@ const PLAN_LABELS: Record<string, string> = {
 interface PopoverPos { bottom: number; left: number; width: number; }
 
 export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
-    const router = useRouter();
     const { user, isLoaded, isSignedIn } = useUser();
+    const router = useRouter();
     const sub = useSubscription();
     const [modalOpen, setModalOpen] = useState(false);
     const [popoverOpen, setPopoverOpen] = useState(false);
@@ -107,12 +108,12 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
                 {!collapsed ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Personalize your experience</p>
-                        <a href="/sign-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: '8px', background: 'var(--accent)', color: 'white', borderRadius: '6px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>Sign In</a>
+                        <Link href="/sign-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: '8px', background: 'var(--accent)', color: 'white', borderRadius: '6px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>Sign In</Link>
                     </div>
                 ) : (
-                    <a href="/sign-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', background: 'var(--accent)', color: 'white', borderRadius: '50%', textDecoration: 'none' }} title="Sign In">
+                    <Link href="/sign-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', background: 'var(--accent)', color: 'white', borderRadius: '50%', textDecoration: 'none' }} title="Sign In">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
-                    </a>
+                    </Link>
                 )}
             </div>
         );
@@ -179,7 +180,10 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
 
                     <button
                         className="user-menu-item"
-                        onClick={() => { setPopoverOpen(false); router.push('/upgrade'); }}
+                        onClick={() => {
+                            setPopoverOpen(false);
+                            router.push('/upgrade');
+                        }}
                         style={{
                             width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                             padding: '9px 10px', borderRadius: '7px',
@@ -237,7 +241,7 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
                                 {displayName}
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {planLabel} plan
+                                {sub.planType === 'LITE' ? 'Lite user' : planLabel}
                             </div>
                         </div>
                     )}
