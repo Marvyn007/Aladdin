@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   Search, Users, Mail, Lock, Eye, Loader2, MapPin, X, ChevronDown, Send,
@@ -457,27 +456,6 @@ export function ReferralsView() {
 
   return (
     <div className="referrals-view">
-
-      {sub.planType === 'LITE' && (
-        <div className="referrals-lite-network-teaser" role="note">
-          <Lock size={18} className="referrals-lite-network-teaser-lock" aria-hidden />
-          <div className="referrals-lite-network-teaser-main">
-            <p className="referrals-lite-network-teaser-title">
-              People who can refer you are already in here—you just can&apos;t reach them yet.
-            </p>
-            <div className="referrals-lite-network-teaser-chips" aria-hidden>
-              {['Jordan M.', 'Sam Okonkwo', 'Priya R.'].map((name) => (
-                <span key={name} className="referrals-lite-network-teaser-chip">
-                  {name}
-                </span>
-              ))}
-            </div>
-            <Link href="/upgrade" className="referrals-lite-network-teaser-cta">
-              Unlock referral access with Co-Pilot
-            </Link>
-          </div>
-        </div>
-      )}
 
       {/* ── Hero / Top search area ── */}
       <motion.div

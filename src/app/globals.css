@@ -645,6 +645,15 @@ body {
   overflow: hidden;
 }
 
+/* Pricing (/upgrade): muted canvas fills main column below view tabs */
+.content-area.content-area--pricing {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: color-mix(in oklch, var(--muted) 88%, var(--background) 12%);
+}
+
 /* ===== MOBILE HEADER ===== */
 .mobile-header {
   display: none;
