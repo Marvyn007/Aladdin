@@ -1,0 +1,241 @@
+/**
+ * Self-contained overlay — no reliance on app Tailwind tokens.
+ * Scoped under .island; explicit typography and colors only.
+ */
+
+.island {
+  box-sizing: border-box;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #2c241c;
+  -webkit-font-smoothing: antialiased;
+}
+
+.island *,
+.island *::before,
+.island *::after {
+  box-sizing: border-box;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 22, 18, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  padding: 40px 36px 32px;
+  background: linear-gradient(165deg, #fffefb 0%, #fff8ee 55%, #ffefd9 100%);
+  border-radius: 28px;
+  border: 1px solid rgba(180, 120, 60, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+    0 32px 64px rgba(45, 28, 12, 0.35),
+    0 12px 24px rgba(120, 72, 24, 0.18);
+  isolation: isolate;
+}
+
+.close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  color: #5c4d3d;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.close:hover {
+  background: rgba(255, 220, 170, 0.65);
+  color: #2c241c;
+}
+
+.close:focus-visible {
+  outline: 2px solid #c9782a;
+  outline-offset: 2px;
+}
+
+.iconWrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.heroIcon {
+  display: block;
+  width: 72px;
+  height: 72px;
+}
+
+.title {
+  margin: 0 0 20px;
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: #1e1812;
+  line-height: 1.25;
+}
+
+.body {
+  margin: 0 0 24px;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  text-align: center;
+  color: #5c4d42;
+  line-height: 1.65;
+}
+
+.body strong {
+  font-weight: 600;
+  color: #3d3228;
+}
+
+.tokensBlock {
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(200, 150, 90, 0.28);
+}
+
+.tokensLabel {
+  margin: 0 0 12px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #8a7260;
+}
+
+.tokenRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tokenPill {
+  margin: 0;
+  padding: 6px 12px;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.3;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 130, 50, 0.45);
+  background: rgba(255, 236, 200, 0.85);
+  color: #6b3d12;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.learnLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #3d5a78;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.learnLink:hover {
+  color: #2a4158;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btnPrimary {
+  margin: 0;
+  padding: 12px 22px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #3a4558 0%, #2a3142 100%);
+  color: #fffefb;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(30, 24, 18, 0.25);
+  transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.btnPrimary:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 6px 18px rgba(30, 24, 18, 0.32);
+}
+
+.btnPrimary:focus-visible {
+  outline: 2px solid #f0a030;
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .panel {
+    padding: 36px 22px 26px;
+    border-radius: 22px;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .btnPrimary {
+    width: 100%;
+  }
+}
