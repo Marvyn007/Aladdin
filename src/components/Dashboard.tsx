@@ -548,13 +548,18 @@ export function Dashboard({
         if (!hasInitializedRef.current || paginationChanged || sortingChanged || statusChanged) {
             // Prevent API calls if in search mode (client-side only)
             if (useStore.getState().searchMode) {
-                // But we need to update URL to reflect page change if desired? 
-                // Actually URL params usually drive the backend state. 
+                // But we need to update URL to reflect page change if desired?
+                // Actually URL params usually drive the backend state.
                 // If we are in "in-memory search" mode, maybe strictly ignoring URL updates or suppressing fetch is best.
-                // We still might want to update URL params for consistency? 
+                // We still might want to update URL params for consistency?
                 // Let's just Return early to stop the Fetch.
                 // But if we return, we don't update URL.
                 // Let's Update URL but NOT fetch.
+            }
+
+            // Sort order changed — cached pages are now in wrong order
+            if (sortingChanged) {
+                clearJobCache();
             }
 
             hasInitializedRef.current = true;
