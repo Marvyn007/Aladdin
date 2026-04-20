@@ -50,6 +50,11 @@ interface AppState {
         dir: 'asc' | 'desc';
     };
 
+    // Job Page Cache
+    jobCache: Map<string, { jobs: Job[]; pagination: AppState['pagination'] }>;
+    setCachedJobs: (key: string, entry: { jobs: Job[]; pagination: AppState['pagination'] }) => void;
+    clearJobCache: () => void;
+
     // UI State
     sidebarOpen: boolean;
     viewMode: 'list' | 'map';
@@ -160,6 +165,7 @@ export const useStore = create<AppState>()(
             // Initial Pagination & Sorting
             pagination: { page: 1, limit: 25, total: 0, totalPages: 0 },
             sorting: { by: 'time', dir: 'desc' },
+            jobCache: new Map(),
 
             sidebarOpen: true,
             viewMode: 'list',
@@ -352,6 +358,15 @@ export const useStore = create<AppState>()(
                 set((state) => ({
                     pagination: { ...state.pagination, ...pagination }
                 })),
+
+            setCachedJobs: (key, entry) =>
+                set((state) => {
+                    const next = new Map(state.jobCache);
+                    next.set(key, entry);
+                    return { jobCache: next };
+                }),
+
+            clearJobCache: () => set({ jobCache: new Map() }),
 
             setSorting: (sorting) =>
                 set((state) => ({
@@ -573,6 +588,8 @@ export const useStoreActions = () => useStore(
         setSearchQuery: state.setSearchQuery,
         performServerSearch: state.performServerSearch,
         clearSearchResults: state.clearSearchResults,
-        toggleJobStatus: state.toggleJobStatus
+        toggleJobStatus: state.toggleJobStatus,
+        setCachedJobs: state.setCachedJobs,
+        clearJobCache: state.clearJobCache
     }))
 );
