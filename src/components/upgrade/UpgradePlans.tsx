@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Check } from 'lucide-react';
@@ -79,17 +79,38 @@ const plans: Plan[] = [
 ];
 
 function PlanCard({ plan }: { plan: Plan }) {
-  const router = useRouter();
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const tight = plan.imageTransparent;
   const treeWrapClass = tight ? `${styles.treeWrap} ${styles.treeWrapTransparent}` : styles.treeWrap;
   const imgW = tight ? 56 : 80;
   const imgH = tight ? 56 : 80;
 
-  function handleCta() {
+  async function handleCta() {
     if (plan.ctaNav !== 'upgrade') return;
     const checkoutPlan = plan.id === 'captain' ? 'captain' : plan.id === 'pilot' ? 'copilot' : null;
     if (!checkoutPlan) return;
-    router.push(`/upgrade/checkout?plan=${checkoutPlan}`);
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch('/api/stripe/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: checkoutPlan,
+          successPath: '/upgrade?session_id={CHECKOUT_SESSION_ID}',
+          cancelPath: '/upgrade',
+        }),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok) {
+        console.error('[UpgradePlans] Checkout:', data.error ?? res.status);
+        return;
+      }
+      if (data.url) window.location.href = data.url;
+    } catch (e) {
+      console.error('[UpgradePlans] Checkout request failed:', e);
+    } finally {
+      setCheckoutLoading(false);
+    }
   }
 
   const ctaClass =
@@ -132,9 +153,10 @@ function PlanCard({ plan }: { plan: Plan }) {
           <button
             type="button"
             className={ctaClass}
+            disabled={checkoutLoading}
             onClick={plan.ctaNav === 'upgrade' ? handleCta : undefined}
           >
-            {plan.ctaLabel}
+            {checkoutLoading ? 'Redirecting…' : plan.ctaLabel}
           </button>
         </div>
       </div>
