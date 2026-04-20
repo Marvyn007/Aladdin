@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { loadStripe } from '@stripe/stripe-js';
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from '@stripe/react-stripe-js';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Shield } from 'lucide-react';
 import css from '@/components/upgrade/upgrade-checkout.module.css';
 import type { CheckoutPlanKey } from '@/lib/stripe/checkout-price';
 
@@ -17,32 +17,41 @@ const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 const PLAN_COPY: Record<
   CheckoutPlanKey,
-  { headline: string; price: string; interval: string; tagline: string; bullets: string[] }
+  {
+    pillLabel: string;
+    headline: string;
+    price: string;
+    interval: string;
+    tagline: string;
+    bullets: string[];
+  }
 > = {
   copilot: {
-    headline: 'Subscribe to Aladdin Co-Pilot',
+    pillLabel: 'Co-Pilot',
+    headline: 'Run your search with AI that saves real time.',
     price: '$6.99',
     interval: '/ month',
-    tagline: 'AI-assisted applications, outreach, and tracking—built for serious job seekers.',
+    tagline: 'Tailored resumes, sharper outreach, and tracking that keeps pace with you—not the other way around.',
     bullets: [
-      'AI-tailored resumes each billing period (see plan limits in-app)',
-      'High-conversion cover letters for more replies',
-      'LinkedIn profile insights for warmer outreach',
+      'Monthly quota for AI-tailored resumes (see limits in-app)',
+      'Cover letters tuned for replies, not filler',
+      'LinkedIn insights for warmer intros',
       'Referral network access inside Aladdin',
-      'Apply Pilot auto-fill on supported applications',
+      'Apply Pilot auto-fill where supported',
     ],
   },
   captain: {
-    headline: 'Subscribe to Aladdin Captain',
+    pillLabel: 'Captain',
+    headline: 'Maximum reach when every application counts.',
     price: '$16.99',
     interval: '/ month',
-    tagline: 'Maximum reach: more resumes, verified contacts, and priority signal on new roles.',
+    tagline: 'Higher caps on resumes and verified contacts, unlimited where your plan allows, and priority signal on new roles.',
     bullets: [
       'Higher monthly caps on tailored resumes and verified emails',
       'Unlimited AI cover letters where your plan allows',
       'Unlimited LinkedIn lead depth where your plan allows',
-      'Priority “first-to-apply” style alerts in the product',
-      'Everything included in Co-Pilot',
+      'Priority alerts for time-sensitive opportunities',
+      'Everything in Co-Pilot',
     ],
   },
 };
@@ -138,10 +147,8 @@ export function UpgradeCheckoutClient() {
       <div className={css.page}>
         <div className={css.inner}>
           <div className={css.errorBox}>{error ?? 'Invalid checkout link.'}</div>
-          <p style={{ textAlign: 'center', marginTop: '1rem' }}>
-            <Link href="/upgrade" style={{ color: '#0d9488', fontWeight: 600 }}>
-              Back to plans
-            </Link>
+          <p className={css.errorLink}>
+            <Link href="/upgrade">Back to plans</Link>
           </p>
         </div>
       </div>
@@ -153,20 +160,32 @@ export function UpgradeCheckoutClient() {
   return (
     <div className={css.page}>
       <div className={css.inner}>
-        <div className={css.grid}>
+        <div className={css.grid} data-plan={plan}>
           <div className={css.summary}>
             <button type="button" className={css.back} onClick={() => router.push('/upgrade')}>
               <ArrowLeft size={16} aria-hidden />
-              Back
+              Plans
             </button>
 
+            <div className={css.topMeta}>
+              <span className={css.kicker}>Secure checkout</span>
+              <span className={css.dot} aria-hidden />
+              <span className={css.trust}>
+                <Shield size={13} strokeWidth={2} aria-hidden />
+                Payments processed by Stripe
+              </span>
+            </div>
+
             <div className={css.logoRow}>
-              <Image src="/aladdin-logo.png" alt="Aladdin" width={36} height={36} />
+              <div className={css.logoMark}>
+                <Image src="/aladdin-logo.png" alt="Aladdin" width={34} height={34} />
+              </div>
               <span className={css.brandName}>Aladdin</span>
             </div>
 
+            <span className={css.planPill}>{copy.pillLabel}</span>
             <h1 className={css.headline}>{copy.headline}</h1>
-            <div className={css.priceRow}>
+            <div className={css.priceBlock}>
               <span className={css.price}>{copy.price}</span>
               <span className={css.interval}>{copy.interval}</span>
             </div>
@@ -175,29 +194,34 @@ export function UpgradeCheckoutClient() {
             <ul className={css.features}>
               {copy.bullets.map((line) => (
                 <li key={line} className={css.feature}>
-                  <Check className={css.checkIcon} size={16} strokeWidth={2.25} aria-hidden />
+                  <span className={css.checkWrap}>
+                    <Check size={12} strokeWidth={2.75} aria-hidden />
+                  </span>
                   <span>{line}</span>
                 </li>
               ))}
             </ul>
 
             <p className={css.footnote}>
-              Taxes (if any) appear in the payment panel. Your subscription renews each month until you cancel from
-              Manage plan. After cancellation, you keep paid access through the end of the period you already paid for.
+              Taxes (if any) show in the payment panel. Your plan renews monthly until you cancel from Manage plan.
+              If you cancel, you keep paid access through the end of the period you already paid for.
             </p>
           </div>
 
           <div className={css.checkoutCol}>
-            {!clientSecret || !stripePromise ? (
-              <div className={css.loader} style={{ minHeight: 320 }}>
-                <div className={css.spinner} />
-                <span>Loading payment form…</span>
-              </div>
-            ) : (
-              <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
-                <EmbeddedCheckout />
-              </EmbeddedCheckoutProvider>
-            )}
+            <p className={css.paymentLabel}>Payment</p>
+            <div className={css.paymentWell}>
+              {!clientSecret || !stripePromise ? (
+                <div className={css.loader} style={{ minHeight: 300 }}>
+                  <div className={css.spinner} />
+                  <span>Loading payment form…</span>
+                </div>
+              ) : (
+                <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+                  <EmbeddedCheckout />
+                </EmbeddedCheckoutProvider>
+              )}
+            </div>
           </div>
         </div>
       </div>

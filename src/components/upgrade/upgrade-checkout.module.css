@@ -1,114 +1,270 @@
+/* Checkout — aligned with Aladdin “claude blu 2” tokens; editorial summary + calm payment well */
+
 .page {
   min-height: 100vh;
-  background: #f4f5f7;
-  color: #0f172a;
+  color: var(--text-primary);
+  background:
+    radial-gradient(120% 80% at 12% -10%, color-mix(in oklch, var(--primary) 14%, transparent) 0%, transparent 55%),
+    radial-gradient(90% 60% at 92% 0%, color-mix(in oklch, var(--ring) 10%, transparent) 0%, transparent 45%),
+    var(--background);
+  font-family: var(--font-sans);
+  letter-spacing: var(--tracking-normal, -0.01em);
 }
 
 .inner {
-  max-width: 1080px;
+  max-width: min(1120px, 100%);
   margin: 0 auto;
-  padding: 2rem 1.25rem 3rem;
+  padding: clamp(1.25rem, 4vw, 2.75rem) clamp(1rem, 3vw, 1.75rem) clamp(2.5rem, 6vw, 4rem);
 }
 
 .grid {
   display: grid;
   gap: 0;
   align-items: stretch;
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  background: var(--popover, #fff);
+  color: var(--popover-foreground, var(--text-primary));
+  border-radius: var(--radius-xl, 20px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
+  position: relative;
+  isolation: isolate;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .grid {
+    animation: checkoutReveal 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes checkoutReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (min-width: 900px) {
   .grid {
-    grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.05fr);
+    grid-template-columns: minmax(300px, 1.02fr) minmax(340px, 1fr);
+  }
+}
+
+.grid::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--primary) 32%, transparent) 0%,
+    color-mix(in oklch, var(--chart-2) 22%, transparent) 100%
+  );
+  opacity: 0.95;
+}
+
+.grid[data-plan='captain']::before {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--primary) 35%, transparent) 0%,
+    color-mix(in oklch, var(--chart-5) 28%, transparent) 100%
+  );
+}
+
+@media (max-width: 899px) {
+  .grid::before {
+    width: 100%;
+    height: 3px;
+    inset: 0 0 auto 0;
   }
 }
 
 .summary {
-  padding: 1.75rem 1.75rem 2rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fafbfc 0%, #fff 40%);
+  position: relative;
+  padding: clamp(1.5rem, 3.5vw, 2.25rem) clamp(1.35rem, 3vw, 2rem) clamp(1.75rem, 4vw, 2.5rem);
+  padding-left: clamp(1.5rem, 3.5vw, 2.25rem);
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    165deg,
+    color-mix(in oklch, var(--card) 88%, var(--primary)) 0%,
+    var(--card) 42%,
+    var(--popover) 100%
+  );
 }
 
 @media (min-width: 900px) {
   .summary {
     border-bottom: none;
-    border-right: 1px solid #e2e8f0;
+    border-right: 1px solid var(--border);
+    padding-left: clamp(1.65rem, 3.5vw, 2.35rem);
   }
 }
 
+.topMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.kicker {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-foreground);
+}
+
+.dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  opacity: 0.45;
+}
+
+.trust {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .checkoutCol {
-  padding: 1.25rem 1.25rem 1.75rem;
-  background: #fff;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  background: var(--background-secondary);
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+}
+
+.paymentWell {
+  flex: 1;
+  border-radius: var(--radius-lg, 16px);
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: var(--shadow-sm);
+  padding: clamp(0.65rem, 1.5vw, 1rem);
+  min-height: 360px;
+}
+
+.paymentLabel {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+  margin: 0 0 0.65rem 0.35rem;
 }
 
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.875rem;
-  color: #64748b;
-  text-decoration: none;
-  margin-bottom: 1.25rem;
-  border: none;
-  background: none;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 1.35rem;
+  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--popover) 92%, transparent);
   cursor: pointer;
-  padding: 0;
+  padding: 0.45rem 0.75rem 0.45rem 0.55rem;
+  border-radius: var(--radius-md, 12px);
   font-family: inherit;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .back:hover {
-  color: #0f172a;
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
 }
 
 .logoRow {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 1.25rem;
+  gap: 0.75rem;
+  margin-bottom: 1.35rem;
+}
+
+.logoMark {
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: var(--shadow-xs);
+  padding: 2px;
 }
 
 .brandName {
   font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
+  font-size: clamp(1rem, 2.2vw, 1.125rem);
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.planPill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sidebar-primary-foreground, #fff);
+  background: var(--gradient-primary);
+  margin-bottom: 0.65rem;
+  box-shadow: 0 1px 0 color-mix(in oklch, #000 12%, transparent);
 }
 
 .headline {
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.25;
-  margin: 0 0 0.5rem;
+  font-family: var(--font-serif);
+  font-size: clamp(1.45rem, 2.8vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 0.65rem;
+  color: var(--foreground);
+  max-width: 22ch;
 }
 
-.priceRow {
+.priceBlock {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .price {
-  font-size: 1.5rem;
+  font-size: clamp(1.65rem, 3.5vw, 2.125rem);
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .interval {
-  font-size: 0.9rem;
-  color: #64748b;
+  font-size: 0.9375rem;
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 
 .tagline {
-  font-size: 0.875rem;
-  color: #64748b;
-  margin: 0 0 1.25rem;
-  line-height: 1.45;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 1.35rem;
+  max-width: 38ch;
 }
 
 .features {
@@ -117,42 +273,78 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.5rem;
 }
 
 .feature {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.65rem;
   align-items: flex-start;
   font-size: 0.875rem;
-  line-height: 1.4;
-  color: #334155;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  padding: 0.5rem 0.6rem;
+  margin: 0 -0.35rem;
+  border-radius: var(--radius-sm, 8px);
+  transition: background var(--transition-fast);
 }
 
-.checkIcon {
+.feature:hover {
+  background: color-mix(in oklch, var(--muted) 55%, transparent);
+}
+
+.checkWrap {
   flex-shrink: 0;
-  margin-top: 0.1rem;
-  color: #0d9488;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.06rem;
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in oklch, var(--primary) 22%, transparent);
 }
 
 .footnote {
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid #e2e8f0;
-  font-size: 0.8rem;
-  color: #64748b;
-  line-height: 1.45;
+  margin-top: 1.65rem;
+  padding-top: 1.2rem;
+  border-top: 1px dashed color-mix(in oklch, var(--border) 85%, var(--primary));
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--text-tertiary);
+  max-width: 42ch;
 }
 
 .errorBox {
   max-width: 520px;
-  margin: 3rem auto;
-  padding: 1.25rem 1.5rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 12px;
-  color: #991b1b;
-  font-size: 0.9rem;
+  margin: 2.5rem auto 0;
+  padding: 1.15rem 1.35rem;
+  background: var(--error-muted);
+  border: 1px solid color-mix(in oklch, var(--error) 35%, var(--border));
+  border-radius: var(--radius-lg);
+  color: var(--error);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.errorLink {
+  text-align: center;
+  margin-top: 1.25rem;
+}
+
+.errorLink a {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--primary) 40%, transparent);
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.errorLink a:hover {
+  color: var(--accent-hover);
+  border-bottom-color: var(--accent-hover);
 }
 
 .loader {
@@ -160,23 +352,51 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  min-height: 40vh;
-  color: #64748b;
-  font-size: 0.9rem;
+  gap: 0.85rem;
+  min-height: 42vh;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
 }
 
 .spinner {
-  width: 2rem;
-  height: 2rem;
-  border: 3px solid #e2e8f0;
-  border-top-color: #0d9488;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
   border-radius: 50%;
-  animation: spin 0.85s linear infinite;
+  animation: spin 0.82s linear infinite;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid {
+    animation: none;
+  }
+  .spinner {
+    animation: none;
+    border-top-color: var(--border);
+    opacity: 0.7;
+  }
+}
+
+.dark .summary {
+  background: linear-gradient(
+    165deg,
+    color-mix(in oklch, var(--card) 75%, var(--primary)) 0%,
+    var(--card) 50%,
+    var(--popover) 100%
+  );
+}
+
+.dark .checkoutCol {
+  background: var(--background-secondary);
+}
+
+.dark .paymentWell {
+  background: color-mix(in oklch, var(--popover) 94%, #000);
 }
