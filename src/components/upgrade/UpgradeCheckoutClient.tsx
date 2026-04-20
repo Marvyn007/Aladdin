@@ -203,8 +203,8 @@ export function UpgradeCheckoutClient() {
             </ul>
 
             <p className={css.footnote}>
-              Taxes (if any) show in the payment panel. Your plan renews monthly until you cancel from Manage plan.
-              If you cancel, you keep paid access through the end of the period you already paid for.
+              Taxes (if any) appear in the payment panel. Renews monthly until you cancel in Manage plan; after cancel,
+              paid access continues through the period you already paid for.
             </p>
           </div>
 
@@ -212,14 +212,16 @@ export function UpgradeCheckoutClient() {
             <p className={css.paymentLabel}>Payment</p>
             <div className={css.paymentWell}>
               {!clientSecret || !stripePromise ? (
-                <div className={css.loader} style={{ minHeight: 300 }}>
+                <div className={css.loader}>
                   <div className={css.spinner} />
                   <span>Loading payment form…</span>
                 </div>
               ) : (
-                <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
-                  <EmbeddedCheckout />
-                </EmbeddedCheckoutProvider>
+                <div className={css.embedSlot}>
+                  <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+                    <EmbeddedCheckout />
+                  </EmbeddedCheckoutProvider>
+                </div>
               )}
             </div>
           </div>
