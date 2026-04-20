@@ -2,13 +2,16 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   Search, Users, Mail, Lock, Eye, Loader2, MapPin, X, ChevronDown, Send,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSubscription, isFeatureLocked } from '@/hooks/useSubscription';
-import { UpgradeCTAModal } from '@/components/subscription/UpgradeCTAModal';
+import { LiteUpgradeModal } from '@/components/subscription/LiteUpgradeModal';
+import { LimitReachedModal } from '@/components/subscription/LimitReachedModal';
+import type { UsageFeature } from '@/lib/subscription/tier-config';
 
 interface ContactLocation {
   city: string | null;
@@ -276,7 +279,8 @@ export function ReferralsView() {
   const initialDomain = searchParams.get('domain') ?? '';
   const sub = useSubscription();
   const linkedinLocked = isFeatureLocked('linkedinRetrieved', sub);
-  const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [liteModalOpen, setLiteModalOpen] = useState(false);
+  const [limitModal, setLimitModal] = useState<{ feature: UsageFeature; resetDate: string | null } | null>(null);
   const [viewingLinkedinIds, setViewingLinkedinIds] = useState<Set<string>>(new Set());
 
   const [companyInput, setCompanyInput] = useState(initialDomain);
@@ -386,15 +390,30 @@ export function ReferralsView() {
 
   async function handleReveal(contactId: string) {
     if (revealingIds.has(contactId)) return;
+
+    // Client-side pre-check (skip if sub still loading — server guard will enforce)
+    if (!sub.isLoading) {
+      if (sub.planType === 'LITE') { setLiteModalOpen(true); return; }
+      if (sub.usage.emailsRetrieved >= sub.limits.emailsRetrieved) {
+        setLimitModal({ feature: 'emailsRetrieved', resetDate: sub.currentPeriodEnd });
+        return;
+      }
+    }
+
     setRevealingIds(prev => new Set(prev).add(contactId));
     try {
       const res = await fetch(`/api/contacts/${contactId}/reveal`, { method: 'POST' });
       if (!res.ok) {
+        if (res.status === 403) {
+          const body = await res.json().catch(() => ({})) as { error?: string; resetDate?: string };
+          if (body.error === 'UNAUTHORIZED') { setLiteModalOpen(true); return; }
+          setLimitModal({ feature: 'emailsRetrieved', resetDate: body.resetDate ?? null });
+          return;
+        }
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error ?? 'Failed to reveal');
       }
       const data = await res.json() as RevealResult;
-      // Always store the result — even email:null marks the attempt as complete
       setRevealedMap(prev => ({ ...prev, [contactId]: data }));
     } catch (err) {
       console.error('[referrals] reveal error:', err);
@@ -405,11 +424,26 @@ export function ReferralsView() {
 
   async function handleLinkedinView(contactId: string, linkedinUrl: string) {
     if (viewingLinkedinIds.has(contactId)) return;
+
+    // Client-side pre-check (skip if sub still loading — server guard will enforce)
+    if (!sub.isLoading) {
+      if (sub.planType === 'LITE') { setLiteModalOpen(true); return; }
+      if (sub.usage.linkedinRetrieved >= sub.limits.linkedinRetrieved) {
+        setLimitModal({ feature: 'linkedinRetrieved', resetDate: sub.currentPeriodEnd });
+        return;
+      }
+    }
+
     setViewingLinkedinIds(prev => new Set(prev).add(contactId));
     try {
       const res = await fetch(`/api/contacts/${contactId}/linkedin-view`, { method: 'POST' });
       if (!res.ok) {
-        setPricingModalOpen(true);
+        if (res.status === 403) {
+          const body = await res.json().catch(() => ({})) as { error?: string; resetDate?: string };
+          if (body.error === 'UNAUTHORIZED') { setLiteModalOpen(true); return; }
+          setLimitModal({ feature: 'linkedinRetrieved', resetDate: body.resetDate ?? null });
+          return;
+        }
         return;
       }
       window.open(linkedinUrl, '_blank', 'noopener,noreferrer');
@@ -423,6 +457,27 @@ export function ReferralsView() {
 
   return (
     <div className="referrals-view">
+
+      {sub.planType === 'LITE' && (
+        <div className="referrals-lite-network-teaser" role="note">
+          <Lock size={18} className="referrals-lite-network-teaser-lock" aria-hidden />
+          <div className="referrals-lite-network-teaser-main">
+            <p className="referrals-lite-network-teaser-title">
+              People who can refer you are already in here—you just can&apos;t reach them yet.
+            </p>
+            <div className="referrals-lite-network-teaser-chips" aria-hidden>
+              {['Jordan M.', 'Sam Okonkwo', 'Priya R.'].map((name) => (
+                <span key={name} className="referrals-lite-network-teaser-chip">
+                  {name}
+                </span>
+              ))}
+            </div>
+            <Link href="/upgrade" className="referrals-lite-network-teaser-cta">
+              Unlock referral access with Co-Pilot
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── Hero / Top search area ── */}
       <motion.div
@@ -650,7 +705,7 @@ export function ReferralsView() {
                                     <button
                                       type="button"
                                       className="referrals-linkedin-btn referrals-linkedin-btn--locked"
-                                      onClick={() => setPricingModalOpen(true)}
+                                      onClick={() => setLiteModalOpen(true)}
                                     >
                                       <Image src={LINKEDIN_LOGO_SRC} alt="" width={14} height={14} className="referrals-linkedin-logo" style={{ opacity: 0.4 }} />
                                       <Lock size={11} strokeWidth={2} />
@@ -723,13 +778,13 @@ export function ReferralsView() {
         )}
       </AnimatePresence>
 
-      {pricingModalOpen && (
-        <UpgradeCTAModal
-          isOpen={pricingModalOpen}
-          onClose={() => setPricingModalOpen(false)}
-          reason="Unlock LinkedIn profiles"
-        />
-      )}
+      <LiteUpgradeModal open={liteModalOpen} onClose={() => setLiteModalOpen(false)} />
+      <LimitReachedModal
+        open={!!limitModal}
+        onClose={() => setLimitModal(null)}
+        feature={limitModal?.feature ?? 'emailsRetrieved'}
+        resetDate={limitModal?.resetDate ?? null}
+      />
     </div>
   );
 }
