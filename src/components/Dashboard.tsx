@@ -734,6 +734,11 @@ export function Dashboard({
                                 
                                 useStore.getState().setJobs(combined);
                                 useStore.getState().setLastUpdated(data.lastUpdated);
+                                // Keep the cache in sync with the polled result
+                                useStore.getState().setCachedJobs('fresh:1', {
+                                    jobs: combined,
+                                    pagination: useStore.getState().pagination,
+                                });
                             }
                         }
                     }
