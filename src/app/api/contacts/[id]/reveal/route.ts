@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { revealContactEmail, ContactNotFoundError } from '@/lib/contacts/reveal-contact';
-import { checkAndIncrement } from '@/lib/subscription/check-usage';
+import { checkUsage, incrementUsage } from '@/lib/subscription/check-usage';
 import {
   ProspeoAuthError,
   ProspeoRateLimitError,
@@ -16,7 +16,8 @@ export async function POST(
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const usageGuard = await checkAndIncrement(userId, 'emailsRetrieved');
+  // Gate check only — do NOT increment yet
+  const usageGuard = await checkUsage(userId, 'emailsRetrieved');
   if (!usageGuard.allowed) {
     return NextResponse.json(
       { error: usageGuard.reason, feature: 'emailsRetrieved', resetDate: usageGuard.resetDate },
@@ -28,6 +29,10 @@ export async function POST(
 
   try {
     const result = await revealContactEmail(contactId, userId);
+    // Only charge a credit when an email was actually returned
+    if (result.email) {
+      await incrementUsage(userId, 'emailsRetrieved');
+    }
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof ContactNotFoundError) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });

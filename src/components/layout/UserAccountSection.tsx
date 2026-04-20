@@ -14,9 +14,9 @@ import { AccountSettingsModal } from './AccountSettingsModal';
 import { useSubscription } from '@/hooks/useSubscription';
 
 const PLAN_LABELS: Record<string, string> = {
-  LITE: 'Lite',
-  COPILOT: 'Co-Pilot',
-  CAPTAIN: 'Captain',
+  LITE: 'Lite user',
+  COPILOT: 'Copilot user',
+  CAPTAIN: 'Captain user',
 };
 
 interface PopoverPos { bottom: number; left: number; width: number; }
@@ -241,7 +241,7 @@ export function UserAccountSection({ collapsed }: { collapsed?: boolean }) {
                                 {displayName}
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {sub.planType === 'LITE' ? 'Lite user' : planLabel}
+                                {sub.isLoading ? null : planLabel}
                             </div>
                         </div>
                     )}

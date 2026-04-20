@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
 import { X, Zap, Rocket, Star, ArrowRight, Lock } from 'lucide-react';
 import NumberFlow from '@number-flow/react';
 import { useSubscription } from '@/hooks/useSubscription';
+import { PricingModal } from './PricingModal';
 
 const PLANS = [
   {
@@ -41,17 +41,14 @@ interface UpgradeCTAModalProps {
 }
 
 export function UpgradeCTAModal({ isOpen, onClose, reason }: UpgradeCTAModalProps) {
-  const router = useRouter();
   const sub = useSubscription();
-  const [mounted, setMounted] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
 
   // Pre-select the next upgrade tier
   const defaultIndex = Math.min((PLAN_ORDER[sub.planType] ?? 0) + 1, 2);
   const [active, setActive] = useState(defaultIndex);
   const [animatedPrices, setAnimatedPrices] = useState([0, 0, 0]);
   const hasAnimated = useRef(false);
-
-  useEffect(() => { setMounted(true); }, []);
 
   // Animate prices in when modal opens
   useEffect(() => {
@@ -76,14 +73,26 @@ export function UpgradeCTAModal({ isOpen, onClose, reason }: UpgradeCTAModalProp
     return () => document.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
 
-  if (!isOpen || !mounted) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
+
+  if (pricingOpen) {
+    return (
+      <PricingModal
+        isOpen={pricingOpen}
+        onClose={() => {
+          setPricingOpen(false);
+          onClose();
+        }}
+        sub={sub}
+      />
+    );
+  }
 
   const ROW_H = 72;
   const GAP = 8;
 
   function handleContinue() {
-    onClose();
-    router.push('/upgrade');
+    setPricingOpen(true);
   }
 
   const contextTitle = reason ?? 'Unlock this feature';

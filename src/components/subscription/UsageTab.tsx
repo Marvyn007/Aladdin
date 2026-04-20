@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Lock, Zap } from 'lucide-react';
+import { Lock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useSubscription, isUnlimited } from '@/hooks/useSubscription';
-import { UpgradeCTAModal } from './UpgradeCTAModal';
-import { PricingModal } from './PricingModal';
+import { LimitReachedModal } from './LimitReachedModal';
 
 interface UsageBarProps {
   label: string;
@@ -52,15 +52,17 @@ function UsageBar({ label, used, limit, isLite }: UsageBarProps) {
 
 const PLAN_LABELS: Record<string, string> = {
   LITE: 'Aladdin Lite',
-  COPILOT: 'Aladdin Co-Pilot',
+  COPILOT: 'Aladdin Copilot',
   CAPTAIN: 'Aladdin Captain',
 };
 
 export function UsageTab() {
   const sub = useSubscription();
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
+  const router = useRouter();
+  const [captainModalOpen, setCaptainModalOpen] = useState(false);
   const isLite = sub.planType === 'LITE';
+  const isCopilot = sub.planType === 'COPILOT';
+  const isCaptain = sub.planType === 'CAPTAIN';
 
   if (sub.isLoading) {
     return (
@@ -84,18 +86,32 @@ export function UsageTab() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => isLite ? setUpgradeOpen(true) : setManageOpen(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 14px', borderRadius: '8px', border: 'none',
-            background: 'var(--accent)', color: 'white', cursor: 'pointer',
-            fontSize: '13px', fontWeight: 600,
-          }}
-        >
-          <Zap size={14} />
-          {isLite ? 'Upgrade' : 'Manage'}
-        </button>
+
+        {isLite && (
+          <button
+            onClick={() => router.push('/upgrade')}
+            style={{
+              padding: '8px 14px', borderRadius: '8px', border: 'none',
+              background: 'var(--accent)', color: 'white', cursor: 'pointer',
+              fontSize: '13px', fontWeight: 600,
+            }}
+          >
+            Upgrade
+          </button>
+        )}
+
+        {isCopilot && (
+          <button
+            onClick={() => setCaptainModalOpen(true)}
+            style={{
+              padding: '8px 14px', borderRadius: '8px', border: 'none',
+              background: 'var(--accent)', color: 'white', cursor: 'pointer',
+              fontSize: '13px', fontWeight: 600,
+            }}
+          >
+            Upgrade to Captain
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -127,16 +143,17 @@ export function UsageTab() {
 
       {isLite && (
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
-          Upgrade to Co-Pilot to unlock AI-powered features.
+          Upgrade to Copilot to unlock AI-powered features.
         </p>
       )}
 
-      {upgradeOpen && (
-        <UpgradeCTAModal isOpen={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
-      )}
-      {manageOpen && (
-        <PricingModal isOpen={manageOpen} onClose={() => setManageOpen(false)} sub={sub} />
-      )}
+      <LimitReachedModal
+        open={captainModalOpen}
+        onClose={() => setCaptainModalOpen(false)}
+        feature="resumesGenerated"
+        resetDate={sub.currentPeriodEnd}
+        mode="upgrade"
+      />
     </div>
   );
 }

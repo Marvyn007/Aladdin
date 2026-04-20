@@ -44,7 +44,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
             await signIn.authenticateWithRedirect({
                 strategy: provider,
                 redirectUrl: '/sso-callback',
-                redirectUrlComplete: window.location.href,
+                redirectUrlComplete: '/sso-callback',
             });
         } catch (error) {
             console.error('OAuth sign-in error:', error);

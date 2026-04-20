@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useSubscription, isFeatureLocked } from '@/hooks/useSubscription';
 import { LiteUpgradeModal } from '@/components/subscription/LiteUpgradeModal';
 import { LimitReachedModal } from '@/components/subscription/LimitReachedModal';
+import { CaptainLimitModal } from '@/components/subscription/CaptainLimitModal';
 import type { UsageFeature } from '@/lib/subscription/tier-config';
 
 interface ContactLocation {
@@ -683,7 +684,10 @@ export function ReferralsView() {
                                     <button
                                       type="button"
                                       className="referrals-linkedin-btn referrals-linkedin-btn--locked"
-                                      onClick={() => setLiteModalOpen(true)}
+                                      onClick={() => {
+                                        if (sub.planType === 'LITE') { setLiteModalOpen(true); return; }
+                                        setLimitModal({ feature: 'linkedinRetrieved', resetDate: sub.currentPeriodEnd });
+                                      }}
                                     >
                                       <Image src={LINKEDIN_LOGO_SRC} alt="" width={14} height={14} className="referrals-linkedin-logo" style={{ opacity: 0.4 }} />
                                       <Lock size={11} strokeWidth={2} />
@@ -757,12 +761,20 @@ export function ReferralsView() {
       </AnimatePresence>
 
       <LiteUpgradeModal open={liteModalOpen} onClose={() => setLiteModalOpen(false)} />
-      <LimitReachedModal
-        open={!!limitModal}
-        onClose={() => setLimitModal(null)}
-        feature={limitModal?.feature ?? 'emailsRetrieved'}
-        resetDate={limitModal?.resetDate ?? null}
-      />
+      {sub.planType === 'CAPTAIN' ? (
+        <CaptainLimitModal
+          open={!!limitModal}
+          onClose={() => setLimitModal(null)}
+          resetDate={limitModal?.resetDate ?? null}
+        />
+      ) : (
+        <LimitReachedModal
+          open={!!limitModal}
+          onClose={() => setLimitModal(null)}
+          feature={limitModal?.feature ?? 'emailsRetrieved'}
+          resetDate={limitModal?.resetDate ?? null}
+        />
+      )}
     </div>
   );
 }

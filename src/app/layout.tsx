@@ -40,8 +40,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  if (!publishableKey?.trim() && process.env.NODE_ENV === 'production') {
+    throw new Error('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not configured');
+  }
+
   return (
-    <ClerkProvider afterSignUpUrl="/">
+    <ClerkProvider publishableKey={publishableKey} afterSignUpUrl="/">
       <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
         <body className={inter.className} suppressHydrationWarning>
           <ThemeRegistry>

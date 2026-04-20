@@ -7,10 +7,18 @@ export async function GET() {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const [sub, usage] = await Promise.all([
-    prisma.subscription.findUnique({ where: { userId } }),
-    prisma.userUsage.findUnique({ where: { userId } }),
-  ]);
+  let sub, usage;
+  try {
+    [sub, usage] = await Promise.all([
+      prisma.subscription.findUnique({ where: { userId } }),
+      prisma.userUsage.findUnique({ where: { userId } }),
+    ]);
+  } catch (err) {
+    console.error('[subscription] DB error for userId', userId, err);
+    return NextResponse.json({ error: 'DB error' }, { status: 500 });
+  }
+
+  console.log('[subscription] userId:', userId, '| planType:', sub?.planType ?? '(no row, defaulting LITE)');
 
   const planType = (sub?.planType ?? 'LITE') as PlanType;
   const limits = TIER_LIMITS[planType];

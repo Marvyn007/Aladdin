@@ -22,7 +22,7 @@ const PLANS = [
   },
   {
     id: 'COPILOT' as const,
-    name: 'Aladdin Co-Pilot',
+    name: 'Aladdin Co-pilot',
     price: '$6.99/mo',
     icon: <Zap size={20} />,
     features: ['Everything in Lite', '15 AI resume tailorings', '30 cover letters', '60 LinkedIn profiles', '30 email reveals'],
@@ -34,7 +34,7 @@ const PLANS = [
     name: 'Aladdin Captain',
     price: '$16.99/mo',
     icon: <Rocket size={20} />,
-    features: ['Everything in Co-Pilot', '60 AI resume tailorings', '∞ cover letters*', '150 email reveals', '∞ LinkedIn profiles*'],
+    features: ['Everything in Co-pilot', '60 AI resume tailorings', '∞ cover letters*', '150 email reveals', '∞ LinkedIn profiles*'],
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_CAPTAIN ?? null,
   },
 ];

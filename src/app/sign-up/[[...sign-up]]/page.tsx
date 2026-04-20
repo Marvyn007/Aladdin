@@ -380,6 +380,13 @@ export default function SignUpPage() {
                             </div>
                         )}
 
+                        {/* Mount point for Clerk Smart CAPTCHA in custom flows */}
+                        <div
+                            id="clerk-captcha"
+                            className="min-h-[52px] w-full"
+                            aria-hidden="true"
+                        />
+
                         <button
                             type="submit"
                             disabled={isLoading}

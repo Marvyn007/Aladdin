@@ -3,8 +3,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { X, Lock, ExternalLink, ArrowRight, Loader2, Users } from 'lucide-react';
+import { X, Lock, ArrowRight, Loader2, Users, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
+import { useAuth } from '@clerk/nextjs';
+import { useSubscription } from '@/hooks/useSubscription';
+import { LiteUpgradeModal } from '@/components/subscription/LiteUpgradeModal';
+import { LimitReachedModal } from '@/components/subscription/LimitReachedModal';
+import { CaptainLimitModal } from '@/components/subscription/CaptainLimitModal';
+import { AuthModal } from '@/components/modals/AuthModal';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -26,9 +32,10 @@ interface SearchResult {
   cached: boolean;
 }
 
+type GateModal = { type: 'lite' } | { type: 'limit'; resetDate: string | null };
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/** pravatar.cc supports img=1 … 70 for stable face photos */
 function buildPlaceholderAvatarUrls(seed: string): string[] {
   let h = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -48,10 +55,6 @@ function buildPlaceholderAvatarUrls(seed: string): string[] {
   return out;
 }
 
-const LINKEDIN_LOGO_SRC =
-  'https://img.logo.dev/linkedin.com?token=pk_b-8PjthySeKn8CjgOa7NeA&retina=true';
-
-/** Round avatar art in `public/avatars/` (served as `/avatars/...`). */
 const LOCAL_AVATAR_PATHS = [
   '/avatars/splitimage.im-1.png',
   '/avatars/splitimage.im-2.png',
@@ -69,7 +72,9 @@ const LOCAL_AVATAR_PATHS = [
 
 const MODAL_CONTACT_PREVIEW = 5;
 
-/** Seeded shuffle so avatar order is “random” but stable for the same seed. */
+const LINKEDIN_LOGO_SRC =
+  'https://img.logo.dev/linkedin.com?token=pk_b-8PjthySeKn8CjgOa7NeA&retina=true';
+
 function seededShufflePaths(seed: string, paths: readonly string[]): string[] {
   const out = [...paths];
   let h = 0;
@@ -92,25 +97,30 @@ function ReferralModal({
   companyName,
   companyDomain,
   isLoading,
+  canViewLinkedin,
   onClose,
+  onLinkedinLocked,
+  onLinkedinView,
 }: {
   contacts: TeaserContact[];
   companyName: string;
   companyDomain: string;
   isLoading: boolean;
+  canViewLinkedin: boolean;
   onClose: () => void;
+  onLinkedinLocked: () => void;
+  onLinkedinView: (contactId: string, linkedinUrl: string) => void;
 }) {
   const router = useRouter();
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const { displayed, rowAvatarSrcs } = useMemo(() => {
+  const { displayed } = useMemo(() => {
     const rows = contacts.slice(0, MODAL_CONTACT_PREVIEW);
     const shuffled = seededShufflePaths(`${companyDomain}|referral-modal`, LOCAL_AVATAR_PATHS);
     const avatars = rows.map((_, i) => shuffled[i % shuffled.length]);
     return { displayed: rows, rowAvatarSrcs: avatars };
   }, [contacts, companyDomain]);
 
-  // Escape to close
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
@@ -149,7 +159,6 @@ function ReferralModal({
               Connect with the team at <span className="rt-modal-subtitle-strong">{companyName}</span>.
             </p>
           </div>
-
           <button className="rt-modal-close" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
@@ -187,7 +196,7 @@ function ReferralModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {displayed.map((contact, rowIndex) => {
+                  {displayed.map((contact) => {
                     const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || 'Unknown';
                     return (
                       <tr key={contact.id} className="rt-row">
@@ -204,13 +213,12 @@ function ReferralModal({
                           </span>
                         </td>
                         <td className="rt-td-right">
-                          {contact.linkedinUrl ? (
-                            <a
-                              href={contact.linkedinUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                          {canViewLinkedin && contact.linkedinUrl ? (
+                            <button
+                              onClick={() => onLinkedinView(contact.id, contact.linkedinUrl!)}
                               className="rt-linkedin-btn"
                               title="View LinkedIn profile"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                             >
                               <Image
                                 src={LINKEDIN_LOGO_SRC}
@@ -221,9 +229,23 @@ function ReferralModal({
                               />
                               <span>View</span>
                               <ExternalLink size={10} />
-                            </a>
+                            </button>
                           ) : (
-                            <span className="rt-empty">—</span>
+                            <button
+                              onClick={canViewLinkedin ? undefined : onLinkedinLocked}
+                              className="rt-linkedin-btn rt-linkedin-btn--locked"
+                              title={canViewLinkedin ? undefined : 'Upgrade to view LinkedIn'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            >
+                              <Image
+                                src={LINKEDIN_LOGO_SRC}
+                                alt=""
+                                width={13}
+                                height={13}
+                                style={{ borderRadius: 4, flexShrink: 0, opacity: 0.45 }}
+                              />
+                              <Lock size={10} />
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -235,7 +257,6 @@ function ReferralModal({
           )}
         </div>
 
-        {/* Actions */}
         {!isLoading && contacts.length > 0 && (
           <div className="rt-modal-actions">
             <button className="rt-view-all-btn" onClick={handleViewAll}>
@@ -258,15 +279,58 @@ interface ReferralTeaserProps {
 }
 
 export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserProps) {
+  const { isSignedIn } = useAuth();
+  const sub = useSubscription();
   const [contacts, setContacts] = useState<TeaserContact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [gateModal, setGateModal] = useState<GateModal | null>(null);
 
   const placeholderAvatarUrls = useMemo(
     () => buildPlaceholderAvatarUrls(`${companyDomain}|${companyName}`),
     [companyDomain, companyName],
   );
+
+  // Local counter so the UI updates immediately after each reveal without waiting for a refetch
+  const [localLinkedinCount, setLocalLinkedinCount] = useState(0);
+
+  const linkedinUsed = sub.usage.linkedinRetrieved + localLinkedinCount;
+  const canViewLinkedin = !sub.isLoading
+    && sub.planType !== 'LITE'
+    && linkedinUsed < sub.limits.linkedinRetrieved;
+
+  function handleLinkedinLocked() {
+    if (sub.isLoading) return;
+    if (sub.planType === 'LITE') {
+      setGateModal({ type: 'lite' });
+    } else {
+      setGateModal({ type: 'limit', resetDate: sub.currentPeriodEnd });
+    }
+  }
+
+  async function handleLinkedinView(contactId: string, linkedinUrl: string) {
+    try {
+      const res = await fetch(`/api/contacts/${contactId}/linkedin-view`, { method: 'POST' });
+      if (res.status === 403) {
+        const body = await res.json().catch(() => ({})) as { error?: string; resetDate?: string };
+        if (body.error === 'UNAUTHORIZED') {
+          setGateModal({ type: 'lite' });
+        } else {
+          setGateModal({ type: 'limit', resetDate: body.resetDate ?? null });
+        }
+        return;
+      }
+      // Success — track usage locally and refresh global subscription state
+      setLocalLinkedinCount(c => c + 1);
+      window.dispatchEvent(new Event('aladdin:subscription-refresh'));
+      window.open(linkedinUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      // Non-fatal — still open the URL
+      window.open(linkedinUrl, '_blank', 'noopener,noreferrer');
+    }
+  }
 
   const fetchContacts = useCallback(async () => {
     if (!companyDomain || hasFetched) return;
@@ -288,7 +352,6 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
     }
   }, [companyDomain, hasFetched]);
 
-  // Fetch when domain is known
   useEffect(() => {
     setContacts([]);
     setHasFetched(false);
@@ -298,8 +361,8 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
   if (!companyDomain) return null;
 
   function handleClick() {
+    if (!isSignedIn) { setAuthModalOpen(true); return; }
     setIsModalOpen(true);
-    // Only fetch when the user asks to see the list
     if (!hasFetched) fetchContacts();
   }
 
@@ -310,7 +373,6 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
         onClick={handleClick}
         type="button"
       >
-        {/* Avatar stack — always photo avatars (never initials) */}
         <div className="rt-teaser-avatars">
           {placeholderAvatarUrls.map(src => (
             <div key={src} className="rt-teaser-avatar rt-teaser-avatar--photo-wrap">
@@ -327,8 +389,6 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
             </div>
           ))}
         </div>
-
-        {/* Text — direct, full-sentence CTA copy */}
         <p className="rt-teaser-text">
           <span>See who can refer you at</span>
           <strong className="rt-teaser-company">{companyName}</strong>
@@ -345,9 +405,32 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
           companyName={companyName}
           companyDomain={companyDomain}
           isLoading={isLoading}
+          canViewLinkedin={canViewLinkedin}
           onClose={() => setIsModalOpen(false)}
+          onLinkedinLocked={handleLinkedinLocked}
+          onLinkedinView={handleLinkedinView}
         />
       )}
+
+      <LiteUpgradeModal
+        open={gateModal?.type === 'lite'}
+        onClose={() => setGateModal(null)}
+      />
+      {sub.planType === 'CAPTAIN' ? (
+        <CaptainLimitModal
+          open={gateModal?.type === 'limit'}
+          onClose={() => setGateModal(null)}
+          resetDate={gateModal?.type === 'limit' ? gateModal.resetDate : null}
+        />
+      ) : (
+        <LimitReachedModal
+          open={gateModal?.type === 'limit'}
+          onClose={() => setGateModal(null)}
+          feature="linkedinRetrieved"
+          resetDate={gateModal?.type === 'limit' ? gateModal.resetDate : null}
+        />
+      )}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </>
   );
 }

@@ -87,6 +87,24 @@ export default function SignInPage() {
     const [showPassword, setShowPassword] = React.useState(false)
     const [error, setError] = React.useState('')
     const [isLoading, setIsLoading] = React.useState(false)
+    const [needsSecondFactor, setNeedsSecondFactor] = React.useState(false)
+    const [secondFactorCode, setSecondFactorCode] = React.useState('')
+    const [secondFactorStrategy, setSecondFactorStrategy] = React.useState<string | null>(null)
+    const signInAttemptRef = React.useRef<any>(null)
+
+    const explainSignInStatus = (status: unknown) => {
+        if (typeof status !== 'string' || !status) return 'Unknown sign-in status.'
+        switch (status) {
+            case 'needs_first_factor':
+                return 'Sign in requires a first factor (password, passkey, etc.).'
+            case 'needs_second_factor':
+                return 'This account requires 2-step verification to sign in.'
+            case 'needs_identifier':
+                return 'Please enter your email to continue.'
+            default:
+                return `Sign in status: ${status}`
+        }
+    }
 
     const signInWith = (strategy: 'oauth_google' | 'oauth_github') => {
         if (!isLoaded) return
@@ -102,16 +120,109 @@ export default function SignInPage() {
         if (!isLoaded) return
         setIsLoading(true)
         setError('')
+        setNeedsSecondFactor(false)
+        setSecondFactorCode('')
+        setSecondFactorStrategy(null)
         try {
-            const result = await signIn.create({ identifier: email, password })
+            // Clerk password flow: create sign-in, then attempt first factor.
+            // `signIn.create({ identifier, password })` does not reliably complete sign-in.
+            const start = await signIn.create({ identifier: email })
+
+            if (start.status === 'needs_first_factor') {
+                const supportedFirstFactorStrategies: Array<string> =
+                    Array.isArray((start as any).supportedFirstFactors)
+                        ? (start as any).supportedFirstFactors.map((f: any) => f?.strategy).filter(Boolean)
+                        : []
+
+                // If password isn't an allowed first factor, Clerk will push the user into email-code / passwordless flows.
+                // For your test users (no real inbox), it's better to fail loudly with clear instructions.
+                if (!supportedFirstFactorStrategies.includes('password')) {
+                    console.warn('Password factor not available:', { supportedFirstFactorStrategies })
+                    setError(
+                        'Password sign-in is not enabled for this Clerk instance (it is currently offering email-code/passwordless sign-in). ' +
+                        'Enable Password under Clerk Dashboard → User & authentication → Password, then try again.'
+                    )
+                    return
+                }
+            }
+
+            const result =
+                start.status === 'needs_first_factor'
+                    ? await start.attemptFirstFactor({ strategy: 'password', password })
+                    : start
+
             if (result.status === 'complete') {
                 await setActive({ session: result.createdSessionId })
                 router.replace('/')
-            } else {
-                console.log('SignIn status:', result.status)
+                return
             }
+
+            if (result.status === 'needs_second_factor') {
+                // Save the attempt so we can complete it with an OTP/TOTP/etc.
+                signInAttemptRef.current = result
+
+                const strategies: Array<string> =
+                    Array.isArray(result.supportedSecondFactors)
+                        ? result.supportedSecondFactors.map((f: any) => f?.strategy).filter(Boolean)
+                        : []
+
+                if (strategies.length === 0) {
+                    console.warn('Second factor required but no supportedSecondFactors provided.')
+                    setError(
+                        'Clerk is requiring a second factor for this user, but no second-factor method is available to complete it. ' +
+                        'Disable 2FA for this user (Clerk Dashboard → Users → user → Security) or relax your instance MFA policy.'
+                    )
+                    return
+                }
+
+                setSecondFactorStrategy(strategies[0] ?? 'totp')
+                setNeedsSecondFactor(true)
+                setError('')
+                return
+            }
+
+            // Use warn to avoid Next.js "Console Error" overlay.
+            console.warn('SignIn not complete:', {
+                startStatus: String(start.status ?? ''),
+                resultStatus: String(result.status ?? ''),
+            })
+
+            setError(explainSignInStatus(result.status))
         } catch (err: unknown) {
             setError(getClerkErrorMessage(err, 'Something went wrong'))
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    const handleSecondFactorSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!isLoaded) return
+        const attempt = signInAttemptRef.current
+        if (!attempt || !secondFactorStrategy) {
+            setError('Your sign-in session expired. Please try again.')
+            setNeedsSecondFactor(false)
+            return
+        }
+
+        setIsLoading(true)
+        setError('')
+        try {
+            const result = await attempt.attemptSecondFactor({
+                strategy: secondFactorStrategy,
+                code: secondFactorCode,
+            })
+
+            if (result.status === 'complete') {
+                await setActive({ session: result.createdSessionId })
+                router.replace('/')
+                return
+            }
+
+            console.warn('Second factor not complete:', { resultStatus: String(result.status ?? '') })
+            setError(explainSignInStatus(result.status))
+        } catch (err: unknown) {
+            setError(getClerkErrorMessage(err, 'Verification failed'))
         } finally {
             setIsLoading(false)
         }
@@ -184,63 +295,89 @@ export default function SignInPage() {
                     </div>
 
                     {/* Email / password form */}
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-4" autoComplete="on">
+                    <form
+                        onSubmit={needsSecondFactor ? handleSecondFactorSubmit : handleSubmit}
+                        className="flex flex-col gap-4"
+                        autoComplete="on"
+                    >
                         {error && (
                             <div className="rounded-xl bg-red-50 p-3 text-center text-sm text-red-500">
                                 {error}
                             </div>
                         )}
 
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-1.5">
-                                <label htmlFor="email" className="text-sm font-medium text-gray-700">Email</label>
-                                <input
-                                    id="email"
-                                    name="email"
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="Enter your email"
-                                    required
-                                    autoComplete="email"
-                                    className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50/60 px-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:bg-blue-50/40 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                                />
-                            </div>
-
-                            <div className="flex flex-col gap-1.5">
-                                <label htmlFor="password" className="text-sm font-medium text-gray-700">Password</label>
-                                <div className="relative">
+                        {!needsSecondFactor ? (
+                            <div className="flex flex-col gap-3">
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor="email" className="text-sm font-medium text-gray-700">Email</label>
                                     <input
-                                        id="password"
-                                        name="password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="Password"
+                                        id="email"
+                                        name="email"
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="Enter your email"
                                         required
-                                        autoComplete="current-password"
-                                        className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50/60 px-4 pr-10 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:bg-blue-50/40 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                                        autoComplete="email"
+                                        className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50/60 px-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:bg-blue-50/40 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword((p) => !p)}
-                                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                        className="absolute inset-y-0 right-0 flex h-full w-10 items-center justify-center text-gray-400 transition-colors hover:text-gray-600"
-                                    >
-                                        {showPassword
-                                            ? <EyeOff className="h-4 w-4" />
-                                            : <Eye className="h-4 w-4" />}
-                                    </button>
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor="password" className="text-sm font-medium text-gray-700">Password</label>
+                                    <div className="relative">
+                                        <input
+                                            id="password"
+                                            name="password"
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="Password"
+                                            required
+                                            autoComplete="current-password"
+                                            className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50/60 px-4 pr-10 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:bg-blue-50/40 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword((p) => !p)}
+                                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            className="absolute inset-y-0 right-0 flex h-full w-10 items-center justify-center text-gray-400 transition-colors hover:text-gray-600"
+                                        >
+                                            {showPassword
+                                                ? <EyeOff className="h-4 w-4" />
+                                                : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="flex flex-col gap-1.5">
+                                <label htmlFor="secondFactor" className="text-sm font-medium text-gray-700">
+                                    2-step verification code
+                                </label>
+                                <input
+                                    id="secondFactor"
+                                    name="secondFactor"
+                                    type="text"
+                                    value={secondFactorCode}
+                                    onChange={(e) => setSecondFactorCode(e.target.value)}
+                                    placeholder="Enter code"
+                                    required
+                                    autoComplete="one-time-code"
+                                    className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50/60 px-4 text-center text-lg tracking-widest text-gray-900 outline-none transition-all placeholder:text-gray-400 placeholder:tracking-normal focus:bg-blue-50/40 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                                />
+                                <p className="mt-1 text-center text-xs text-gray-400">
+                                    Strategy: {secondFactorStrategy ?? 'unknown'}
+                                </p>
+                            </div>
+                        )}
 
                         <button
                             type="submit"
                             disabled={isLoading}
                             className="mt-1 h-11 w-full rounded-[15px] bg-gray-900 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
                         >
-                            {isLoading ? 'Signing in…' : 'Sign in'}
+                            {isLoading ? 'Signing in…' : needsSecondFactor ? 'Verify' : 'Sign in'}
                         </button>
                     </form>
 

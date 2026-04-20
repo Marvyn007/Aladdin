@@ -33,10 +33,12 @@ const DEFAULT_STATE: SubscriptionState = {
   isLoading: true,
 };
 
-function fetchSubscription(): Promise<Partial<SubscriptionState>> {
-  return fetch('/api/user/subscription')
-    .then((r) => r.json())
-    .then((data) => data as Partial<SubscriptionState>);
+async function fetchSubscription(): Promise<Partial<SubscriptionState>> {
+  const r = await fetch('/api/user/subscription');
+  if (!r.ok) throw new Error(`subscription API ${r.status}`);
+  const data = await r.json() as Partial<SubscriptionState> & { error?: string };
+  if (data.error || !data.planType) throw new Error(data.error ?? 'missing planType');
+  return data;
 }
 
 export function useSubscription(): SubscriptionState {
@@ -44,17 +46,27 @@ export function useSubscription(): SubscriptionState {
 
   useEffect(() => {
     let cancelled = false;
-    setState((s) => ({ ...s, isLoading: true }));
-    fetchSubscription()
-      .then((data) => {
-        if (!cancelled) setState({ ...DEFAULT_STATE, ...data, isLoading: false });
-      })
-      .catch(() => {
-        if (!cancelled) setState((s) => ({ ...s, isLoading: false }));
-      });
-    return () => {
-      cancelled = true;
-    };
+    let retries = 0;
+
+    async function load() {
+      setState((s) => ({ ...s, isLoading: true }));
+      while (retries < 3) {
+        try {
+          const data = await fetchSubscription();
+          if (!cancelled) setState({ ...DEFAULT_STATE, ...data, isLoading: false });
+          return;
+        } catch (err) {
+          retries++;
+          if (retries < 3) {
+            await new Promise((res) => setTimeout(res, 800 * retries));
+          }
+        }
+      }
+      if (!cancelled) setState((s) => ({ ...s, isLoading: false }));
+    }
+
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {

@@ -4,6 +4,14 @@ import { createContext, useContext, useRef, useState, useCallback } from 'react'
 import type { ParsingStage } from '@/components/resume-editor/ParsingProgress';
 import type { TailoredResumeData } from '@/types';
 import { toEditorFormat } from '@/lib/resume-generation/toEditorFormat';
+import { useSubscription } from '@/hooks/useSubscription';
+import type { UsageFeature } from '@/lib/subscription/tier-config';
+
+export interface GateBlock {
+  reason: 'UNAUTHORIZED' | 'LIMIT_REACHED';
+  feature: UsageFeature;
+  resetDate: string | null;
+}
 
 export type GenerationStatus = 'idle' | 'generating' | 'complete' | 'error';
 
@@ -62,6 +70,8 @@ export interface ResumeGenerationContextValue extends ResumeGenerationState {
   openProgressModal(): void;
   dismissCompletion(): void;
   cancelGeneration(): void;
+  blockedBy: GateBlock | null;
+  clearBlockedBy(): void;
 }
 
 const ResumeGenerationContext = createContext<ResumeGenerationContextValue | null>(null);
@@ -91,8 +101,11 @@ function applyAddLog(stages: ParsingStage[], stageId: string, log: string): Pars
 }
 
 export function ResumeGenerationProvider({ children }: { children: React.ReactNode }) {
+  const sub = useSubscription();
   const abortRef = useRef<AbortController | null>(null);
   const generatingRef = useRef(false);
+  const [blockedBy, setBlockedBy] = useState<GateBlock | null>(null);
+  const clearBlockedBy = useCallback(() => setBlockedBy(null), []);
   const paramsRef = useRef<{
     jobId: string;
     jobTitle: string;
@@ -177,6 +190,14 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
   }, []);
 
   const startGeneration = useCallback(async (jobDescription: string) => {
+    if (!sub.isLoading && sub.planType === 'LITE') {
+      setBlockedBy({ reason: 'UNAUTHORIZED', feature: 'resumesGenerated', resetDate: null });
+      return;
+    }
+    if (!sub.isLoading && sub.usage.resumesGenerated >= sub.limits.resumesGenerated) {
+      setBlockedBy({ reason: 'LIMIT_REACHED', feature: 'resumesGenerated', resetDate: sub.currentPeriodEnd });
+      return;
+    }
     if (generatingRef.current) return;
     generatingRef.current = true;
 
@@ -199,7 +220,19 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
         signal: abortRef.current.signal,
       });
 
-      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 403) {
+          const body = await response.json().catch(() => ({})) as { error?: string; resetDate?: string };
+          setBlockedBy({
+            reason: body.error === 'UNAUTHORIZED' ? 'UNAUTHORIZED' : 'LIMIT_REACHED',
+            feature: 'resumesGenerated',
+            resetDate: body.resetDate ?? null,
+          });
+          generatingRef.current = false;
+          return;
+        }
+        throw new Error(`Server returned ${response.status}`);
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('Failed to read response stream');
@@ -312,7 +345,7 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
       }
       generatingRef.current = false;
     }
-  }, []);
+  }, [sub]);
 
   const value: ResumeGenerationContextValue = {
     ...state,
@@ -322,6 +355,8 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
     openProgressModal,
     dismissCompletion,
     cancelGeneration,
+    blockedBy,
+    clearBlockedBy,
   };
 
   return (
