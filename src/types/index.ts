@@ -293,6 +293,7 @@ export interface ResumeBullet {
   text: string;
   isSuggested?: boolean; // "Suggested (add if true)" for unverified skills
   visible?: boolean; // For hide/unhide functionality
+  suggestion?: string | null; // LLM hint: "adding a % here would strengthen this bullet"
 }
 
 export interface ResumeSectionItem {
@@ -305,6 +306,7 @@ export interface ResumeSectionItem {
   bullets: ResumeBullet[];
   links?: { label: string; url: string }[];
   visible?: boolean; // For hide/unhide functionality
+  jdAnchors?: string[][]; // Per-bullet JD phrase anchors (parallel to bullets array)
 }
 
 export interface ResumeSection {
@@ -345,6 +347,23 @@ export interface TailoredResumeData {
   hiddenContext?: ResumeSection[];  // Suppressed sections for UI toggling
 }
 
+/** Persisted shape: full tailored resume + one-page variant (same job). */
+export const TAILORED_RESUME_BUNDLE_VERSION = 2 as const;
+
+export interface TailoredResumeBundleV2 {
+  _v: typeof TAILORED_RESUME_BUNDLE_VERSION;
+  full: TailoredResumeData;
+  onePage: TailoredResumeData;
+}
+
+export interface HoneypotReport {
+  detected: boolean;
+  confidence: number;
+  reasons: string[];
+  flaggedTokens: string[];
+  sanitizedJd: string;
+}
+
 export interface KeywordAnalysis {
   matched: string[];
   missing: string[];
@@ -356,7 +375,10 @@ export interface KeywordAnalysis {
     weighted: number;
     matchedCount: number;
     totalCount: number;
+    skillsMatch: number;
+    formattingCheck: boolean;
   };
+  honeypot?: HoneypotReport | null;
 }
 
 export interface TailoredResumeGenerationResponse {
@@ -385,7 +407,7 @@ export interface LeakCheckResult {
 
 export const DEFAULT_RESUME_DESIGN: ResumeDesign = {
   template: 'classic',
-  fontFamily: 'Times New Roman',
+  fontFamily: "'Roboto', sans-serif",
   fontSize: 12,
   accentColor: '#1a365d',
   margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },

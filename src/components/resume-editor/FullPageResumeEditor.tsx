@@ -7,8 +7,12 @@ import type { TailoredResumeData, KeywordAnalysis } from '@/types';
 import { ContentPanel } from '@/components/resume-editor/ContentPanel';
 import { DesignPanel } from '@/components/resume-editor/DesignPanel';
 import { ResumePreview } from '@/components/resume-editor/ResumePreview';
-import { renderResumeHtml } from '@/lib/resume-templates';
-import { generatePDFFromElement } from '@/lib/client-pdf';
+import { renderResumeHtml, upgradeLegacyTimesFontInResume } from '@/lib/resume-templates';
+import { buildTailoredResumeSavePayload } from '@/lib/tailored-resume-bundle';
+import { generatePDFFromServerless } from '@/lib/client-pdf';
+import { AtsScoreWidget } from '@/components/resume-editor/AtsScoreWidget';
+import { HoneypotAlertModal } from '@/components/resume-editor/HoneypotAlertModal';
+import type { HoneypotReport } from '@/types';
 
 const GOOGLE_FONTS_MAP: Record<string, string> = {
     "'Inter', 'Segoe UI', sans-serif": 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
@@ -18,7 +22,7 @@ const GOOGLE_FONTS_MAP: Record<string, string> = {
 
 function injectFontsForPdf(html: string, fontFamily: string): string {
     const url = GOOGLE_FONTS_MAP[fontFamily];
-    if (!url) return html; // system font (Times New Roman, Georgia, Arial, Helvetica) — no injection needed
+    if (!url) return html; // system font stack (Georgia, Arial, Helvetica, etc.) — no injection needed
     const linkTag = `<link rel="stylesheet" href="${url}">`;
     return html.replace('</head>', `${linkTag}</head>`);
 }
@@ -28,8 +32,11 @@ interface FullPageResumeEditorProps {
     jobId: string;
     jobTitle: string;
     company: string | null;
-    initialResumeData: TailoredResumeData;
+    initialFull: TailoredResumeData;
+    /** When null, only the full resume exists (legacy saves). */
+    initialOnePage: TailoredResumeData | null;
     initialKeywords: KeywordAnalysis | null;
+    jobDescription?: string | null;
 }
 
 const MIN_ZOOM = 0.4;
@@ -44,11 +51,23 @@ export function FullPageResumeEditor({
     jobId,
     jobTitle,
     company,
-    initialResumeData,
-    initialKeywords
+    initialFull,
+    initialOnePage,
+    initialKeywords,
+    jobDescription,
 }: FullPageResumeEditorProps) {
-    const [resume, setResume] = useState<TailoredResumeData>(initialResumeData);       // preview (debounced)
-    const [editorResume, setEditorResume] = useState<TailoredResumeData>(initialResumeData); // inputs (immediate)
+    const seedFull = upgradeLegacyTimesFontInResume(initialFull);
+    const hasOnePage = initialOnePage != null;
+    const seedOne = hasOnePage && initialOnePage ? upgradeLegacyTimesFontInResume(initialOnePage) : null;
+
+    const [variant, setVariant] = useState<'full' | 'onePage'>('full');
+    const [editorFull, setEditorFull] = useState(seedFull);
+    const [resumeFull, setResumeFull] = useState(seedFull);
+    const [editorOnePage, setEditorOnePage] = useState<TailoredResumeData | null>(seedOne);
+    const [resumeOnePage, setResumeOnePage] = useState<TailoredResumeData | null>(seedOne);
+
+    const editorResume = variant === 'onePage' && hasOnePage && editorOnePage ? editorOnePage : editorFull;
+    const resume = variant === 'onePage' && hasOnePage && resumeOnePage ? resumeOnePage : resumeFull;
     const [keywords, setKeywords] = useState<KeywordAnalysis | null>(initialKeywords);
     const [isSaving, setIsSaving] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
@@ -79,36 +98,76 @@ export function FullPageResumeEditor({
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const zoomTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isInitializedRef = useRef(false);
+    const variantRef = useRef(variant);
+    const hasOnePageRef = useRef(hasOnePage);
+    useEffect(() => {
+        variantRef.current = variant;
+    }, [variant]);
+    useEffect(() => {
+        hasOnePageRef.current = hasOnePage;
+    }, [hasOnePage]);
 
-    // History state
-    const [history, setHistory] = useState<TailoredResumeData[]>([initialResumeData]);
-    const [historyIndex, setHistoryIndex] = useState(0);
+    // Honeypot modal state — shown once per mount if confidence >= 0.9
+    const honeypotReport = initialKeywords?.honeypot ?? null;
+    const [honeypotModalOpen, setHoneypotModalOpen] = useState<boolean>(
+        !!(honeypotReport?.detected && honeypotReport.confidence >= 0.9)
+    );
+
+    // History state (per variant when one-page exists)
+    const [historyFull, setHistoryFull] = useState<TailoredResumeData[]>([seedFull]);
+    const [historyIndexFull, setHistoryIndexFull] = useState(0);
+    const [historyOnePage, setHistoryOnePage] = useState<TailoredResumeData[]>(() => (seedOne ? [seedOne] : []));
+    const [historyIndexOnePage, setHistoryIndexOnePage] = useState(0);
     const isUndoingRedoingRef = useRef(false);
+    const historyIndexFullRef = useRef(0);
+    const historyIndexOnePageRef = useRef(0);
+    useEffect(() => {
+        historyIndexFullRef.current = historyIndexFull;
+    }, [historyIndexFull]);
+    useEffect(() => {
+        historyIndexOnePageRef.current = historyIndexOnePage;
+    }, [historyIndexOnePage]);
 
-    const canUndo = historyIndex > 0;
-    const canRedo = historyIndex < history.length - 1;
+    const onePageBranch = variant === 'onePage' && hasOnePage;
+    const activeHistory = onePageBranch ? historyOnePage : historyFull;
+    const activeHistoryIndex = onePageBranch ? historyIndexOnePage : historyIndexFull;
+
+    const canUndo = activeHistoryIndex > 0;
+    const canRedo = activeHistoryIndex < activeHistory.length - 1;
 
     const undo = useCallback(() => {
-        if (canUndo) {
-            isUndoingRedoingRef.current = true;
-            const prev = history[historyIndex - 1];
-            setHistoryIndex(historyIndex - 1);
-            setResume(prev);
-            setEditorResume(prev);
-            setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
+        if (!canUndo) return;
+        isUndoingRedoingRef.current = true;
+        if (variantRef.current === 'onePage' && hasOnePageRef.current) {
+            const prev = historyOnePage[historyIndexOnePage - 1];
+            setHistoryIndexOnePage(historyIndexOnePage - 1);
+            setResumeOnePage(prev);
+            setEditorOnePage(prev);
+        } else {
+            const prev = historyFull[historyIndexFull - 1];
+            setHistoryIndexFull(historyIndexFull - 1);
+            setResumeFull(prev);
+            setEditorFull(prev);
         }
-    }, [canUndo, history, historyIndex]);
+        setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
+    }, [canUndo, historyFull, historyIndexOnePage, historyIndexFull, historyOnePage]);
 
     const redo = useCallback(() => {
-        if (canRedo) {
-            isUndoingRedoingRef.current = true;
-            const next = history[historyIndex + 1];
-            setHistoryIndex(historyIndex + 1);
-            setResume(next);
-            setEditorResume(next);
-            setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
+        if (!canRedo) return;
+        isUndoingRedoingRef.current = true;
+        if (variantRef.current === 'onePage' && hasOnePageRef.current) {
+            const next = historyOnePage[historyIndexOnePage + 1];
+            setHistoryIndexOnePage(historyIndexOnePage + 1);
+            setResumeOnePage(next);
+            setEditorOnePage(next);
+        } else {
+            const next = historyFull[historyIndexFull + 1];
+            setHistoryIndexFull(historyIndexFull + 1);
+            setResumeFull(next);
+            setEditorFull(next);
         }
-    }, [canRedo, history, historyIndex]);
+        setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
+    }, [canRedo, historyFull, historyIndexFull, historyIndexOnePage, historyOnePage]);
 
     const calculateFitZoom = useCallback(() => {
         if (!canvasRef.current || canvasSize.width === 0) return 0.7;
@@ -324,10 +383,14 @@ export function FullPageResumeEditor({
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
     }, []);
 
-    // Debounced preview update
+    // Debounced preview update (active variant only)
     const updatePreview = useCallback((newResume: TailoredResumeData) => {
-        // Immediately update editor inputs so typing is instant
-        setEditorResume(newResume);
+        const oneBranch = variantRef.current === 'onePage' && hasOnePageRef.current;
+        if (oneBranch) {
+            setEditorOnePage(newResume);
+        } else {
+            setEditorFull(newResume);
+        }
         setIsPreviewUpdating(true);
 
         if (debounceTimerRef.current) {
@@ -335,19 +398,31 @@ export function FullPageResumeEditor({
         }
 
         debounceTimerRef.current = setTimeout(() => {
-            setResume(newResume);
+            const one = variantRef.current === 'onePage' && hasOnePageRef.current;
+            if (one) {
+                setResumeOnePage(newResume);
+            } else {
+                setResumeFull(newResume);
+            }
             setIsPreviewUpdating(false);
 
-            // Add to history
             if (!isUndoingRedoingRef.current) {
-                setHistory(prev => {
-                    const newHistory = prev.slice(0, historyIndex + 1);
-                    return [...newHistory, newResume];
-                });
-                setHistoryIndex(prev => prev + 1);
+                if (one) {
+                    setHistoryOnePage(prev => {
+                        const idx = historyIndexOnePageRef.current;
+                        return [...prev.slice(0, idx + 1), newResume];
+                    });
+                    setHistoryIndexOnePage((i) => i + 1);
+                } else {
+                    setHistoryFull(prev => {
+                        const idx = historyIndexFullRef.current;
+                        return [...prev.slice(0, idx + 1), newResume];
+                    });
+                    setHistoryIndexFull((i) => i + 1);
+                }
             }
         }, 300);
-    }, [historyIndex]);
+    }, []);
 
     // Cleanup timer on unmount
     useEffect(() => {
@@ -367,7 +442,9 @@ export function FullPageResumeEditor({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     jobId,
-                    resumeData: editorResume,
+                    resumeData: hasOnePage && editorOnePage
+                        ? buildTailoredResumeSavePayload(editorFull, editorOnePage)
+                        : editorFull,
                     keywordsData: keywords,
                 }),
             });
@@ -394,57 +471,16 @@ export function FullPageResumeEditor({
         const html = injectFontsForPdf(baseHtml, editorResume.design.fontFamily);
 
         try {
-            const response = await fetch('/api/resume-export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    html,
-                    jobTitle,
-                    contactName: editorResume.contact?.name,
-                }),
-            });
-
-            if (!response.ok) throw new Error('Server PDF generation failed');
-
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = downloadFilename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
+            await generatePDFFromServerless(
+                html, 
+                downloadFilename, 
+                jobTitle, 
+                editorResume.contact?.name,
+                editorResume.design.margins
+            );
         } catch (error) {
-            console.error('Server PDF failed, falling back to client-side:', error);
-            // Fallback: render into a hidden off-screen container and use html2canvas.
-            // Note: html2canvas cannot load external CSS URLs so font injection is intentionally skipped here.
-            try {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(baseHtml, 'text/html');
-
-                const container = document.createElement('div');
-                container.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:8.5in;background:white;';
-
-                // Copy <style> tags from the parsed document's <head>
-                doc.head.querySelectorAll('style').forEach((s) => {
-                    container.appendChild(s.cloneNode(true));
-                });
-                // Copy the resume body element
-                if (doc.body.firstElementChild) {
-                    container.appendChild(doc.body.firstElementChild.cloneNode(true));
-                }
-
-                document.body.appendChild(container);
-                try {
-                    await generatePDFFromElement(container, { filename: downloadFilename, format: 'letter' });
-                } finally {
-                    document.body.removeChild(container);
-                }
-            } catch {
-                alert('Failed to generate PDF. Please try again.');
-            }
+            console.error('Server PDF generation failed:', error);
+            alert('Failed to generate PDF. Please try again or check your network connection.');
         } finally {
             setIsDownloading(false);
         }
@@ -588,7 +624,7 @@ export function FullPageResumeEditor({
                         }}
                     >
                         {isDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 
-                        {isDownloading ? 'Generating...' : 'Export'}
+                        {isDownloading ? 'Downloading...' : 'Download'}
                     </button>
                     
                     <div style={{ width: '1px', height: '24px', background: '#e5e7eb', margin: '0 4px' }} />
@@ -908,92 +944,14 @@ export function FullPageResumeEditor({
                                 style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
                             >
                                 {/* Moved Keywords Optimization Header Inside Scroll Area */}
-                                {keywords && (keywords.missing.length > 0 || (keywords.autoAdded && keywords.autoAdded.length > 0)) && (
-                                    <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
-                                        {keywords.autoAdded && keywords.autoAdded.length > 0 && (
-                                            <div style={{ marginBottom: '8px' }}>
-                                                <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>Added Keywords</span>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-                                                    {keywords.autoAdded.map((k, i) => (
-                                                        <button
-                                                            key={`auto-${i}`}
-                                                            onClick={() => {
-                                                                let updatedSkills = { ...resume.skills } as any;
-                                                                if (resume.skills && !Array.isArray(resume.skills)) {
-                                                                    for (const cat in updatedSkills) {
-                                                                        if (updatedSkills[cat].includes(k)) {
-                                                                            updatedSkills[cat] = updatedSkills[cat].filter((skill: string) => skill !== k);
-                                                                        }
-                                                                    }
-                                                                }
-                                                                updatePreview({ ...editorResume, skills: updatedSkills, updatedAt: new Date().toISOString() });
-                                                                setKeywords(prev => ({
-                                                                    ...prev!,
-                                                                    matched: prev!.matched.filter(match => match !== k),
-                                                                    missing: [...prev!.missing, k],
-                                                                    autoAdded: prev!.autoAdded ? prev!.autoAdded.filter(add => add !== k) : []
-                                                                }));
-                                                            }}
-                                                            style={{
-                                                                padding: '2px 8px',
-                                                                background: '#ecfdf5',
-                                                                color: '#059669',
-                                                                border: '1px solid #a7f3d0',
-                                                                borderRadius: '4px',
-                                                                fontSize: '10px',
-                                                                fontWeight: 500,
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            {k}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        
-                                        {keywords.missing.length > 0 && (
-                                            <div>
-                                                <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>Missing</span>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-                                                    {keywords.missing.slice(0, 8).map((k, i) => (
-                                                        <button
-                                                            key={i}
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const currentSkillsObj = (resume.skills && !Array.isArray(resume.skills)) ? resume.skills : {};
-                                                                    const res = await fetch('/api/categorize-skills', {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ currentSkills: currentSkillsObj, newSkills: [k] })
-                                                                    });
-                                                                    const data = await res.json();
-                                                                    updatePreview({ ...editorResume, skills: data.updatedSkills || currentSkillsObj, updatedAt: new Date().toISOString() });
-                                                                    setKeywords(prev => ({
-                                                                        ...prev!,
-                                                                        matched: [...prev!.matched, k],
-                                                                        missing: prev!.missing.filter(missingKey => missingKey !== k)
-                                                                    }));
-                                                                } catch (e) { console.error('Categorize failed', e); }
-                                                            }}
-                                                            style={{
-                                                                padding: '2px 8px',
-                                                                background: '#f1f5f9',
-                                                                color: '#64748b',
-                                                                border: '1px solid #e2e8f0',
-                                                                borderRadius: '4px',
-                                                                fontSize: '10px',
-                                                                fontWeight: 500,
-                                                                cursor: 'pointer'
-                                                            }}
-                                                        >
-                                                            + {k}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                {keywords && (keywords.missing.length > 0 || (keywords.autoAdded && keywords.autoAdded.length > 0) || keywords.atsScore) && (
+                                    <AtsScoreWidget
+                                        keywords={keywords}
+                                        resume={resume}
+                                        editorResume={editorResume}
+                                        updatePreview={updatePreview}
+                                        setKeywords={setKeywords}
+                                    />
                                 )}
                                 
                                 <ContentPanel
@@ -1055,19 +1013,23 @@ export function FullPageResumeEditor({
                                 style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}
                             >
                                 <DesignPanel
-                                    design={resume.design}
+                                    design={editorResume.design}
                                     onChange={(design) => updatePreview({ ...editorResume, design, updatedAt: new Date().toISOString() })}
                                     onReset={() => updatePreview({
                                         ...editorResume,
                                         design: {
                                             template: 'classic',
-                                            fontFamily: "'Times New Roman', Georgia, serif",
+                                            fontFamily: "'Roboto', sans-serif",
                                             fontSize: 12,
                                             accentColor: '#1a365d',
                                             margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 }
                                         },
                                         updatedAt: new Date().toISOString()
                                     })}
+                                    onePageToggle={hasOnePage ? {
+                                        active: variant === 'onePage',
+                                        onChange: (next) => setVariant(next ? 'onePage' : 'full'),
+                                    } : undefined}
                                 />
                             </div>
                         </div>
@@ -1135,6 +1097,15 @@ export function FullPageResumeEditor({
                     scrollbar-color: #cbd5e1 #f1f5f9;
                 }
             `}</style>
+
+            {/* Honeypot Alert Modal */}
+            {honeypotReport && (
+                <HoneypotAlertModal
+                    open={honeypotModalOpen}
+                    report={honeypotReport as HoneypotReport}
+                    onClose={() => setHoneypotModalOpen(false)}
+                />
+            )}
         </div>
     );
 }

@@ -8,7 +8,7 @@
  *   stage    { stageId, name }           — stage started
  *   log      { stageId, log }            — optional log within a stage
  *   complete { stageId }                 — stage finished
- *   done     { status, final_resume_json, missingSkills } — pipeline complete
+ *   done     { status, final_resume_json, final_resume_json_one_page?, missingSkills } — pipeline complete
  *   error    { message }                 — any failure
  */
 
@@ -16,6 +16,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@clerk/nextjs/server";
 import { getDefaultResume, getAllLinkedInProfiles } from "@/lib/db";
 import { generateTailoredResume } from "@/lib/resume-generation/pipeline";
+import { compactTailoredResumeToOnePage } from "@/lib/resume-generation/one-page-compaction";
 import { getS3Client } from "@/lib/s3";
 import { toPlainText } from "@/lib/plain-text";
 import { checkAndIncrement } from "@/lib/subscription/check-usage";
@@ -27,16 +28,23 @@ function createSSEStream(req: Request, userId: string) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      const abortSignal = req.signal;
+
       const sendEvent = (event: string, data: any) => {
-        const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-        controller.enqueue(encoder.encode(message));
+        if (abortSignal.aborted) return;
+        try {
+          const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+          controller.enqueue(encoder.encode(message));
+        } catch {
+          /* client disconnected or stream closed */
+        }
       };
 
       try {
 
         // ── Parse request body ─────────────────────────────────────
         const body = await req.json();
-        const { jobDescription, linkedinData, linkedinProfileUrl } = body;
+        const { jobDescription, linkedinData, linkedinProfileUrl, allowedTokens } = body;
         const plainJobDescription = toPlainText(jobDescription);
 
         if (!plainJobDescription || plainJobDescription.trim().length < 20) {
@@ -46,6 +54,8 @@ function createSSEStream(req: Request, userId: string) {
           controller.close();
           return;
         }
+
+        if (abortSignal.aborted) return;
 
         // ── Stage 1: Load resume from S3 ───────────────────────────
         sendEvent("stage", {
@@ -71,11 +81,12 @@ function createSSEStream(req: Request, userId: string) {
               process.env.AWS_S3_BUCKET || process.env.S3_BUCKET_NAME || "",
             Key: resume.s3_key,
           });
-          const s3Response = await s3.send(getCmd);
+          const s3Response = await s3.send(getCmd, { abortSignal });
           if (!s3Response.Body) throw new Error("Empty body from S3.");
           const byteArray = await s3Response.Body.transformToByteArray();
           resumeBuffer = Buffer.from(byteArray);
         } catch (e: any) {
+          if (e?.name === "AbortError" || abortSignal.aborted) return;
           console.error("[generate-tailored-resume-stream] S3 resume fetch error:", e);
           sendEvent("error", {
             message: "Failed to download resume from storage.",
@@ -83,6 +94,8 @@ function createSSEStream(req: Request, userId: string) {
           controller.close();
           return;
         }
+
+        if (abortSignal.aborted) return;
 
         sendEvent("complete", { stageId: "stage1_resume-load" });
 
@@ -98,7 +111,7 @@ function createSSEStream(req: Request, userId: string) {
                 Bucket: process.env.AWS_S3_BUCKET || process.env.S3_BUCKET_NAME || "",
                 Key: latestProfile.s3_key,
               });
-              const s3Response = await s3.send(getCmd);
+              const s3Response = await s3.send(getCmd, { abortSignal });
               if (s3Response.Body) {
                 const byteArray = await s3Response.Body.transformToByteArray();
                 linkedinPdfBuffer = Buffer.from(byteArray);
@@ -107,8 +120,11 @@ function createSSEStream(req: Request, userId: string) {
             }
           }
         } catch (e: any) {
+          if (e?.name === "AbortError" || abortSignal.aborted) return;
           console.warn("[route] Non-fatal error loading LinkedIn Profile from S3:", e);
         }
+
+        if (abortSignal.aborted) return;
 
         // ── Stage 2 to 5: Run AI Pipeline ───────────────────────────
         // The pipeline will emit "stage", "log", and "complete" events natively as it executes.
@@ -118,7 +134,9 @@ function createSSEStream(req: Request, userId: string) {
             linkedinPdf: linkedinPdfBuffer,
             jobDescription: plainJobDescription,
             linkedinData,
+            allowedTokens: Array.isArray(allowedTokens) ? allowedTokens : undefined,
             onProgress: (event, data) => sendEvent(event, data),
+            abortSignal,
           });
 
           // ── Stage 7: Done ──────────────────────────────────────────
@@ -138,21 +156,51 @@ function createSSEStream(req: Request, userId: string) {
             skills: finalSkills
           };
 
+          // Hidden one-page variant (no extra SSE stages — runs before `done`)
+          let finalResumeJsonOnePage: typeof payloadResume | null = null;
+          try {
+            const onePageOut = await compactTailoredResumeToOnePage(
+              { ...result, skills: finalSkills },
+              plainJobDescription,
+              abortSignal
+            );
+            let oneSkills = onePageOut.skills || {};
+            if (Array.isArray(oneSkills)) {
+              oneSkills = { Skills: oneSkills };
+            }
+            finalResumeJsonOnePage = {
+              ...onePageOut,
+              skills: oneSkills,
+            };
+          } catch (onePageErr: any) {
+            if (onePageErr?.name === "AbortError" || abortSignal.aborted) {
+              throw onePageErr;
+            }
+            console.error("[generate-tailored-resume-stream] One-page compaction failed:", onePageErr);
+            finalResumeJsonOnePage = { ...payloadResume };
+          }
+
           sendEvent("done", {
             status: "success",
             final_resume_json: payloadResume,
+            final_resume_json_one_page: finalResumeJsonOnePage,
             missingSkills: result.missingSkills,
-            // ATS scoring from two-pass pipeline
             ats: result.ats || null,
+            honeypot: result.honeypot || null,
             pdfUrl: null,
           });
         } catch (pipelineError: any) {
+          if (pipelineError?.name === "AbortError" || abortSignal.aborted) {
+            console.log("[generate-tailored-resume-stream] Generation aborted (client cancelled).");
+            return;
+          }
           console.error("[generate-tailored-resume-stream] Pipeline error:", pipelineError);
           sendEvent("error", {
             message: pipelineError.message || "Resume generation failed.",
           });
         }
       } catch (error: any) {
+        if (error?.name === "AbortError") return;
         console.error("[generate-tailored-resume-stream] Request error:", error);
         sendEvent("error", {
           message: error.message || "Internal server error.",

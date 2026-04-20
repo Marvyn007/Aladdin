@@ -15,9 +15,14 @@ interface DesignPanelProps {
     design: ResumeDesign;
     onChange: (design: ResumeDesign) => void;
     onReset: () => void;
+    /** When set, show toggle to preview the one-page tailored variant vs full. */
+    onePageToggle?: {
+        active: boolean;
+        onChange: (active: boolean) => void;
+    };
 }
 
-export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
+export function DesignPanel({ design, onChange, onReset, onePageToggle }: DesignPanelProps) {
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
     const [isMounted, setIsMounted] = useState(false);
@@ -89,6 +94,61 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
             </div>
 
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1 }}>
+
+                {onePageToggle && (
+                    <div
+                        style={{
+                            background: '#fff',
+                            borderRadius: '8px',
+                            border: '1px solid #e6e9ee',
+                            boxShadow: '0 4px 10px rgba(11,24,40,0.04)',
+                            padding: '14px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                        }}
+                    >
+                        <div>
+                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>Make it 1 page</div>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                Preview and edit the A4 one-page version. Full resume stays separate.
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={onePageToggle.active}
+                            onClick={() => onePageToggle.onChange(!onePageToggle.active)}
+                            style={{
+                                width: '48px',
+                                height: '28px',
+                                borderRadius: '14px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                background: onePageToggle.active ? '#2563eb' : '#cbd5e1',
+                                position: 'relative',
+                                transition: 'background 0.2s ease',
+                            }}
+                            title={onePageToggle.active ? 'Show full resume' : 'Show one-page resume'}
+                        >
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    top: '3px',
+                                    left: onePageToggle.active ? '24px' : '4px',
+                                    width: '22px',
+                                    height: '22px',
+                                    borderRadius: '11px',
+                                    background: '#fff',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                                    transition: 'left 0.2s ease',
+                                }}
+                            />
+                        </button>
+                    </div>
+                )}
                 
                 {/* Visual Template Selector */}
                 <div className="form-group" style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e6e9ee', boxShadow: '0 4px 10px rgba(11,24,40,0.04)', padding: '16px' }}>
@@ -380,7 +440,7 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                                     gap: '20px'
                                 }}
                             >
-                                {TEMPLATE_META.map((template) => {
+                                {TEMPLATE_META.filter(t => t.id !== 'modern' && t.id !== 'professional').map((template) => {
                                     const isSelected = template.id === design.template;
                                     return (
                                         <div 
@@ -400,15 +460,13 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                                             }}
                                             onMouseOver={(e) => {
                                                 if (!isSelected) {
-                                                    e.currentTarget.style.transform = 'translateY(-6px)';
-                                                    e.currentTarget.style.boxShadow = '0 14px 40px rgba(12,24,40,0.18)';
+                                                    e.currentTarget.style.backgroundColor = '#f8fafc';
                                                     e.currentTarget.style.borderColor = '#cbd5e1';
                                                 }
                                             }}
                                             onMouseOut={(e) => {
                                                 if (!isSelected) {
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
+                                                    e.currentTarget.style.backgroundColor = '#fff';
                                                     e.currentTarget.style.borderColor = '#e6e9ee';
                                                 }
                                             }}
@@ -438,14 +496,8 @@ export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
                                                     {template.id === 'classic' && (
                                                         <img src="/templates/classic.jpg" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="Classic Template" />
                                                     )}
-                                                    {template.id === 'modern' && (
-                                                        <img src="/templates/modern.png" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="Modern Template" />
-                                                    )}
                                                     {template.id === 'executive' && (
                                                         <img src="/templates/executive.png" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="Executive Template" />
-                                                    )}
-                                                    {template.id === 'professional' && (
-                                                        <img src="/templates/professional.png" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="Professional Template" />
                                                     )}
                                                     {template.id === 'minimal' && (
                                                         <img src="/templates/minimal.png" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} alt="Minimal Template" />

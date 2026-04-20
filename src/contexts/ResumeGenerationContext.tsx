@@ -2,8 +2,9 @@
 
 import { createContext, useContext, useRef, useState, useCallback } from 'react';
 import type { ParsingStage } from '@/components/resume-editor/ParsingProgress';
-import type { TailoredResumeData } from '@/types';
+import type { TailoredResumeBundleV2, TailoredResumeData } from '@/types';
 import { toEditorFormat } from '@/lib/resume-generation/toEditorFormat';
+import { applyOnePageDesignFromFull, buildTailoredResumeSavePayload } from '@/lib/tailored-resume-bundle';
 import { useSubscription } from '@/hooks/useSubscription';
 import type { UsageFeature } from '@/lib/subscription/tier-config';
 
@@ -301,11 +302,34 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
                 jobTitle,
               };
 
+              const oneParsed = data.final_resume_json_one_page as typeof parsed | undefined;
+              let resumePayload: TailoredResumeData | TailoredResumeBundleV2 = resumeData;
+              if (oneParsed) {
+                const onePageResume: TailoredResumeData = {
+                  ...toEditorFormat(oneParsed, { jobId: jobId ?? undefined, jobTitle: jobTitle ?? undefined }),
+                  jobId,
+                  jobTitle,
+                  design: applyOnePageDesignFromFull(resumeData.design),
+                };
+                resumePayload = buildTailoredResumeSavePayload(resumeData, onePageResume);
+              }
+
               const missingSkills: string[] = parsed.missingSkills ?? data.missingSkills ?? [];
               const autoAddedSkills: string[] = parsed.autoAddedSkills ?? data.autoAddedSkills ?? [];
               const matchedSkills = autoAddedSkills.length > 0
                 ? skillsFlat.filter(s => !autoAddedSkills.includes(s))
                 : skillsFlat;
+
+              const atsScoreData = data.ats ? {
+                raw: data.ats.keyword_coverage ?? 0,
+                weighted: data.ats.keyword_coverage ?? 0,
+                matchedCount: data.ats.matched_keywords?.length ?? 0,
+                totalCount: (data.ats.matched_keywords?.length ?? 0) + (data.ats.missing_keywords?.length ?? 0),
+                skillsMatch: data.ats.skills_match ?? data.ats.keyword_coverage ?? 0,
+                formattingCheck: true
+              } : undefined;
+
+              const honeypotData = data.honeypot ?? null;
 
               try {
                 await fetch('/api/tailored-resume', {
@@ -313,8 +337,14 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     jobId,
-                    resumeData,
-                    keywordsData: { matched: matchedSkills, missing: missingSkills, autoAdded: autoAddedSkills },
+                    resumeData: resumePayload,
+                    keywordsData: {
+                      matched: matchedSkills,
+                      missing: missingSkills,
+                      autoAdded: autoAddedSkills,
+                      atsScore: atsScoreData,
+                      honeypot: honeypotData,
+                    },
                   }),
                 });
               } catch (saveErr) {
