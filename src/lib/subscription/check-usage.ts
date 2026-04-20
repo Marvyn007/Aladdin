@@ -1,9 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { PlanType, UsageFeature, TIER_LIMITS, UNLIMITED, SOFT_CAP } from './tier-config';
 
+export type GuardReason = 'UNAUTHORIZED' | 'LIMIT_REACHED';
+
 export type GuardResult =
   | { allowed: true }
-  | { allowed: false; reason: 'LIMIT_REACHED' | 'SOFT_CAP' };
+  | { allowed: false; reason: GuardReason; resetDate: string | null };
 
 export function isAtLimit(current: number, limit: number): boolean {
   return current >= limit;
@@ -23,11 +25,13 @@ export async function checkAndIncrement(
   ]);
 
   const plan = (sub?.planType ?? 'LITE') as PlanType;
+  const resetDate = sub?.currentPeriodEnd?.toISOString() ?? null;
   const current = usage?.[feature] ?? 0;
   const limit = TIER_LIMITS[plan][feature];
 
-  if (isAtLimit(current, limit)) return { allowed: false, reason: 'LIMIT_REACHED' };
-  if (isAtSoftCap(current, limit)) return { allowed: false, reason: 'SOFT_CAP' };
+  if (plan === 'LITE') return { allowed: false, reason: 'UNAUTHORIZED', resetDate: null };
+  if (isAtSoftCap(current, limit)) return { allowed: false, reason: 'LIMIT_REACHED', resetDate };
+  if (isAtLimit(current, limit)) return { allowed: false, reason: 'LIMIT_REACHED', resetDate };
 
   await prisma.userUsage.upsert({
     where: { userId },
