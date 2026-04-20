@@ -18,7 +18,10 @@ export async function POST(
 
   const usageGuard = await checkAndIncrement(userId, 'emailsRetrieved');
   if (!usageGuard.allowed) {
-    return NextResponse.json({ error: 'Email retrieval limit reached. Please upgrade your plan.' }, { status: 403 });
+    return NextResponse.json(
+      { error: usageGuard.reason, feature: 'emailsRetrieved', resetDate: usageGuard.resetDate },
+      { status: 403 }
+    );
   }
 
   const { id: contactId } = await params;

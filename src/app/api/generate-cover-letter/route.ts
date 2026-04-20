@@ -24,7 +24,10 @@ export async function POST(request: NextRequest) {
 
         const usageGuard = await checkAndIncrement(userId, 'coverLettersGenerated');
         if (!usageGuard.allowed) {
-            return NextResponse.json({ error: 'Cover letter generation limit reached. Please upgrade your plan.' }, { status: 403 });
+            return NextResponse.json(
+                { error: usageGuard.reason, feature: 'coverLettersGenerated', resetDate: usageGuard.resetDate },
+                { status: 403 }
+            );
         }
         const { job_id, resume_id, queue, job_description } = await request.json();
         const normalizedJobDescription = toPlainText(job_description);

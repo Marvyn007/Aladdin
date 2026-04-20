@@ -23,7 +23,7 @@ import { toPlainText } from "@/lib/plain-text";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function createSSEStream(req: Request) {
+function createSSEStream(req: Request, userId: string) {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -34,19 +34,6 @@ function createSSEStream(req: Request) {
       };
 
       try {
-        const { userId } = await auth();
-        if (!userId) {
-          sendEvent("error", { message: "Unauthorized" });
-          controller.close();
-          return;
-        }
-
-        const usageGuard = await checkAndIncrement(userId, 'coverLettersGenerated');
-        if (!usageGuard.allowed) {
-          sendEvent("error", { message: "Cover letter generation limit reached. Please upgrade your plan." });
-          controller.close();
-          return;
-        }
 
         const body = await req.json();
         const { job_id, job_description } = body;
@@ -298,8 +285,19 @@ Write a tailored cover letter using the provided data. Use the provided date, re
 }
 
 export async function POST(req: Request) {
-  const stream = createSSEStream(req);
-  
+  const { userId } = await auth();
+  if (!userId) return new Response('Unauthorized', { status: 401 });
+
+  const usageGuard = await checkAndIncrement(userId, 'coverLettersGenerated');
+  if (!usageGuard.allowed) {
+    return Response.json(
+      { error: usageGuard.reason, feature: 'coverLettersGenerated', resetDate: usageGuard.resetDate },
+      { status: 403 }
+    );
+  }
+
+  const stream = createSSEStream(req, userId);
+
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',

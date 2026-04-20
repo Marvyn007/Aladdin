@@ -14,7 +14,7 @@ export async function POST(
   const usageGuard = await checkAndIncrement(userId, 'linkedinRetrieved');
   if (!usageGuard.allowed) {
     return NextResponse.json(
-      { error: 'LinkedIn profile limit reached. Please upgrade your plan.' },
+      { error: usageGuard.reason, feature: 'linkedinRetrieved', resetDate: usageGuard.resetDate },
       { status: 403 }
     );
   }
