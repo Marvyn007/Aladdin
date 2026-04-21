@@ -25,8 +25,10 @@ export async function generateServerlessPdfBufferFromHtml(
             executablePath = await chromium.executablePath();
         }
     } else {
-        // Production Vercel/AWS environment
-        executablePath = await chromium.executablePath();
+        // Production Vercel environment: Download Chromium on the fly to bypass 50MB function limits.
+        executablePath = await chromium.executablePath(
+            "https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar"
+        );
     }
 
     const browser = await puppeteer.launch({
