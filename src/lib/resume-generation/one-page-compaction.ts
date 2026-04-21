@@ -1,4 +1,4 @@
-import type { TailoredResumeOutput, DynamicSection } from './types';
+import type { TailoredResumeOutput, DynamicSection, DynamicParsedResume } from './types';
 import { assertNotAborted, callLLM, safeJsonParse } from './utils';
 import { measureResumeHeightPx, A4_HEIGHT_PX } from './measure-height';
 import { renderResumeHtml } from '../resume-templates';
@@ -53,7 +53,7 @@ export function microTrimSections(sections: DynamicSection[], lineBudget: number
 }
 
 function renderForMeasurement(output: TailoredResumeOutput, applyOnePage: boolean): string {
-  const editorData = toEditorFormat(output);
+  const editorData = toEditorFormat(output as unknown as DynamicParsedResume);
   if (applyOnePage) {
     const design = applyOnePageDesignFromFull(editorData.design);
     return renderResumeHtml({ ...editorData, design });
