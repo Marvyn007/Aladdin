@@ -77,7 +77,7 @@ export interface DynamicParsedResume {
   basics: ResumeBasics;
   summary: string;
   sections: DynamicSection[];
-  skills: string[];
+  skills: string[] | Record<string, string[]>;
 }
 
 /** Result from parser — includes both raw text and structured data */
