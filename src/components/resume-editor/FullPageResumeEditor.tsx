@@ -57,17 +57,12 @@ export function FullPageResumeEditor({
     jobDescription,
 }: FullPageResumeEditorProps) {
     const seedFull = upgradeLegacyTimesFontInResume(initialFull);
-    const hasOnePage = initialOnePage != null;
-    const seedOne = hasOnePage && initialOnePage ? upgradeLegacyTimesFontInResume(initialOnePage) : null;
 
-    const [variant, setVariant] = useState<'full' | 'onePage'>('full');
     const [editorFull, setEditorFull] = useState(seedFull);
     const [resumeFull, setResumeFull] = useState(seedFull);
-    const [editorOnePage, setEditorOnePage] = useState<TailoredResumeData | null>(seedOne);
-    const [resumeOnePage, setResumeOnePage] = useState<TailoredResumeData | null>(seedOne);
 
-    const editorResume = variant === 'onePage' && hasOnePage && editorOnePage ? editorOnePage : editorFull;
-    const resume = variant === 'onePage' && hasOnePage && resumeOnePage ? resumeOnePage : resumeFull;
+    const editorResume = editorFull;
+    const resume = resumeFull;
     const [keywords, setKeywords] = useState<KeywordAnalysis | null>(initialKeywords);
     const [isSaving, setIsSaving] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
@@ -98,14 +93,6 @@ export function FullPageResumeEditor({
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const zoomTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isInitializedRef = useRef(false);
-    const variantRef = useRef(variant);
-    const hasOnePageRef = useRef(hasOnePage);
-    useEffect(() => {
-        variantRef.current = variant;
-    }, [variant]);
-    useEffect(() => {
-        hasOnePageRef.current = hasOnePage;
-    }, [hasOnePage]);
 
     // Honeypot modal state — shown once per mount if confidence >= 0.9
     const honeypotReport = initialKeywords?.honeypot ?? null;
@@ -113,61 +100,34 @@ export function FullPageResumeEditor({
         !!(honeypotReport?.detected && honeypotReport.confidence >= 0.9)
     );
 
-    // History state (per variant when one-page exists)
+    // History state
     const [historyFull, setHistoryFull] = useState<TailoredResumeData[]>([seedFull]);
     const [historyIndexFull, setHistoryIndexFull] = useState(0);
-    const [historyOnePage, setHistoryOnePage] = useState<TailoredResumeData[]>(() => (seedOne ? [seedOne] : []));
-    const [historyIndexOnePage, setHistoryIndexOnePage] = useState(0);
     const isUndoingRedoingRef = useRef(false);
-    const historyIndexFullRef = useRef(0);
-    const historyIndexOnePageRef = useRef(0);
-    useEffect(() => {
-        historyIndexFullRef.current = historyIndexFull;
-    }, [historyIndexFull]);
-    useEffect(() => {
-        historyIndexOnePageRef.current = historyIndexOnePage;
-    }, [historyIndexOnePage]);
 
-    const onePageBranch = variant === 'onePage' && hasOnePage;
-    const activeHistory = onePageBranch ? historyOnePage : historyFull;
-    const activeHistoryIndex = onePageBranch ? historyIndexOnePage : historyIndexFull;
-
-    const canUndo = activeHistoryIndex > 0;
-    const canRedo = activeHistoryIndex < activeHistory.length - 1;
+    const canUndo = historyIndexFull > 0;
+    const canRedo = historyIndexFull < historyFull.length - 1;
 
     const undo = useCallback(() => {
         if (!canUndo) return;
         isUndoingRedoingRef.current = true;
-        if (variantRef.current === 'onePage' && hasOnePageRef.current) {
-            const prev = historyOnePage[historyIndexOnePage - 1];
-            setHistoryIndexOnePage(historyIndexOnePage - 1);
-            setResumeOnePage(prev);
-            setEditorOnePage(prev);
-        } else {
-            const prev = historyFull[historyIndexFull - 1];
-            setHistoryIndexFull(historyIndexFull - 1);
-            setResumeFull(prev);
-            setEditorFull(prev);
-        }
+        const prev = historyFull[historyIndexFull - 1];
+        setHistoryIndexFull(historyIndexFull - 1);
+        setResumeFull(prev);
+        setEditorFull(prev);
         setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
-    }, [canUndo, historyFull, historyIndexOnePage, historyIndexFull, historyOnePage]);
+    }, [canUndo, historyFull, historyIndexFull]);
 
     const redo = useCallback(() => {
         if (!canRedo) return;
         isUndoingRedoingRef.current = true;
-        if (variantRef.current === 'onePage' && hasOnePageRef.current) {
-            const next = historyOnePage[historyIndexOnePage + 1];
-            setHistoryIndexOnePage(historyIndexOnePage + 1);
-            setResumeOnePage(next);
-            setEditorOnePage(next);
-        } else {
-            const next = historyFull[historyIndexFull + 1];
-            setHistoryIndexFull(historyIndexFull + 1);
-            setResumeFull(next);
-            setEditorFull(next);
-        }
+        const next = historyFull[historyIndexFull + 1];
+        setHistoryIndexFull(historyIndexFull + 1);
+        setResumeFull(next);
+        setEditorFull(next);
         setTimeout(() => { isUndoingRedoingRef.current = false; }, 50);
-    }, [canRedo, historyFull, historyIndexFull, historyIndexOnePage, historyOnePage]);
+    }, [canRedo, historyFull, historyIndexFull]);
+
 
     const calculateFitZoom = useCallback(() => {
         if (!canvasRef.current || canvasSize.width === 0) return 0.7;
@@ -383,14 +343,9 @@ export function FullPageResumeEditor({
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
     }, []);
 
-    // Debounced preview update (active variant only)
+    // Debounced preview update
     const updatePreview = useCallback((newResume: TailoredResumeData) => {
-        const oneBranch = variantRef.current === 'onePage' && hasOnePageRef.current;
-        if (oneBranch) {
-            setEditorOnePage(newResume);
-        } else {
-            setEditorFull(newResume);
-        }
+        setEditorFull(newResume);
         setIsPreviewUpdating(true);
 
         if (debounceTimerRef.current) {
@@ -398,31 +353,17 @@ export function FullPageResumeEditor({
         }
 
         debounceTimerRef.current = setTimeout(() => {
-            const one = variantRef.current === 'onePage' && hasOnePageRef.current;
-            if (one) {
-                setResumeOnePage(newResume);
-            } else {
-                setResumeFull(newResume);
-            }
+            setResumeFull(newResume);
             setIsPreviewUpdating(false);
 
             if (!isUndoingRedoingRef.current) {
-                if (one) {
-                    setHistoryOnePage(prev => {
-                        const idx = historyIndexOnePageRef.current;
-                        return [...prev.slice(0, idx + 1), newResume];
-                    });
-                    setHistoryIndexOnePage((i) => i + 1);
-                } else {
-                    setHistoryFull(prev => {
-                        const idx = historyIndexFullRef.current;
-                        return [...prev.slice(0, idx + 1), newResume];
-                    });
-                    setHistoryIndexFull((i) => i + 1);
-                }
+                setHistoryFull(prev => {
+                    return [...prev.slice(0, historyIndexFull + 1), newResume];
+                });
+                setHistoryIndexFull((i) => i + 1);
             }
         }, 300);
-    }, []);
+    }, [historyIndexFull]);
 
     // Cleanup timer on unmount
     useEffect(() => {
@@ -442,9 +383,7 @@ export function FullPageResumeEditor({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     jobId,
-                    resumeData: hasOnePage && editorOnePage
-                        ? buildTailoredResumeSavePayload(editorFull, editorOnePage)
-                        : editorFull,
+                    resumeData: editorFull,
                     keywordsData: keywords,
                 }),
             });
@@ -1026,10 +965,6 @@ export function FullPageResumeEditor({
                                         },
                                         updatedAt: new Date().toISOString()
                                     })}
-                                    onePageToggle={hasOnePage ? {
-                                        active: variant === 'onePage',
-                                        onChange: (next) => setVariant(next ? 'onePage' : 'full'),
-                                    } : undefined}
                                 />
                             </div>
                         </div>

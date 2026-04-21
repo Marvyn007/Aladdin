@@ -16,7 +16,6 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@clerk/nextjs/server";
 import { getDefaultResume, getAllLinkedInProfiles } from "@/lib/db";
 import { generateTailoredResume } from "@/lib/resume-generation/pipeline";
-import { compactTailoredResumeToOnePage } from "@/lib/resume-generation/one-page-compaction";
 import { getS3Client } from "@/lib/s3";
 import { toPlainText } from "@/lib/plain-text";
 import { checkUsage, incrementUsage } from "@/lib/subscription/check-usage";
@@ -157,45 +156,12 @@ function createSSEStream(req: Request, userId: string) {
             ...result,
             skills: finalSkills
           };
-
-          // Hidden one-page variant (no extra SSE stages — runs before `done`)
-          // Returns null when the full resume already fits on one page → toggle hidden
-          // Hard 90s timeout so `done` always fires even if Puppeteer hangs.
-          let finalResumeJsonOnePage: typeof payloadResume | null = null;
-          try {
-            const compactionTimeout = new Promise<null>((resolve) =>
-              setTimeout(() => resolve(null), 90_000)
-            );
-            const onePageOut = await Promise.race([
-              compactTailoredResumeToOnePage(
-                { ...result, skills: finalSkills },
-                plainJobDescription,
-                abortSignal
-              ),
-              compactionTimeout,
-            ]);
-            if (onePageOut !== null) {
-              let oneSkills = onePageOut.skills || {};
-              if (Array.isArray(oneSkills)) {
-                oneSkills = { Skills: oneSkills };
-              }
-              finalResumeJsonOnePage = {
-                ...onePageOut,
-                skills: oneSkills,
-              };
-            }
-          } catch (onePageErr: any) {
-            if (onePageErr?.name === "AbortError" || abortSignal.aborted) {
-              throw onePageErr;
-            }
-            console.error("[generate-tailored-resume-stream] One-page compaction failed:", onePageErr);
-          }
-
+          
           await incrementUsage(userId, 'resumesGenerated');
           sendEvent("done", {
             status: "success",
             final_resume_json: payloadResume,
-            final_resume_json_one_page: finalResumeJsonOnePage,
+            final_resume_json_one_page: null,
             missingSkills: result.missingSkills,
             ats: result.ats || null,
             honeypot: result.honeypot || null,

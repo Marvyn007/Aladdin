@@ -15,14 +15,9 @@ interface DesignPanelProps {
     design: ResumeDesign;
     onChange: (design: ResumeDesign) => void;
     onReset: () => void;
-    /** When set, show toggle to preview the one-page tailored variant vs full. */
-    onePageToggle?: {
-        active: boolean;
-        onChange: (active: boolean) => void;
-    };
 }
 
-export function DesignPanel({ design, onChange, onReset, onePageToggle }: DesignPanelProps) {
+export function DesignPanel({ design, onChange, onReset }: DesignPanelProps) {
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
     const [isMounted, setIsMounted] = useState(false);
@@ -65,61 +60,7 @@ export function DesignPanel({ design, onChange, onReset, onePageToggle }: Design
 
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1 }}>
 
-                {onePageToggle && (
-                    <div
-                        style={{
-                            background: '#fff',
-                            borderRadius: '8px',
-                            border: '1px solid #e6e9ee',
-                            boxShadow: '0 4px 10px rgba(11,24,40,0.04)',
-                            padding: '14px 16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '12px',
-                        }}
-                    >
-                        <div>
-                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>Make it 1 page</div>
-                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                                Preview and edit the A4 one-page version. Full resume stays separate.
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={onePageToggle.active}
-                            onClick={() => onePageToggle.onChange(!onePageToggle.active)}
-                            style={{
-                                width: '48px',
-                                height: '28px',
-                                borderRadius: '14px',
-                                border: 'none',
-                                cursor: 'pointer',
-                                flexShrink: 0,
-                                background: onePageToggle.active ? '#2563eb' : '#cbd5e1',
-                                position: 'relative',
-                                transition: 'background 0.2s ease',
-                            }}
-                            title={onePageToggle.active ? 'Show full resume' : 'Show one-page resume'}
-                        >
-                            <span
-                                style={{
-                                    position: 'absolute',
-                                    top: '3px',
-                                    left: onePageToggle.active ? '24px' : '4px',
-                                    width: '22px',
-                                    height: '22px',
-                                    borderRadius: '11px',
-                                    background: '#fff',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-                                    transition: 'left 0.2s ease',
-                                }}
-                            />
-                        </button>
-                    </div>
-                )}
-                
+
                 {/* Visual Template Selector */}
                 <div className="form-group" style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e6e9ee', boxShadow: '0 4px 10px rgba(11,24,40,0.04)', padding: '16px' }}>
                     <label style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#1e293b' }}>
