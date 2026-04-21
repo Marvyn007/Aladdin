@@ -20,8 +20,12 @@ export interface GenerateTailoredResumeParams {
   linkedinData?: string;
   /** Raw job description text (required) */
   jobDescription: string;
+  /** Tokens whitelisted by user from honeypot detection — excluded from nonsense-token heuristic */
+  allowedTokens?: string[];
   /** Optional callback to stream SSE progress updates back to the client natively */
   onProgress?: (event: string, data: any) => void;
+  /** When aborted (client disconnect / explicit cancel), pipeline and LLM fetches stop */
+  abortSignal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,6 +42,12 @@ export interface ResumeBasics {
   headline: string;
 }
 
+export interface BulletSuggestion {
+  bulletIndex: number;
+  type: 'missing_metric' | 'missing_scope' | 'weak_verb';
+  hint: string;
+}
+
 /**
  * A generalized entry within any resume section.
  * E.g., a Job, a Project, a Volunteer role, an Education degree.
@@ -49,6 +59,10 @@ export interface DynamicEntry {
   startDate: string;
   endDate: string;
   bullets: string[];
+  /** Per-bullet LLM suggestions for adding metrics/scope; parallel to bullets array */
+  bulletSuggestions?: (BulletSuggestion | null)[];
+  /** Per-bullet JD phrase anchors; parallel to bullets array */
+  jdAnchors?: string[][];
 }
 
 /**
@@ -110,6 +124,7 @@ export interface ATSKeywords {
 
 export interface ATSResult {
   keyword_coverage: number;
+  skills_match: number;
   matched_keywords: string[];
   missing_keywords: string[];
 }
@@ -117,6 +132,14 @@ export interface ATSResult {
 // ---------------------------------------------------------------------------
 // Final Output — Flattened (backward-compatible for SSE + frontend)
 // ---------------------------------------------------------------------------
+
+export interface HoneypotReport {
+  detected: boolean;
+  confidence: number;
+  reasons: string[];
+  flaggedTokens: string[];
+  sanitizedJd: string;
+}
 
 export interface TailoredResumeOutput {
   basics: ResumeBasics;
@@ -127,4 +150,6 @@ export interface TailoredResumeOutput {
   autoAddedSkills?: string[];
   /** ATS scoring data */
   ats?: ATSResult;
+  /** Honeypot detection report */
+  honeypot?: HoneypotReport;
 }

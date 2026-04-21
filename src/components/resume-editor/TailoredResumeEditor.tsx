@@ -19,6 +19,7 @@ export function TailoredResumeEditor() {
     jobId,
     startGeneration,
     sendToBackground,
+    cancelGeneration,
   } = useResumeGeneration();
 
   const [jobDescription, setJobDescription] = useState('');
@@ -145,8 +146,26 @@ export function TailoredResumeEditor() {
         {/* Footer */}
         <div style={{ padding: '16px 24px', borderTop: '1px solid #e6e9ee', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {isGenerating ? (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', width: '100%', flexWrap: 'wrap' }}>
               <button
+                type="button"
+                onClick={cancelGeneration}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#b91c1c',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Stop generation
+              </button>
+              <button
+                type="button"
                 onClick={sendToBackground}
                 style={{
                   padding: '8px 16px',

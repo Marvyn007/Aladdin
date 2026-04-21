@@ -92,6 +92,39 @@ export interface CallLLMOptions {
   /** Override the default model */
   model?: string;
   jsonMode?: boolean;
+  /** Combined with request timeout; aborts in-flight LLM call when fired */
+  abortSignal?: AbortSignal;
+}
+
+const LLM_FETCH_TIMEOUT_MS = 180_000;
+
+/**
+ * Fires when any input signal aborts (used to merge user cancel + timeout).
+ */
+export function mergeAbortSignals(...signals: AbortSignal[]): AbortSignal {
+  const controller = new AbortController();
+  for (const sig of signals) {
+    if (sig.aborted) {
+      controller.abort();
+      return controller.signal;
+    }
+    sig.addEventListener(
+      "abort",
+      () => {
+        controller.abort();
+      },
+      { once: true }
+    );
+  }
+  return controller.signal;
+}
+
+export function assertNotAborted(signal?: AbortSignal | null): void {
+  if (signal?.aborted) {
+    const err = new Error("Resume generation was cancelled.");
+    err.name = "AbortError";
+    throw err;
+  }
 }
 
 /**
@@ -117,6 +150,11 @@ export async function callLLM(
     body.response_format = { type: "json_object" };
   }
 
+  const timeoutSignal = AbortSignal.timeout(LLM_FETCH_TIMEOUT_MS);
+  const fetchSignal = options.abortSignal
+    ? mergeAbortSignals(timeoutSignal, options.abortSignal)
+    : timeoutSignal;
+
   const response = await fetch(`${LLM_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -124,8 +162,7 @@ export async function callLLM(
       Authorization: `Bearer ${LLM_API_KEY}`,
     },
     body: JSON.stringify(body),
-    // @ts-ignore — Node 18+ supports this
-    signal: AbortSignal.timeout(180_000),
+    signal: fetchSignal,
   });
 
   if (!response.ok) {

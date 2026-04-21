@@ -31,7 +31,7 @@ describe('Enhanced Tailored Resume API', () => {
                     },
                     design: {
                         template: 'classic',
-                        fontFamily: 'Times New Roman',
+                        fontFamily: "'Roboto', sans-serif",
                         fontSize: 12,
                         accentColor: '#1a365d',
                         margins: { top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 },

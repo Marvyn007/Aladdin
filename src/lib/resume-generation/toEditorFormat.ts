@@ -12,17 +12,28 @@ export function toEditorFormat(
     id: uuidv4(),
     type: sec.name.toLowerCase().replace(/[^a-z]/g, ''),
     title: sec.name,
-    items: (sec.entries ?? []).map((entry) => ({
-      id: uuidv4(),
-      title: entry.title ?? '',
-      subtitle: entry.subtitle ?? '',
-      location: entry.location ?? '',
-      dates:
-        entry.startDate && entry.endDate
-          ? `${entry.startDate} - ${entry.endDate}`
-          : entry.startDate ?? '',
-      bullets: (entry.bullets ?? []).map((b) => ({ id: uuidv4(), text: b })),
-    })),
+    items: (sec.entries ?? []).map((entry) => {
+      const bullets = (entry.bullets ?? []).map((b, i) => {
+        const suggestion = entry.bulletSuggestions?.[i];
+        return {
+          id: uuidv4(),
+          text: b,
+          suggestion: suggestion ? suggestion.hint : undefined,
+        };
+      });
+      return {
+        id: uuidv4(),
+        title: entry.title ?? '',
+        subtitle: entry.subtitle ?? '',
+        location: entry.location ?? '',
+        dates:
+          entry.startDate && entry.endDate
+            ? `${entry.startDate} - ${entry.endDate}`
+            : entry.startDate ?? '',
+        bullets,
+        jdAnchors: entry.jdAnchors,
+      };
+    }),
   }));
 
   if (!mappedSections.some((s) => s.type === 'skills')) {

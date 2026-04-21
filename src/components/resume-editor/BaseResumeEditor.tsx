@@ -12,7 +12,7 @@ import { ContentPanel } from '@/components/resume-editor/ContentPanel';
 import { DesignPanel } from '@/components/resume-editor/DesignPanel';
 import { ResumePreview } from '@/components/resume-editor/ResumePreview';
 import { renderResumeHtml } from '@/lib/resume-templates';
-import { generatePDFFromElement } from '@/lib/client-pdf';
+import { generatePDFFromServerless } from '@/lib/client-pdf';
 import { toEditorFormat } from '@/lib/resume-generation/toEditorFormat';
 import type { DynamicParsedResume } from '@/lib/resume-generation/types';
 
@@ -318,7 +318,6 @@ export function BaseResumeEditor({ s3Key, resumeFilename }: BaseResumeEditorProp
         }
     };
 
-    // ── Download PDF ──────────────────────────────────────────────────────────
     const handleDownload = async () => {
         if (!editorResume) return;
         setIsDownloading(true);
@@ -335,38 +334,16 @@ export function BaseResumeEditor({ s3Key, resumeFilename }: BaseResumeEditorProp
         const html = injectFontsForPdf(baseHtml, editorResume.design.fontFamily);
 
         try {
-            const res = await fetch('/api/resume-export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ html, contactName: editorResume.contact?.name }),
-            });
-            if (!res.ok) throw new Error('Server PDF failed');
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch {
-            try {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(baseHtml, 'text/html');
-                const container = document.createElement('div');
-                container.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:8.5in;background:white;';
-                doc.head.querySelectorAll('style').forEach((s) => container.appendChild(s.cloneNode(true)));
-                if (doc.body.firstElementChild) container.appendChild(doc.body.firstElementChild.cloneNode(true));
-                document.body.appendChild(container);
-                try {
-                    await generatePDFFromElement(container, { filename, format: 'letter' });
-                } finally {
-                    document.body.removeChild(container);
-                }
-            } catch {
-                alert('Failed to generate PDF. Please try again.');
-            }
+            await generatePDFFromServerless(
+                html, 
+                filename, 
+                undefined, // jobTitle not in base editor
+                editorResume.contact?.name,
+                editorResume.design.margins
+            );
+        } catch (error) {
+            console.error('Server PDF generation failed:', error);
+            alert('Failed to generate PDF. Please try again or check your network connection.');
         } finally {
             setIsDownloading(false);
         }
@@ -482,7 +459,7 @@ export function BaseResumeEditor({ s3Key, resumeFilename }: BaseResumeEditorProp
                         }}
                     >
                         {isDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                        {isDownloading ? 'Generating...' : 'Export'}
+                        {isDownloading ? 'Downloading...' : 'Download'}
                     </button>
 
                     <div style={{ width: 1, height: 24, background: '#e5e7eb', margin: '0 4px' }} />
@@ -639,8 +616,8 @@ export function BaseResumeEditor({ s3Key, resumeFilename }: BaseResumeEditorProp
 
                         <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.1)', margin: '0 8px' }} />
 
-                        {/* Export PDF */}
-                        <button onClick={handleDownload} style={{ background: 'transparent', border: 'none', padding: 8, color: '#fff', cursor: 'pointer', display: 'flex' }} title="Export to PDF">
+                        {/* Download PDF */}
+                        <button onClick={handleDownload} style={{ background: 'transparent', border: 'none', padding: 8, color: '#fff', cursor: 'pointer', display: 'flex' }} title="Download PDF">
                             <Download size={18} />
                         </button>
                     </div>

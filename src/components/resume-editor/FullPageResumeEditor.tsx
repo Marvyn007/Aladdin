@@ -224,9 +224,8 @@ export function FullPageResumeEditor({
         }
     }, [isFullView]);
 
-    // Poll iframe content height to keep iframeContentHeightRef updated (full resume only)
+    // Poll iframe content height to keep iframeContentHeightRef updated
     useEffect(() => {
-        if (variant === 'onePage' && hasOnePage) return;
         const interval = setInterval(() => {
             const iframe = document.querySelector('.resume-document iframe') as HTMLIFrameElement;
             if (iframe && iframe.contentWindow) {
@@ -242,15 +241,7 @@ export function FullPageResumeEditor({
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [isFullView, variant, hasOnePage]);
-
-    // One-page preview is always a fixed A4 frame (no "full bleed" scroll mode)
-    useEffect(() => {
-        if (variant === 'onePage' && hasOnePage) {
-            setIsFullView(false);
-            setPaperHeight(RESUME_HEIGHT);
-        }
-    }, [variant, hasOnePage]);
+    }, [isFullView]);
 
 
     useEffect(() => {
@@ -760,20 +751,16 @@ export function FullPageResumeEditor({
                                 borderRadius: '4px',
                                 background: '#fff',
                                 width: RESUME_WIDTH,
-                                height: variant === 'onePage' && hasOnePage ? RESUME_HEIGHT : paperHeight,
+                                height: paperHeight,
                                 minWidth: RESUME_WIDTH,
                                 overflowX: 'hidden',
-                                overflowY: variant === 'onePage' && hasOnePage ? 'hidden' : undefined,
                                 boxSizing: 'border-box',
                                 position: 'relative',
                                 transition: 'height 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
                             }}
-                            className={`resume-document${variant === 'onePage' && hasOnePage ? ' resume-document--one-page' : ''}`}
+                            className="resume-document"
                         >
-                            <ResumePreview
-                                resume={resume}
-                                fitA4SinglePage={variant === 'onePage' && hasOnePage}
-                            />
+                            <ResumePreview resume={resume} />
                         </div>
                     </div>
 
@@ -1070,12 +1057,6 @@ export function FullPageResumeEditor({
                     width: 794px;
                     max-width: 100%;
                     box-sizing: border-box;
-                }
-                .resume-document.resume-document--one-page {
-                    aspect-ratio: auto;
-                    overflow: hidden !important;
-                    overflow-y: hidden !important;
-                    max-height: 1123px;
                 }
                 .resume-document iframe {
                     display: block;

@@ -9,19 +9,13 @@ import { useEffect, useRef } from 'react';
 import type { TailoredResumeData } from '@/types';
 import { renderResumeHtml } from '@/lib/resume-templates';
 
-/** A4 at 96 CSS px/in — keep in sync with FullPageResumeEditor RESUME_* constants */
-const A4_PREVIEW_PX_W = 794;
-const A4_PREVIEW_PX_H = 1123;
-
 interface ResumePreviewProps {
     resume: TailoredResumeData;
     onDownloadPdf?: () => void;
     isDownloading?: boolean;
-    /** Scale content down so the entire resume fits in one A4 viewport; no outer scroll. */
-    fitA4SinglePage?: boolean;
 }
 
-export function ResumePreview({ resume, onDownloadPdf, isDownloading, fitA4SinglePage }: ResumePreviewProps) {
+export function ResumePreview({ resume, onDownloadPdf, isDownloading }: ResumePreviewProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
     // Update iframe content when resume changes
@@ -44,9 +38,6 @@ export function ResumePreview({ resume, onDownloadPdf, isDownloading, fitA4Singl
                         width: 0 !important;
                         height: 0 !important;
                     }
-                    #resume-scale-root {
-                        box-sizing: border-box;
-                    }
                 </style>
             `;
             const htmlWithScrollbarHide = html.replace('</head>', `${scrollbarHideCSS}</head>`);
@@ -55,63 +46,27 @@ export function ResumePreview({ resume, onDownloadPdf, isDownloading, fitA4Singl
             doc.write(htmlWithScrollbarHide);
             doc.close();
 
-            const applyFitScale = () => {
-                if (!iframeRef.current?.contentWindow) return;
-                const win = iframeRef.current.contentWindow;
-                const b = win.document.body;
-                if (!b) return;
-
-                let root = win.document.getElementById('resume-scale-root') as HTMLDivElement | null;
-                if (!root) {
-                    root = win.document.createElement('div');
-                    root.id = 'resume-scale-root';
-                    while (b.firstChild) {
-                        root.appendChild(b.firstChild);
-                    }
-                    b.appendChild(root);
-                }
-
-                const h = Math.max(root.scrollHeight, root.offsetHeight);
-                const w = Math.max(root.scrollWidth, root.offsetWidth, 1);
-                const scale = Math.min(1, (A4_PREVIEW_PX_H - 2) / h, (A4_PREVIEW_PX_W - 2) / w);
-                root.style.transformOrigin = 'top center';
-                root.style.transform = scale < 0.999 ? `scale(${scale})` : 'none';
-                root.style.width = '100%';
-
-                iframeRef.current.style.height = `${A4_PREVIEW_PX_H}px`;
-                iframeRef.current.style.maxHeight = `${A4_PREVIEW_PX_H}px`;
-                iframeRef.current.style.overflow = 'hidden';
-            };
-
             // Set height after content is written and rendered
             const updateHeight = () => {
-                if (!iframeRef.current?.contentWindow) return;
-                const body = iframeRef.current.contentWindow.document.body;
-                const htmlElement = iframeRef.current.contentWindow.document.documentElement;
-
-                if (fitA4SinglePage) {
-                    applyFitScale();
-                    return;
+                if (iframeRef.current && iframeRef.current.contentWindow) {
+                    const body = iframeRef.current.contentWindow.document.body;
+                    const htmlElement = iframeRef.current.contentWindow.document.documentElement;
+                    const height = Math.max(
+                        body.scrollHeight,
+                        body.offsetHeight,
+                        htmlElement.clientHeight,
+                        htmlElement.scrollHeight,
+                        htmlElement.offsetHeight
+                    );
+                    iframeRef.current.style.height = `${height}px`;
                 }
-
-                const height = Math.max(
-                    body.scrollHeight,
-                    body.offsetHeight,
-                    htmlElement.clientHeight,
-                    htmlElement.scrollHeight,
-                    htmlElement.offsetHeight
-                );
-                iframeRef.current.style.height = `${height}px`;
-                iframeRef.current.style.maxHeight = 'none';
-                iframeRef.current.style.overflow = 'hidden';
             };
 
             updateHeight();
             iframeRef.current.onload = updateHeight;
             setTimeout(updateHeight, 200);
-            setTimeout(updateHeight, 500);
         }
-    }, [resume, fitA4SinglePage]);
+    }, [resume]);
 
     return (
         <iframe

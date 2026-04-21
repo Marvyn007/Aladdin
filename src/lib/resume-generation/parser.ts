@@ -6,7 +6,7 @@
 import pdfParse from "pdf-parse";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { callLLM } from "./utils";
+import { assertNotAborted, callLLM } from "./utils";
 import type { DynamicParsedResume, ParseResult } from "./types";
 
 /**
@@ -54,7 +54,11 @@ const DYNAMIC_RESUME_STRUCTURE = `{
 /**
  * Uses the LLM to structure raw text into the dynamic schema.
  */
-export async function parseTextWithLLM(rawText: string): Promise<DynamicParsedResume> {
+export async function parseTextWithLLM(
+  rawText: string,
+  abortSignal?: AbortSignal
+): Promise<DynamicParsedResume> {
+  assertNotAborted(abortSignal);
   const systemPrompt = `You are a strict JSON extraction AI.
 Your ONLY job is to extract the provided resume text into the required JSON schema.
 
@@ -76,7 +80,8 @@ ${DYNAMIC_RESUME_STRUCTURE}`;
     ],
     {
       model: process.env.LLM_MODEL || "openai/gpt-4o-mini",
-      jsonMode: true
+      jsonMode: true,
+      abortSignal,
     }
   );
 
@@ -87,14 +92,19 @@ ${DYNAMIC_RESUME_STRUCTURE}`;
 /**
  * Main entry point: Buffer -> ParseResult
  */
-export async function parsePdfToDynamicResume(pdfBuffer: Buffer): Promise<ParseResult> {
+export async function parsePdfToDynamicResume(
+  pdfBuffer: Buffer,
+  abortSignal?: AbortSignal
+): Promise<ParseResult> {
+  assertNotAborted(abortSignal);
   const rawText = await extractRawText(pdfBuffer);
-  
+  assertNotAborted(abortSignal);
+
   if (!rawText || rawText.trim().length < 50) {
     throw new Error("Extracted text is too short or empty.");
   }
 
-  const structured = await parseTextWithLLM(rawText);
+  const structured = await parseTextWithLLM(rawText, abortSignal);
 
   return {
     rawText,
@@ -106,12 +116,16 @@ export async function parsePdfToDynamicResume(pdfBuffer: Buffer): Promise<ParseR
  * Alternative entry point: Raw Text -> ParseResult
  * Used for processing scraped LinkedIn data without a PDF container.
  */
-export async function parseTextToDynamicResume(rawText: string): Promise<ParseResult> {
+export async function parseTextToDynamicResume(
+  rawText: string,
+  abortSignal?: AbortSignal
+): Promise<ParseResult> {
+  assertNotAborted(abortSignal);
   if (!rawText || rawText.trim().length < 50) {
     throw new Error("Extracted text is too short or empty.");
   }
 
-  const structured = await parseTextWithLLM(rawText);
+  const structured = await parseTextWithLLM(rawText, abortSignal);
 
   return {
     rawText,

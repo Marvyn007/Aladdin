@@ -25,9 +25,19 @@ html, body {
   box-sizing: border-box;
 }
 
-.resume-classic section {
+@media print {
+  .resume-classic {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+
+.resume-classic h2 {
+  page-break-after: avoid;
+}
+
+.resume-classic .entry {
   page-break-inside: avoid;
-  page-break-after: auto;
 }
 
 .resume-classic header {
@@ -50,11 +60,11 @@ html, body {
   color: #000;
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 6px;
-  white-space: nowrap;
+  row-gap: 4px;
+  column-gap: 6px;
 }
 
 .resume-classic .contact-separator {
@@ -175,9 +185,19 @@ html, body {
   box-sizing: border-box;
 }
 
-.resume-modern section {
+@media print {
+  .resume-modern {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+
+.resume-modern h2 {
+  page-break-after: avoid;
+}
+
+.resume-modern .entry {
   page-break-inside: avoid;
-  page-break-after: auto;
 }
 
 .resume-modern header {
@@ -624,7 +644,7 @@ export const EXECUTIVE_TEMPLATE_CSS = `
 html, body { margin: 0; padding: 0; min-height: auto; }
 
 .resume-executive {
-  font-family: var(--resume-font-family, 'Georgia', 'Times New Roman', serif);
+  font-family: var(--resume-font-family, 'Roboto', 'Helvetica Neue', Arial, sans-serif);
   font-size: var(--resume-font-size, 10.5pt);
   color: #1a1a1a;
   width: 8.5in;
@@ -641,8 +661,23 @@ html, body { margin: 0; padding: 0; min-height: auto; }
   width: 100%;
 }
 
-.resume-executive .content-area {
+.resume-executive .executive-content {
   padding: var(--resume-margin-top, 0.4in) var(--resume-margin-right, 0.6in) var(--resume-margin-bottom, 0.4in) var(--resume-margin-left, 0.6in);
+}
+
+@media print {
+  .resume-executive .executive-content {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+
+.resume-executive h2 {
+  page-break-after: avoid;
+}
+
+.resume-executive .entry {
+  page-break-inside: avoid;
 }
 
 .resume-executive header {
@@ -717,7 +752,7 @@ export function renderExecutiveTemplate(data: TailoredResumeData): string {
   --resume-margin-left: ${design.margins.left}in;
 ">
   <div class="accent-bar"></div>
-  <div class="content-area">
+  <div class="executive-content">
     <header>
       <h1>${contact.name}</h1>
       <div class="contact">
@@ -761,6 +796,22 @@ html, body { margin: 0; padding: 0; min-height: auto; }
   background: #f8f6f4;
   padding: var(--resume-margin-top, 0.5in) 0.3in var(--resume-margin-bottom, 0.5in) 0.3in;
   border-left: 3px solid var(--resume-accent, #d97706);
+}
+
+@media print {
+  .resume-professional .main-col,
+  .resume-professional .sidebar {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+
+.resume-professional h2 {
+  page-break-after: avoid;
+}
+
+.resume-professional .entry {
+  page-break-inside: avoid;
 }
 
 .resume-professional header { margin-bottom: 16px; }
@@ -846,7 +897,7 @@ export function renderProfessionalTemplate(data: TailoredResumeData): string {
   <div class="main-col">
     <header>
       <h1>${contact.name}</h1>
-      ${data.summary ? `<div class="headline">${data.summary.substring(0, 120)}${data.summary.length > 120 ? '...' : ''}</div>` : ''}
+      ${data.summary ? `<div class="headline">${parseMarkdown(data.summary)}</div>` : ''}
     </header>
     ${mainHtml}
   </div>
@@ -924,11 +975,12 @@ html, body { margin: 0; padding: 0; min-height: auto; }
   text-transform: uppercase;
   letter-spacing: 2px;
   color: #111;
-  padding: 4px 0;
+  padding: 5px 0;
   border-top: 1px solid #bbb;
   border-bottom: 1px solid #bbb;
   margin-bottom: 8px;
   text-align: left;
+  line-height: 1;
 }
 
 .resume-minimal .entry { margin-bottom: 8px; }
@@ -937,8 +989,9 @@ html, body { margin: 0; padding: 0; min-height: auto; }
 .resume-minimal .entry-subtitle { color: #444; }
 .resume-minimal .entry-dates { font-size: 9.5pt; color: #666; white-space: nowrap; }
 .resume-minimal .entry-location { font-size: 9.5pt; color: #666; }
-.resume-minimal ul { margin: 3px 0 0 0; padding-left: 16px; }
-.resume-minimal li { margin-bottom: 2px; }
+.resume-minimal ul { margin: 4px 0 0 0; padding-left: 0; list-style: none; }
+.resume-minimal li { margin-bottom: 4px; position: relative; padding-left: 14px; }
+.resume-minimal li::before { content: "•"; position: absolute; left: 0; top: 0; }
 .resume-minimal .skills-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
 .resume-minimal .skills-label { font-weight: 600; }
 .resume-minimal .link { color: #333; text-decoration: underline; }
@@ -965,11 +1018,16 @@ export function renderMinimalTemplate(data: TailoredResumeData): string {
 ">
   <header>
     <h1>${contact.name}</h1>
-    ${data.summary ? `<div class="subtitle">${data.summary.substring(0, 200)}${data.summary.length > 200 ? '...' : ''}</div>` : ''}
     <div class="contact">
       ${renderContactRow(contact, ' ')}
     </div>
   </header>
+  ${data.summary ? `
+  <section>
+    <h2>Summary</h2>
+    <div style="margin-bottom: 6px;">${parseMarkdown(data.summary)}</div>
+  </section>
+  ` : ''}
   ${sectionsHtml}
 </div>
   `.trim();
@@ -983,9 +1041,9 @@ export const TEMPLATE_META = [
   {
     id: 'classic' as const,
     name: 'Classic',
-    description: 'Traditional black & white layout with serif headings and clean lines. Proven ATS-compatible format.',
+    description: 'Traditional black & white layout with clean typography and strong hierarchy. Proven ATS-compatible format.',
     tags: ['ATS Friendly', 'Professional', 'Traditional'],
-    defaultFont: "'Times New Roman', Georgia, serif",
+    defaultFont: "'Roboto', sans-serif",
     defaultAccent: '#000000',
   },
   {
@@ -1073,16 +1131,24 @@ export function renderResumeHtml(data: TailoredResumeData): string {
   `.trim();
 }
 
+/** Times New Roman was removed from the picker; map saved resumes to Roboto. */
+export function upgradeLegacyTimesFontInResume(data: TailoredResumeData): TailoredResumeData {
+  const ff = data.design?.fontFamily;
+  if (typeof ff === 'string' && /times new roman/i.test(ff)) {
+    return { ...data, design: { ...data.design, fontFamily: "'Roboto', sans-serif" } };
+  }
+  return data;
+}
+
 /**
  * Get available font families for the design panel
  */
 export const AVAILABLE_FONTS = [
-  { label: 'Times New Roman', value: "'Times New Roman', Georgia, serif" },
-  { label: 'Georgia', value: "Georgia, serif" },
-  { label: 'Arial', value: "Arial, Helvetica, sans-serif" },
-  { label: 'Helvetica', value: "Helvetica, Arial, sans-serif" },
-  { label: 'Inter', value: "'Inter', 'Segoe UI', sans-serif" },
   { label: 'Roboto', value: "'Roboto', sans-serif" },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Helvetica', value: 'Helvetica, Arial, sans-serif' },
+  { label: 'Inter', value: "'Inter', 'Segoe UI', sans-serif" },
   { label: 'Open Sans', value: "'Open Sans', sans-serif" },
 ];
 

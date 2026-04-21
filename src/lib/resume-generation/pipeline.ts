@@ -7,16 +7,18 @@ import { parsePdfToDynamicResume, parseTextToDynamicResume } from "./parser";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { computeATSScore } from "./ats";
-import { callLLM } from "./utils";
+import { assertNotAborted, callLLM } from "./utils";
 import {
   MASTER_PROFILE_SYSTEM_PROMPT,
   buildMasterProfileUserPrompt,
   FINAL_OPTIMIZATION_SYSTEM_PROMPT,
   buildFinalOptimizationUserPrompt
 } from "./prompts";
+import { scanJobDescription } from "./honeypot";
 import type {
   GenerateTailoredResumeParams,
   TailoredResumeOutput,
+  HoneypotReport,
   MasterProfile,
   ParseResult
 } from "./types";
@@ -24,7 +26,8 @@ import type {
 export async function generateTailoredResume(
   params: GenerateTailoredResumeParams
 ): Promise<TailoredResumeOutput> {
-  const { resumePdf, linkedinPdf, linkedinData, jobDescription } = params;
+  const { resumePdf, linkedinPdf, linkedinData, jobDescription, abortSignal } = params;
+  let honeypotReport: HoneypotReport | undefined;
   console.log("[pipeline] Starting Master Profile Generation Pipeline...");
   const startTime = Date.now();
 
@@ -34,6 +37,7 @@ export async function generateTailoredResume(
   // STEP 1 & 2: Parse Original PDFs (Dynamic Sections)
   // =========================================================================
   console.log("[pipeline] STEP 1: Parsing Base Resume...");
+  assertNotAborted(abortSignal);
   if (params.onProgress) {
     params.onProgress("stage", { stageId: "stage2_resume-parse", name: "Parsing resume PDF..." });
     params.onProgress("log", { stageId: "stage2_resume-parse", log: "Extracting text and structuring resume data..." });
@@ -42,7 +46,8 @@ export async function generateTailoredResume(
   const resumeBuffer = Buffer.isBuffer(resumePdf)
     ? resumePdf
     : Buffer.from(await (resumePdf as File).arrayBuffer());
-  const resumeParseResult: ParseResult = await parsePdfToDynamicResume(resumeBuffer);
+  assertNotAborted(abortSignal);
+  const resumeParseResult: ParseResult = await parsePdfToDynamicResume(resumeBuffer, abortSignal);
 
   if (params.onProgress) {
     params.onProgress("complete", { stageId: "stage2_resume-parse" });
@@ -54,6 +59,7 @@ export async function generateTailoredResume(
 
   let linkedinParseResult: ParseResult | undefined = undefined;
   if (linkedinPdf || linkedinData) {
+    assertNotAborted(abortSignal);
     console.log("[pipeline] STEP 2: Parsing LinkedIn Data...");
     if (params.onProgress) {
       params.onProgress("stage", { stageId: "stage3_linkedin-parse", name: "Parsing LinkedIn profile..." });
@@ -64,9 +70,10 @@ export async function generateTailoredResume(
       const linkedinBuffer = Buffer.isBuffer(linkedinPdf)
         ? linkedinPdf
         : Buffer.from(await (linkedinPdf as File).arrayBuffer());
-      linkedinParseResult = await parsePdfToDynamicResume(linkedinBuffer);
+      assertNotAborted(abortSignal);
+      linkedinParseResult = await parsePdfToDynamicResume(linkedinBuffer, abortSignal);
     } else if (linkedinData) {
-      linkedinParseResult = await parseTextToDynamicResume(linkedinData);
+      linkedinParseResult = await parseTextToDynamicResume(linkedinData, abortSignal);
     }
     await fs.writeFile(path.join(tempDir, "temp-linkedin.json"), JSON.stringify(linkedinParseResult?.structured, null, 2));
 
@@ -78,6 +85,7 @@ export async function generateTailoredResume(
   // =========================================================================
   // STEP 3 & 4: Build MASTER PROFILE (TEMP RESUME)
   // =========================================================================
+  assertNotAborted(abortSignal);
   console.log("[pipeline] STEP 3+4: Building Master Profile...");
   if (params.onProgress) {
     params.onProgress("stage", { stageId: "stage4_master-merge", name: "Merging and Rewriting Profiles..." });
@@ -96,7 +104,8 @@ export async function generateTailoredResume(
     ],
     {
       model,
-      jsonMode: true
+      jsonMode: true,
+      abortSignal,
     }
   );
 
@@ -106,31 +115,52 @@ export async function generateTailoredResume(
   await fs.writeFile(path.join(tempDir, "temp-merged.json"), JSON.stringify(masterProfile, null, 2));
 
   // =========================================================================
-  // STEP 5: Analyze Job Description 
+  // STEP 5: Honeypot Scan + Analyze Job Description
   // =========================================================================
-  console.log("[pipeline] STEP 5: Analyzing Job Description...");
+  assertNotAborted(abortSignal);
+  console.log("[pipeline] STEP 5: Scanning + Analyzing Job Description...");
   if (params.onProgress) {
     params.onProgress("stage", { stageId: "stage5_jd-parse", name: "Analyzing Job Description..." });
-    params.onProgress("log", { stageId: "stage5_jd-parse", log: "Extracting ATS keywords from the Job Description..." });
+    params.onProgress("log", { stageId: "stage5_jd-parse", log: "Scanning for honeypot tactics and extracting ATS keywords..." });
   }
+
+  // Run honeypot scan — use sanitized JD for all downstream processing
+  try {
+    honeypotReport = await scanJobDescription(jobDescription, {
+      allowedTokens: params.allowedTokens,
+      abortSignal,
+    });
+    console.log(`[pipeline] Honeypot scan complete. Confidence: ${honeypotReport.confidence}, Detected: ${honeypotReport.detected}`);
+    if (params.onProgress) {
+      params.onProgress("honeypot", honeypotReport);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") throw e;
+    console.warn("[pipeline] Honeypot scan failed (non-fatal):", e);
+    honeypotReport = { detected: false, confidence: 0, reasons: [], flaggedTokens: [], sanitizedJd: jobDescription };
+  }
+
+  // Use sanitized JD for all downstream LLM calls
+  const safeJobDescription = honeypotReport.sanitizedJd || jobDescription;
 
   // Combine all raw text for ATS analysis
   const combinedRawText = (resumeParseResult.rawText + " " + (linkedinParseResult?.rawText || "")).toLowerCase();
-  
+
   let allMasterSkillsFlat: string[] = [];
   if (Array.isArray(masterProfile.skills)) {
     allMasterSkillsFlat = masterProfile.skills;
   } else if (masterProfile.skills && typeof masterProfile.skills === 'object') {
     allMasterSkillsFlat = Object.values(masterProfile.skills).flat();
   }
-  
+
   const atsContext = {
     skills: allMasterSkillsFlat,
-    experience: [], // Not strictly needed for ATS missing skills, rely on raw text
-    bulletText: combinedRawText 
+    experience: [],
+    bulletText: combinedRawText
   };
-  
-  const atsResult = await computeATSScore(atsContext, jobDescription);
+
+  assertNotAborted(abortSignal);
+  const atsResult = await computeATSScore(atsContext, safeJobDescription, abortSignal);
   console.log(`[pipeline] ATS analysis complete. Missing skills: ${atsResult.missing_keywords.length}`);
 
   if (params.onProgress) {
@@ -140,6 +170,7 @@ export async function generateTailoredResume(
   // =========================================================================
   // STEP 6, 7, 8, 9: Resume Optimization (Full Rewrite)
   // =========================================================================
+  assertNotAborted(abortSignal);
   console.log("[pipeline] STEP 6-9: Optimizing and Rewriting Bullets (ACTION + WHAT + HOW + RESULT)...");
   if (params.onProgress) {
     params.onProgress("stage", { stageId: "stage6_tailor", name: "Generating Tailored Resume..." });
@@ -148,7 +179,7 @@ export async function generateTailoredResume(
   
   const optimizationPrompt = buildFinalOptimizationUserPrompt(
     masterProfile,
-    jobDescription,
+    safeJobDescription,
     {
       required_skills: atsResult.missing_keywords,
       matched_skills: atsResult.matched_keywords
@@ -162,7 +193,8 @@ export async function generateTailoredResume(
     ],
     {
       model,
-      jsonMode: true
+      jsonMode: true,
+      abortSignal,
     }
   );
 
@@ -182,6 +214,7 @@ export async function generateTailoredResume(
   // =========================================================================
   // STEP 10: Output JSON Format & Auto-categorize Skills
   // =========================================================================
+  assertNotAborted(abortSignal);
   console.log("[pipeline] STEP 10: Packaging Final Output...");
   
   // Re-calculate missing skills post-optimization
@@ -199,6 +232,7 @@ export async function generateTailoredResume(
   let mergedSkills = optimizedResume.skills;
 
   if (missingSkillsFinal.length > 0) {
+      assertNotAborted(abortSignal);
       console.log(`[pipeline] Auto-adding ${missingSkillsFinal.length} missing skills to optimize ATS score...`);
       if (params.onProgress) {
         params.onProgress("stage", { stageId: "stage7_skills", name: "Optimizing ATS Skills..." });
@@ -228,12 +262,13 @@ Please return the newly merged JSON object.
                   { role: "system", content: catSystemPrompt },
                   { role: "user", content: catUserPrompt }
               ],
-              { model, jsonMode: true }
+              { model, jsonMode: true, abortSignal }
           );
           const cleanJson = catResponse.replace(/```(?:json)?\s*([\s\S]*?)```/, '$1').trim();
           mergedSkills = JSON.parse(cleanJson);
           autoAddedSkills = [...missingSkillsFinal];
       } catch (e) {
+          if (e instanceof Error && e.name === "AbortError") throw e;
           console.error("[pipeline] Failed to auto-categorize missing skills", e);
           // Fallback
           let targetCategory = "Additional Skills";
@@ -257,12 +292,10 @@ Please return the newly merged JSON object.
   const finalOutput: TailoredResumeOutput = {
     ...optimizedResume,
     skills: mergedSkills,
-    missingSkills: [], // All missing skills have been explicitly auto-added
+    missingSkills: [],
     autoAddedSkills: autoAddedSkills,
-    ats: {
-        ...atsResult,
-        missing_keywords: []
-    }
+    ats: atsResult,
+    honeypot: honeypotReport,
   };
 
   const duration = Date.now() - startTime;

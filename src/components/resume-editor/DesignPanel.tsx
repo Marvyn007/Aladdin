@@ -62,36 +62,6 @@ export function DesignPanel({ design, onChange, onReset, onePageToggle }: Design
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <div style={{ padding: '20px', borderBottom: '1px solid #e6e9ee', background: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                        <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
-                                <Palette size={18} />
-                            </div>
-                            Design Settings
-                        </h2>
-                        <p style={{ marginTop: '6px', fontSize: '12px', fontWeight: 500, color: '#64748b' }}>
-                            Personalize your resume's aesthetic.
-                        </p>
-                    </div>
-                    {/* Applied Template Indicator */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        padding: '5px 10px',
-                        background: '#eff6ff',
-                        borderRadius: '16px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        color: '#3b82f6'
-                    }}>
-                        <Check size={11} />
-                        <span>{currentTemplateMeta.name}</span>
-                    </div>
-                </div>
-            </div>
 
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px', flex: 1 }}>
 

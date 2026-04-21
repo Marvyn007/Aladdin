@@ -5,8 +5,8 @@
 
 'use client';
 
-import { useState } from 'react';
-import { GripVertical } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { GripVertical, Lightbulb } from 'lucide-react';
 import {
     DndContext,
     closestCenter,
@@ -1296,9 +1296,12 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                 {(item.bullets || []).map((bullet) => (
                                                     <div
                                                         key={bullet.id}
-                                                        style={{ 
-                                                            display: 'flex', 
-                                                            gap: '8px', 
+                                                        style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
+                                                    >
+                                                    <div
+                                                        style={{
+                                                            display: 'flex',
+                                                            gap: '8px',
                                                             padding: '6px 8px',
                                                             borderRadius: '6px',
                                                             background: bullet.isSuggested ? '#fffbeb' : (bullet.visible === false ? '#fef3c7' : '#f9fafb'),
@@ -1354,12 +1357,12 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                                 onClick={() => removeBullet(section.id, item.id, bullet.id)}
                                                                 style={{
                                                                     padding: '2px',
-                                                                    color: '#ef4444', // Always red
+                                                                    color: '#ef4444',
                                                                     background: 'transparent',
                                                                     border: 'none',
                                                                     borderRadius: '2px',
                                                                     cursor: 'pointer',
-                                                                    opacity: 1, // Always visible
+                                                                    opacity: 1,
                                                                     transition: 'all 0.15s ease',
                                                                     flexShrink: 0
                                                                 }}
@@ -1367,6 +1370,25 @@ export function ContentPanel({ resume, onChange }: ContentPanelProps) {
                                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                                             </button>
                                                         </div>
+                                                    </div>
+                                                    {/* Metric / scope suggestion hint */}
+                                                    {bullet.suggestion && (
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            alignItems: 'flex-start',
+                                                            gap: '5px',
+                                                            padding: '4px 8px',
+                                                            background: '#fefce8',
+                                                            border: '1px solid #fde68a',
+                                                            borderRadius: '5px',
+                                                            fontSize: '11px',
+                                                            color: '#92400e',
+                                                            lineHeight: 1.4,
+                                                        }}>
+                                                            <Lightbulb size={11} style={{ color: '#f59e0b', flexShrink: 0, marginTop: '1px' }} />
+                                                            <span>{bullet.suggestion}</span>
+                                                        </div>
+                                                    )}
                                                     </div>
                                                 ))}
                                                 <button

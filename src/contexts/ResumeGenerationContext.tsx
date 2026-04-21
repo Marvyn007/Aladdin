@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useRef, useState, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import type { ParsingStage } from '@/components/resume-editor/ParsingProgress';
 import type { TailoredResumeBundleV2, TailoredResumeData } from '@/types';
 import { toEditorFormat } from '@/lib/resume-generation/toEditorFormat';
@@ -267,9 +268,11 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
             const eventType = currentEvent;
 
             if (eventType === 'stage') {
-              setState(prev => {
-                const { stages, currentStageIndex } = applyUpdateStage(prev.progress.stages, data.stageId);
-                return { ...prev, progress: { ...prev.progress, stages, currentStageIndex } };
+              flushSync(() => {
+                setState(prev => {
+                  const { stages, currentStageIndex } = applyUpdateStage(prev.progress.stages, data.stageId);
+                  return { ...prev, progress: { ...prev.progress, stages, currentStageIndex } };
+                });
               });
             } else if (eventType === 'log') {
               setState(prev => ({
@@ -277,10 +280,12 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
                 progress: { ...prev.progress, stages: applyAddLog(prev.progress.stages, data.stageId, data.log) },
               }));
             } else if (eventType === 'complete') {
-              setState(prev => ({
-                ...prev,
-                progress: { ...prev.progress, stages: applyCompleteStage(prev.progress.stages, data.stageId) },
-              }));
+              flushSync(() => {
+                setState(prev => ({
+                  ...prev,
+                  progress: { ...prev.progress, stages: applyCompleteStage(prev.progress.stages, data.stageId) },
+                }));
+              });
             } else if (eventType === 'done') {
               const parsed = data.final_resume_json;
               if (!parsed) {
