@@ -149,7 +149,7 @@ CRITICAL NON-NEGOTIABLE RULES:
 
 5. **KEYWORD HIGHLIGHTING:** Use markdown bolding (**keyword**) ONLY for technologies, important achievements, metrics, and exact JD-matched keywords. Do NOT bold common words or overuse bold formatting.
 
-6. **SKILLS SCHEMA:** ALL skills MUST be categorized into the root \`skills\` JSON dictionary using smart categories (e.g. Languages, Frameworks, Cloud & DevOps, Databases, Tools). DO NOT include a "Skills" section in the \`sections\` array — skills exclusively belong in the root \`skills\` map.
+6. **SKILLS CATEGORIZATION:** ALL skills (including both original skills and those matched/missing from the JD) MUST be smartly categorized into the root \`skills\` JSON dictionary (e.g. Languages, Frameworks, Cloud & DevOps, Databases, Tools). Return a Record<string, string[]>. Ensure NO skill is lost and the categorization is logical and professional. DO NOT include a "Skills" section in the \`sections\` array.
 
 7. **METRIC SUGGESTIONS (bulletSuggestions field):** For each entry, output a \`bulletSuggestions\` array parallel to \`bullets\`. If a bullet is structurally strong but would be significantly improved by a specific metric or scope signal (team size, user count, % improvement, $ value), emit a suggestion object: \`{ "bulletIndex": N, "type": "missing_metric" | "missing_scope" | "weak_verb", "hint": "one sentence hint" }\`. If a bullet needs no suggestion, emit \`null\` for that position. NEVER fabricate the metric itself — only flag the opportunity. Omit the field entirely for an entry if ALL bullets are null.
 

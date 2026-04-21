@@ -19,8 +19,10 @@ import { generateTailoredResume } from "@/lib/resume-generation/pipeline";
 import { getS3Client } from "@/lib/s3";
 import { toPlainText } from "@/lib/plain-text";
 import { checkUsage, incrementUsage } from "@/lib/subscription/check-usage";
+import { prisma } from "@/lib/prisma";
+import { toEditorFormat } from "@/lib/resume-generation/toEditorFormat";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -158,6 +160,41 @@ function createSSEStream(req: Request, userId: string) {
           };
           
           await incrementUsage(userId, 'resumesGenerated');
+
+          // ── Stage 8: Auto-save to Database ──────────────────────────
+          let savedResumeId: string | null = null;
+          try {
+            const editorData = toEditorFormat(payloadResume, { 
+              jobId: body.jobId, 
+              jobTitle: body.jobTitle 
+            });
+            
+            const saved = await prisma.tailoredResume.create({
+              data: {
+                userId,
+                jobId: body.jobId || "manual",
+                resumeData: editorData as any,
+                keywordsData: {
+                  matched: (payloadResume as any).ats?.matched_keywords ?? [],
+                  missing: (payloadResume as any).missingSkills ?? [],
+                  autoAdded: (payloadResume as any).autoAddedSkills ?? [],
+                  atsScore: (payloadResume as any).ats ? {
+                    raw: (payloadResume as any).ats.keyword_coverage ?? 0,
+                    weighted: (payloadResume as any).ats.keyword_coverage ?? 0,
+                    matchedCount: (payloadResume as any).ats.matched_keywords?.length ?? 0,
+                    totalCount: ((payloadResume as any).ats.matched_keywords?.length ?? 0) + ((payloadResume as any).ats.missing_keywords?.length ?? 0),
+                    skillsMatch: (payloadResume as any).ats.skills_match ?? (payloadResume as any).ats.keyword_coverage ?? 0,
+                    formattingCheck: true
+                  } : undefined,
+                  honeypot: (payloadResume as any).honeypot || null,
+                } as any,
+              }
+            });
+            savedResumeId = saved.id;
+          } catch (saveError) {
+            console.error("[generate-tailored-resume-stream] Backend auto-save failed:", saveError);
+          }
+
           sendEvent("done", {
             status: "success",
             final_resume_json: payloadResume,
@@ -166,6 +203,7 @@ function createSSEStream(req: Request, userId: string) {
             ats: result.ats || null,
             honeypot: result.honeypot || null,
             pdfUrl: null,
+            savedResumeId,
           });
         } catch (pipelineError: any) {
           if (pipelineError?.name === "AbortError" || abortSignal.aborted) {

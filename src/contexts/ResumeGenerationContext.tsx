@@ -336,26 +336,6 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
 
               const honeypotData = data.honeypot ?? null;
 
-              try {
-                await fetch('/api/tailored-resume', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    jobId,
-                    resumeData: resumePayload,
-                    keywordsData: {
-                      matched: matchedSkills,
-                      missing: missingSkills,
-                      autoAdded: autoAddedSkills,
-                      atsScore: atsScoreData,
-                      honeypot: honeypotData,
-                    },
-                  }),
-                });
-              } catch (saveErr) {
-                console.error('[ResumeGenerationContext] Auto-save failed:', saveErr);
-              }
-
               setState(prev => ({
                 ...prev,
                 status: 'complete',

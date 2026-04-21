@@ -28,157 +28,97 @@ export async function generateTailoredResume(
 ): Promise<TailoredResumeOutput> {
   const { resumePdf, linkedinPdf, linkedinData, jobDescription, abortSignal } = params;
   let honeypotReport: HoneypotReport | undefined;
-  console.log("[pipeline] Starting Master Profile Generation Pipeline...");
+  console.log("[pipeline] Starting Optimized Master Profile Generation Pipeline...");
   const startTime = Date.now();
 
   const model = process.env.LLM_MODEL || "openai/gpt-4o-mini";
 
   // =========================================================================
-  // STEP 1 & 2: Parse Original PDFs (Dynamic Sections)
+  // BATCH 1: Parallel Parsers + Honeypot Scan
   // =========================================================================
-  console.log("[pipeline] STEP 1: Parsing Base Resume...");
-  assertNotAborted(abortSignal);
+  console.log("[pipeline] BATCH 1: Parallel Parsing + JD Scan...");
   if (params.onProgress) {
-    params.onProgress("stage", { stageId: "stage2_resume-parse", name: "Parsing resume PDF..." });
-    params.onProgress("log", { stageId: "stage2_resume-parse", log: "Extracting text and structuring resume data..." });
+    params.onProgress("stage", { stageId: "stage2_resume-parse", name: "Parsing inputs and JD..." });
   }
 
-  const resumeBuffer = Buffer.isBuffer(resumePdf)
-    ? resumePdf
-    : Buffer.from(await (resumePdf as File).arrayBuffer());
-  assertNotAborted(abortSignal);
-  const resumeParseResult: ParseResult = await parsePdfToDynamicResume(resumeBuffer, abortSignal);
+  const resumeBufferPromise = Buffer.isBuffer(resumePdf)
+    ? Promise.resolve(resumePdf)
+    : (resumePdf as File).arrayBuffer().then(ab => Buffer.from(ab));
 
-  if (params.onProgress) {
-    params.onProgress("complete", { stageId: "stage2_resume-parse" });
-  }
+  const [resumeBuffer, honeypotPromise] = await Promise.all([
+    resumeBufferPromise,
+    scanJobDescription(jobDescription, { allowedTokens: params.allowedTokens, abortSignal })
+      .catch(e => {
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        console.warn("[pipeline] Honeypot scan failed (non-fatal):", e);
+        return { detected: false, confidence: 0, reasons: [], flaggedTokens: [], sanitizedJd: jobDescription };
+    })
+  ]);
 
-  const tempDir = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
-    ? "/tmp"
-    : path.join(process.cwd(), "temp");
-  try {
-    await fs.mkdir(tempDir, { recursive: true });
-    await fs.writeFile(path.join(tempDir, "temp-resume.json"), JSON.stringify(resumeParseResult.structured, null, 2));
-  } catch { /* debug writes are best-effort */ }
+  const [resumeParseResult, linkedinParseResult] = await Promise.all([
+    parsePdfToDynamicResume(resumeBuffer, abortSignal),
+    (async () => {
+      if (!linkedinPdf && !linkedinData) return undefined;
+      if (linkedinPdf) {
+        const linkedinBuffer = Buffer.isBuffer(linkedinPdf)
+          ? linkedinPdf
+          : Buffer.from(await (linkedinPdf as File).arrayBuffer());
+        return parsePdfToDynamicResume(linkedinBuffer, abortSignal);
+      }
+      return parseTextToDynamicResume(linkedinData as string, abortSignal);
+    })()
+  ]);
 
-  let linkedinParseResult: ParseResult | undefined = undefined;
-  if (linkedinPdf || linkedinData) {
-    assertNotAborted(abortSignal);
-    console.log("[pipeline] STEP 2: Parsing LinkedIn Data...");
-    if (params.onProgress) {
-      params.onProgress("stage", { stageId: "stage3_linkedin-parse", name: "Parsing LinkedIn profile..." });
-      params.onProgress("log", { stageId: "stage3_linkedin-parse", log: "Extracting and structuring LinkedIn profile data..." });
-    }
-
-    if (linkedinPdf) {
-      const linkedinBuffer = Buffer.isBuffer(linkedinPdf)
-        ? linkedinPdf
-        : Buffer.from(await (linkedinPdf as File).arrayBuffer());
-      assertNotAborted(abortSignal);
-      linkedinParseResult = await parsePdfToDynamicResume(linkedinBuffer, abortSignal);
-    } else if (linkedinData) {
-      linkedinParseResult = await parseTextToDynamicResume(linkedinData, abortSignal);
-    }
-    try { await fs.writeFile(path.join(tempDir, "temp-linkedin.json"), JSON.stringify(linkedinParseResult?.structured, null, 2)); } catch { /* debug writes are best-effort */ }
-
-    if (params.onProgress) {
-      params.onProgress("complete", { stageId: "stage3_linkedin-parse" });
-    }
-  }
-
-  // =========================================================================
-  // STEP 3 & 4: Build MASTER PROFILE (TEMP RESUME)
-  // =========================================================================
-  assertNotAborted(abortSignal);
-  console.log("[pipeline] STEP 3+4: Building Master Profile...");
-  if (params.onProgress) {
-    params.onProgress("stage", { stageId: "stage4_master-merge", name: "Merging and Rewriting Profiles..." });
-    params.onProgress("log", { stageId: "stage4_master-merge", log: "Merging Base + LinkedIn into Master Profile..." });
-  }
-
-  const masterProfilePrompt = buildMasterProfileUserPrompt(
-    resumeParseResult.structured,
-    linkedinParseResult?.structured
-  );
-
-  const masterProfileResponse = await callLLM(
-    [
-      { role: "system", content: MASTER_PROFILE_SYSTEM_PROMPT },
-      { role: "user", content: masterProfilePrompt }
-    ],
-    {
-      model,
-      jsonMode: true,
-      abortSignal,
-    }
-  );
-
-  const masterProfile = JSON.parse(masterProfileResponse) as MasterProfile;
-  const originalBulletCount = countBulletsInMasterProfile(masterProfile);
-  console.log(`[pipeline] Master Profile created with ${originalBulletCount} total bullets.`);
-  try { await fs.writeFile(path.join(tempDir, "temp-merged.json"), JSON.stringify(masterProfile, null, 2)); } catch { /* debug writes are best-effort */ }
-
-  // =========================================================================
-  // STEP 5: Honeypot Scan + Analyze Job Description
-  // =========================================================================
-  assertNotAborted(abortSignal);
-  console.log("[pipeline] STEP 5: Scanning + Analyzing Job Description...");
-  if (params.onProgress) {
-    params.onProgress("stage", { stageId: "stage5_jd-parse", name: "Analyzing Job Description..." });
-    params.onProgress("log", { stageId: "stage5_jd-parse", log: "Scanning for honeypot tactics and extracting ATS keywords..." });
-  }
-
-  // Run honeypot scan — use sanitized JD for all downstream processing
-  try {
-    honeypotReport = await scanJobDescription(jobDescription, {
-      allowedTokens: params.allowedTokens,
-      abortSignal,
-    });
-    console.log(`[pipeline] Honeypot scan complete. Confidence: ${honeypotReport.confidence}, Detected: ${honeypotReport.detected}`);
-    if (params.onProgress) {
-      params.onProgress("honeypot", honeypotReport);
-    }
-  } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") throw e;
-    console.warn("[pipeline] Honeypot scan failed (non-fatal):", e);
-    honeypotReport = { detected: false, confidence: 0, reasons: [], flaggedTokens: [], sanitizedJd: jobDescription };
-  }
-
-  // Use sanitized JD for all downstream LLM calls
+  honeypotReport = await honeypotPromise;
   const safeJobDescription = honeypotReport.sanitizedJd || jobDescription;
 
-  // Combine all raw text for ATS analysis
-  const combinedRawText = (resumeParseResult.rawText + " " + (linkedinParseResult?.rawText || "")).toLowerCase();
-
-  let allMasterSkillsFlat: string[] = [];
-  if (Array.isArray(masterProfile.skills)) {
-    allMasterSkillsFlat = masterProfile.skills;
-  } else if (masterProfile.skills && typeof masterProfile.skills === 'object') {
-    allMasterSkillsFlat = Object.values(masterProfile.skills).flat();
+  if (params.onProgress) {
+    params.onProgress("honeypot", honeypotReport);
+    params.onProgress("complete", { stageId: "stage2_resume-parse" });
+    params.onProgress("complete", { stageId: "stage3_linkedin-parse" });
   }
 
-  const atsContext = {
-    skills: allMasterSkillsFlat,
-    experience: [],
-    bulletText: combinedRawText
-  };
-
+  // =========================================================================
+  // BATCH 2: Parallel Master Merge + ATS Score
+  // =========================================================================
   assertNotAborted(abortSignal);
-  const atsResult = await computeATSScore(atsContext, safeJobDescription, abortSignal);
-  console.log(`[pipeline] ATS analysis complete. Missing skills: ${atsResult.missing_keywords.length}`);
-
+  console.log("[pipeline] BATCH 2: Master Merge + ATS Scoring...");
   if (params.onProgress) {
+    params.onProgress("stage", { stageId: "stage4_master-merge", name: "Synthesizing Profiles..." });
+  }
+
+  // ATS context needs parsed resume raw text
+  const combinedRawText = (resumeParseResult.rawText + " " + (linkedinParseResult?.rawText || "")).toLowerCase();
+  
+  const [masterProfileResponse, atsResult] = await Promise.all([
+    callLLM(
+      [
+        { role: "system", content: MASTER_PROFILE_SYSTEM_PROMPT },
+        { role: "user", content: buildMasterProfileUserPrompt(resumeParseResult.structured, linkedinParseResult?.structured) }
+      ],
+      { model, jsonMode: true, abortSignal }
+    ),
+    computeATSScore({
+      skills: [], // We'll compute flat skills from raw text in computeATSScore logic
+      experience: [],
+      bulletText: combinedRawText
+    }, safeJobDescription, abortSignal)
+  ]);
+
+  const masterProfile = JSON.parse(masterProfileResponse) as MasterProfile;
+  
+  if (params.onProgress) {
+    params.onProgress("complete", { stageId: "stage4_master-merge" });
     params.onProgress("complete", { stageId: "stage5_jd-parse" });
   }
 
   // =========================================================================
-  // STEP 6, 7, 8, 9: Resume Optimization (Full Rewrite)
+  // FINAL PASS: Optimized Rewrite (Includes Action categorization)
   // =========================================================================
   assertNotAborted(abortSignal);
-  console.log("[pipeline] STEP 6-9: Optimizing and Rewriting Bullets (ACTION + WHAT + HOW + RESULT)...");
+  console.log("[pipeline] FINAL PASS: Optimizing and Rewriting Bullets...");
   if (params.onProgress) {
-    params.onProgress("stage", { stageId: "stage6_tailor", name: "Generating Tailored Resume..." });
-    params.onProgress("log", { stageId: "stage6_tailor", log: "Running ATS Optimization Pass..." });
+    params.onProgress("stage", { stageId: "stage6_tailor", name: "Final Tailoring..." });
   }
   
   const optimizationPrompt = buildFinalOptimizationUserPrompt(
@@ -195,33 +135,12 @@ export async function generateTailoredResume(
       { role: "system", content: FINAL_OPTIMIZATION_SYSTEM_PROMPT },
       { role: "user", content: optimizationPrompt }
     ],
-    {
-      model,
-      jsonMode: true,
-      abortSignal,
-    }
+    { model, jsonMode: true, abortSignal }
   );
 
   const optimizedResume = JSON.parse(finalResponse) as Omit<TailoredResumeOutput, "missingSkills" | "ats">;
 
-  // Validate no massive drop
-  const finalBulletCount = countBulletsInOptimizedResume(optimizedResume);
-  console.log(`[pipeline] Final Optimized Resume created with ${finalBulletCount} total bullets.`);
-  if (finalBulletCount < originalBulletCount) {
-    console.warn(`[pipeline] WARNING: The optimized resume has ${originalBulletCount - finalBulletCount} fewer bullets than the master profile. The LLM was instructed not to drop data.`);
-  }
-
-  if (params.onProgress) {
-    params.onProgress("complete", { stageId: "stage6_tailor" });
-  }
-
-  // =========================================================================
-  // STEP 10: Output JSON Format & Auto-categorize Skills
-  // =========================================================================
-  assertNotAborted(abortSignal);
-  console.log("[pipeline] STEP 10: Packaging Final Output...");
-  
-  // Re-calculate missing skills post-optimization
+  // Re-calculate missing skills post-optimization for final report (though categorization handled it)
   let finalSkillsFlat: string[] = [];
   if (Array.isArray(optimizedResume.skills)) {
     finalSkillsFlat = optimizedResume.skills;
@@ -231,79 +150,20 @@ export async function generateTailoredResume(
   const finalSkillsText = finalSkillsFlat.join(" ").toLowerCase();
   const missingSkillsFinal = atsResult.missing_keywords.filter(kw => !finalSkillsText.includes(kw.toLowerCase()));
 
-  // Auto-add any remaining missing skills
-  let autoAddedSkills: string[] = [];
-  let mergedSkills = optimizedResume.skills;
-
-  if (missingSkillsFinal.length > 0) {
-      assertNotAborted(abortSignal);
-      console.log(`[pipeline] Auto-adding ${missingSkillsFinal.length} missing skills to optimize ATS score...`);
-      if (params.onProgress) {
-        params.onProgress("stage", { stageId: "stage7_skills", name: "Optimizing ATS Skills..." });
-        params.onProgress("log", { stageId: "stage7_skills", log: "Automatically injecting missing keywords into the Skills section..." });
-      }
-
-      const currentSkillsObj = (mergedSkills && !Array.isArray(mergedSkills)) ? mergedSkills : {};
-      const catSystemPrompt = `
-You are an expert ATS Resume categorizer. You will be given a JSON object of existing categorized skills and a list of new skills to add.
-Your task is to smartly append the new skills into the MOST appropriate existing category in the JSON object.
-If a new skill clearly belongs in a completely new category, you may create that new category.
-Return ONLY valid JSON matching the schema Record<string, string[]>. Do not include markdown code block syntax. Ensure no existing skills are deleted.
-      `.trim();
-      const catUserPrompt = `
-Existing Skills:
-${JSON.stringify(currentSkillsObj, null, 2)}
-
-New Skills to add:
-${JSON.stringify(missingSkillsFinal, null, 2)}
-
-Please return the newly merged JSON object.
-      `.trim();
-
-      try {
-          const catResponse = await callLLM(
-              [
-                  { role: "system", content: catSystemPrompt },
-                  { role: "user", content: catUserPrompt }
-              ],
-              { model, jsonMode: true, abortSignal }
-          );
-          const cleanJson = catResponse.replace(/```(?:json)?\s*([\s\S]*?)```/, '$1').trim();
-          mergedSkills = JSON.parse(cleanJson);
-          autoAddedSkills = [...missingSkillsFinal];
-      } catch (e) {
-          if (e instanceof Error && e.name === "AbortError") throw e;
-          console.error("[pipeline] Failed to auto-categorize missing skills", e);
-          // Fallback
-          let targetCategory = "Additional Skills";
-          if (currentSkillsObj && Object.keys(currentSkillsObj).length > 0) {
-               targetCategory = Object.keys(currentSkillsObj)[0];
-          }
-          const fallbackSkills: Record<string, string[]> = { ...currentSkillsObj };
-          if (!fallbackSkills[targetCategory]) fallbackSkills[targetCategory] = [];
-          fallbackSkills[targetCategory].push(...missingSkillsFinal);
-          mergedSkills = fallbackSkills;
-          autoAddedSkills = [...missingSkillsFinal];
-      }
-      
-      optimizedResume.skills = mergedSkills;
-
-      if (params.onProgress) {
-        params.onProgress("complete", { stageId: "stage7_skills" });
-      }
-  }
-
   const finalOutput: TailoredResumeOutput = {
     ...optimizedResume,
-    skills: mergedSkills,
-    missingSkills: [],
-    autoAddedSkills: autoAddedSkills,
+    missingSkills: missingSkillsFinal,
+    autoAddedSkills: [], // In this version, LLM handles it during rewrite
     ats: atsResult,
     honeypot: honeypotReport,
   };
 
   const duration = Date.now() - startTime;
-  console.log(`[pipeline] Master Profile generation complete in ${duration}ms.`);
+  console.log(`[pipeline] Optimized pipeline complete in ${duration}ms.`);
+
+  if (params.onProgress) {
+    params.onProgress("complete", { stageId: "stage6_tailor" });
+  }
 
   return finalOutput;
 }
