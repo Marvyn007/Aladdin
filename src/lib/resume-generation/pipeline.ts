@@ -53,9 +53,13 @@ export async function generateTailoredResume(
     params.onProgress("complete", { stageId: "stage2_resume-parse" });
   }
 
-  const tempDir = path.join(process.cwd(), "temp");
-  await fs.mkdir(tempDir, { recursive: true });
-  await fs.writeFile(path.join(tempDir, "temp-resume.json"), JSON.stringify(resumeParseResult.structured, null, 2));
+  const tempDir = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? "/tmp"
+    : path.join(process.cwd(), "temp");
+  try {
+    await fs.mkdir(tempDir, { recursive: true });
+    await fs.writeFile(path.join(tempDir, "temp-resume.json"), JSON.stringify(resumeParseResult.structured, null, 2));
+  } catch { /* debug writes are best-effort */ }
 
   let linkedinParseResult: ParseResult | undefined = undefined;
   if (linkedinPdf || linkedinData) {
@@ -75,7 +79,7 @@ export async function generateTailoredResume(
     } else if (linkedinData) {
       linkedinParseResult = await parseTextToDynamicResume(linkedinData, abortSignal);
     }
-    await fs.writeFile(path.join(tempDir, "temp-linkedin.json"), JSON.stringify(linkedinParseResult?.structured, null, 2));
+    try { await fs.writeFile(path.join(tempDir, "temp-linkedin.json"), JSON.stringify(linkedinParseResult?.structured, null, 2)); } catch { /* debug writes are best-effort */ }
 
     if (params.onProgress) {
       params.onProgress("complete", { stageId: "stage3_linkedin-parse" });
@@ -112,7 +116,7 @@ export async function generateTailoredResume(
   const masterProfile = JSON.parse(masterProfileResponse) as MasterProfile;
   const originalBulletCount = countBulletsInMasterProfile(masterProfile);
   console.log(`[pipeline] Master Profile created with ${originalBulletCount} total bullets.`);
-  await fs.writeFile(path.join(tempDir, "temp-merged.json"), JSON.stringify(masterProfile, null, 2));
+  try { await fs.writeFile(path.join(tempDir, "temp-merged.json"), JSON.stringify(masterProfile, null, 2)); } catch { /* debug writes are best-effort */ }
 
   // =========================================================================
   // STEP 5: Honeypot Scan + Analyze Job Description
