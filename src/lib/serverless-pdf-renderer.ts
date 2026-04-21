@@ -2,6 +2,11 @@ import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import fs from 'fs';
 
+// Disable SwiftShader/WebGL graphics stack — resumes are pure HTML/CSS text,
+// so the 3D GPU emulator is unnecessary. This saves ~80MB of RAM and avoids
+// OOM kills on Vercel's 1024MB Hobby-tier limit.
+chromium.setGraphicsMode = false;
+
 export async function generateServerlessPdfBufferFromHtml(
     html: string,
     margins?: { top: number; right: number; bottom: number; left: number }
@@ -31,8 +36,16 @@ export async function generateServerlessPdfBufferFromHtml(
         );
     }
 
+    // Filter out args that cause segfaults on Vercel Node 20 with puppeteer-core v22+
+    const safeArgs = isLocalDev
+        ? []
+        : chromium.args.filter((arg: string) =>
+            arg !== '--single-process' &&
+            arg !== '--font-render-hinting=none'
+        );
+
     const browser = await puppeteer.launch({
-        args: isLocalDev ? [] : [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+        args: [...safeArgs, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
         defaultViewport: chromium.defaultViewport,
         executablePath: executablePath as string,
         headless: isLocalDev ? true : chromium.headless,
