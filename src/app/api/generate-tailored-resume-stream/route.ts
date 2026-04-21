@@ -19,7 +19,9 @@ import { generateTailoredResume } from "@/lib/resume-generation/pipeline";
 import { compactTailoredResumeToOnePage } from "@/lib/resume-generation/one-page-compaction";
 import { getS3Client } from "@/lib/s3";
 import { toPlainText } from "@/lib/plain-text";
-import { checkAndIncrement } from "@/lib/subscription/check-usage";
+import { checkUsage, incrementUsage } from "@/lib/subscription/check-usage";
+
+export const maxDuration = 120;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -157,6 +159,7 @@ function createSSEStream(req: Request, userId: string) {
           };
 
           // Hidden one-page variant (no extra SSE stages — runs before `done`)
+          // Returns null when the full resume already fits on one page → toggle hidden
           let finalResumeJsonOnePage: typeof payloadResume | null = null;
           try {
             const onePageOut = await compactTailoredResumeToOnePage(
@@ -164,22 +167,24 @@ function createSSEStream(req: Request, userId: string) {
               plainJobDescription,
               abortSignal
             );
-            let oneSkills = onePageOut.skills || {};
-            if (Array.isArray(oneSkills)) {
-              oneSkills = { Skills: oneSkills };
+            if (onePageOut !== null) {
+              let oneSkills = onePageOut.skills || {};
+              if (Array.isArray(oneSkills)) {
+                oneSkills = { Skills: oneSkills };
+              }
+              finalResumeJsonOnePage = {
+                ...onePageOut,
+                skills: oneSkills,
+              };
             }
-            finalResumeJsonOnePage = {
-              ...onePageOut,
-              skills: oneSkills,
-            };
           } catch (onePageErr: any) {
             if (onePageErr?.name === "AbortError" || abortSignal.aborted) {
               throw onePageErr;
             }
             console.error("[generate-tailored-resume-stream] One-page compaction failed:", onePageErr);
-            finalResumeJsonOnePage = { ...payloadResume };
           }
 
+          await incrementUsage(userId, 'resumesGenerated');
           sendEvent("done", {
             status: "success",
             final_resume_json: payloadResume,
@@ -218,7 +223,7 @@ export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return new Response('Unauthorized', { status: 401 });
 
-  const usageGuard = await checkAndIncrement(userId, 'resumesGenerated');
+  const usageGuard = await checkUsage(userId, 'resumesGenerated');
   if (!usageGuard.allowed) {
     return Response.json(
       { error: usageGuard.reason, feature: 'resumesGenerated', resetDate: usageGuard.resetDate },
@@ -232,7 +237,8 @@ export async function POST(req: Request) {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      Connection: "keep-alive",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
