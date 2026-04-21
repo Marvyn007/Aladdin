@@ -7,7 +7,7 @@ import type { NextConfig } from "next";
  * Do not set NEXT_DIST_DIR — Next 16 can mis-resolve absolute `distDir` on Windows.
  */
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['pdf-parse', 'puppeteer-core', '@sparticuz/chromium'],
+  serverExternalPackages: ['pdf-parse', 'puppeteer-core', '@sparticuz/chromium-min'],
   // Dev defaults to Turbopack; this project uses webpack in npm scripts to avoid
   // Turbopack persistent-cache corruption on Windows (esp. OneDrive-synced paths).
   webpack: (config) => {
