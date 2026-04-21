@@ -11,9 +11,30 @@ interface AtsScoreWidgetProps {
 }
 
 export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, setKeywords }: AtsScoreWidgetProps) {
-    // Determine ATS metrics
+    // Determine ATS metrics using deduped keyword sets to avoid impossible scores (>100%)
     const ats = keywords.atsScore || { raw: 0, weighted: 0, matchedCount: 0, totalCount: 0, skillsMatch: 0, formattingCheck: true };
-    const score = ats.weighted || 0;
+    const dedupeKeywords = (list: string[] = []) => {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const k of list) {
+            const key = k.trim().toLowerCase();
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            out.push(k);
+        }
+        return out;
+    };
+
+    const matchedKeywords = dedupeKeywords(keywords.matched);
+    const missingKeywords = dedupeKeywords(keywords.missing);
+    const autoAddedKeywords = dedupeKeywords(keywords.autoAdded || []);
+
+    const derivedTotal = matchedKeywords.length + missingKeywords.length;
+    const totalCount = (ats.totalCount && ats.totalCount > 0) ? ats.totalCount : derivedTotal;
+    const originalMatchedCount = matchedKeywords.length;
+    const score = totalCount > 0
+        ? Math.round((originalMatchedCount / totalCount) * 100)
+        : (ats.weighted || ats.raw || 0);
 
     // Choose color based on score
     let strokeColor = '#84cc16'; // Green
@@ -25,19 +46,12 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (score / 100) * circumference;
 
-    const originalMatchedCount = ats.matchedCount ?? keywords.matched.length;
-    const computedTotal = keywords.matched.length + keywords.missing.length + (keywords.autoAdded?.length || 0);
-    const totalCount = (ats.totalCount && ats.totalCount > 0) ? ats.totalCount : computedTotal;
-
     const keywordsPercent = totalCount > 0 ? Math.round((originalMatchedCount / totalCount) * 100) : 0;
     const skillsMatch = ats.skillsMatch ?? score; // Fallback to score if missing
 
-    // Freeze the original auto-added count so the ATS metrics don't jump around when user modifies pills manually
-    const [initialAutoAddedCount] = React.useState(keywords.autoAdded?.length || 0);
-
-    // Calculate new keyword match after AI auto-additions (frozen)
-    const currentMatchedKeywords = originalMatchedCount + initialAutoAddedCount;
-    const newKeywordPercent = totalCount > 0 ? Math.round((currentMatchedKeywords / totalCount) * 100) : 0;
+    // "After tailoring" score = unique union of matched + auto-added (never above 100%)
+    const newMatchedCount = dedupeKeywords([...matchedKeywords, ...autoAddedKeywords]).length;
+    const newKeywordPercent = totalCount > 0 ? Math.round((newMatchedCount / totalCount) * 100) : 0;
 
     return (
         <div style={{ padding: '20px 14px', borderBottom: '1px solid #f1f5f9', background: '#ffffff', display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%', boxSizing: 'border-box', gap: '24px' }}>
@@ -97,7 +111,7 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
                         <div style={{
                             height: '100%',
                             background: '#84cc16',
-                            width: `${keywordsPercent}%`,
+                            width: `${Math.max(0, Math.min(100, keywordsPercent))}%`,
                             borderRadius: '4px',
                             transition: 'width 1s ease-in-out'
                         }} />
@@ -116,7 +130,7 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
                         <div style={{
                             height: '100%',
                             background: '#84cc16',
-                            width: `${skillsMatch}%`,
+                            width: `${Math.max(0, Math.min(100, skillsMatch))}%`,
                             borderRadius: '4px',
                             transition: 'width 1s ease-in-out'
                         }} />
@@ -124,107 +138,109 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
                 </div>
             </div>
 
-            {/* AFTER SECTION */}
+            {/* AFTER SECTION: Consolidated Results and Keywords */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '16px 14px', background: '#f5f3ff', borderRadius: '12px', border: '1px solid #ddd6fe' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Aladdin Tailoring Results</span>
-                </div>
+                
+                {/* Unified Header and Keywords Block */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 800, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Aladdin Tailoring Results</span>
+                    </div>
 
-
-                {/* Auto Added Pills — full panel width + dense wrap so fewer rows */}
-                {keywords.autoAdded && keywords.autoAdded.length > 0 && (
-                    <div style={{ width: '100%', textAlign: 'left' }}>
-                        <span style={{ fontSize: '13px', color: '#1e293b', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Missing keywords & skills added:</span>
-                        <div
-                            style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: '8px 10px',
-                                alignContent: 'flex-start',
-                                lineHeight: 1.35,
-                            }}
-                        >
-                            {keywords.autoAdded.map((k, i) => (
-                                <button
-                                    key={`auto-${i}`}
-                                    type="button"
-                                    aria-label={`Remove ${k} from resume`}
-                                    onClick={() => {
-                                        let updatedSkills = { ...resume.skills } as any;
-                                        if (resume.skills && !Array.isArray(resume.skills)) {
-                                            for (const cat in updatedSkills) {
-                                                if (updatedSkills[cat].includes(k)) {
-                                                    updatedSkills[cat] = updatedSkills[cat].filter((skill: string) => skill !== k);
+                    {keywords.autoAdded && keywords.autoAdded.length > 0 && (
+                        <div style={{ width: '100%', textAlign: 'left' }}>
+                            <span style={{ fontSize: '13px', color: '#1e293b', display: 'block', marginBottom: '8px', fontWeight: 600 }}>Missing keywords & skills added:</span>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: '8px 10px',
+                                    alignContent: 'flex-start',
+                                    lineHeight: 1.35,
+                                }}
+                            >
+                                {keywords.autoAdded.map((k, i) => (
+                                    <button
+                                        key={`auto-${i}`}
+                                        type="button"
+                                        aria-label={`Remove ${k} from resume`}
+                                        onClick={() => {
+                                            let updatedSkills = { ...resume.skills } as any;
+                                            if (resume.skills && !Array.isArray(resume.skills)) {
+                                                for (const cat in updatedSkills) {
+                                                    if (updatedSkills[cat].includes(k)) {
+                                                        updatedSkills[cat] = updatedSkills[cat].filter((skill: string) => skill !== k);
+                                                    }
                                                 }
                                             }
-                                        }
-                                        updatePreview({ ...editorResume, skills: updatedSkills, updatedAt: new Date().toISOString() });
-                                        setKeywords(prev => ({
-                                            ...prev!,
-                                            matched: prev!.matched.filter(match => match !== k),
-                                            missing: [...prev!.missing, k],
-                                            autoAdded: prev!.autoAdded ? prev!.autoAdded.filter(add => add !== k) : []
-                                        }));
-                                    }}
-                                    style={{
-                                        padding: '8px 14px',
-                                        minHeight: '36px',
-                                        background: '#dcfce7',
-                                        color: '#15803d',
-                                        border: 'none',
-                                        borderRadius: '10px',
-                                        fontSize: '13px',
-                                        fontWeight: 500,
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        transition: 'background 0.2s',
-                                        maxWidth: '100%',
-                                        whiteSpace: 'normal',
-                                        textAlign: 'left',
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.background = '#bbf7d0'}
-                                    onMouseLeave={(e) => e.currentTarget.style.background = '#dcfce7'}
-                                    title="Remove from resume (moves to Still Missing)"
-                                >
-                                    <span
-                                        aria-hidden
+                                            updatePreview({ ...editorResume, skills: updatedSkills, updatedAt: new Date().toISOString() });
+                                            setKeywords(prev => ({
+                                                ...prev!,
+                                                matched: prev!.matched.filter(match => match !== k),
+                                                missing: [...prev!.missing, k],
+                                                autoAdded: prev!.autoAdded ? prev!.autoAdded.filter(add => add !== k) : []
+                                            }));
+                                        }}
                                         style={{
+                                            padding: '8px 14px',
+                                            minHeight: '36px',
+                                            background: '#dcfce7',
+                                            color: '#15803d',
+                                            border: 'none',
+                                            borderRadius: '10px',
+                                            fontSize: '13px',
+                                            fontWeight: 500,
+                                            cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            justifyContent: 'center',
-                                            width: '20px',
-                                            height: '20px',
-                                            flexShrink: 0,
-                                            borderRadius: '6px',
-                                            background: 'rgba(21, 128, 61, 0.18)',
-                                            color: '#14532d',
-                                            fontSize: '14px',
-                                            fontWeight: 700,
-                                            lineHeight: 1,
+                                            gap: '8px',
+                                            transition: 'background 0.2s',
+                                            maxWidth: '100%',
+                                            whiteSpace: 'normal',
+                                            textAlign: 'left',
                                         }}
+                                        onMouseEnter={(e) => e.currentTarget.style.background = '#bbf7d0'}
+                                        onMouseLeave={(e) => e.currentTarget.style.background = '#dcfce7'}
+                                        title="Remove from resume (moves to Still Missing)"
                                     >
-                                        ×
-                                    </span>
-                                    <span style={{ textAlign: 'left' }}>{k}</span>
-                                </button>
-                            ))}
+                                        <span
+                                            aria-hidden
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: '20px',
+                                                height: '20px',
+                                                flexShrink: 0,
+                                                borderRadius: '6px',
+                                                background: 'rgba(21, 128, 61, 0.18)',
+                                                color: '#14532d',
+                                                fontSize: '14px',
+                                                fontWeight: 700,
+                                                lineHeight: 1,
+                                            }}
+                                        >
+                                            ×
+                                        </span>
+                                        <span style={{ textAlign: 'left' }}>{k}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 {/* Aladdin Optimized Match Line */}
                 <div style={{ width: '100%', marginBottom: '4px', marginTop: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#1e293b', marginBottom: '6px' }}>
                         <span style={{ fontWeight: 600 }}>New Keyword Score:</span>
-                        <span style={{ fontWeight: 600 }}>{newKeywordPercent}%</span>
+                        <span style={{ fontWeight: 600 }}>{Math.max(0, Math.min(100, newKeywordPercent))}%</span>
                     </div>
                     <div style={{ height: '10px', background: '#ffffff', borderRadius: '5px', overflow: 'hidden', border: '1px solid #ddd6fe' }}>
                         <div style={{
                             background: '#8ad617ff',
                             height: '100%',
-                            width: `${newKeywordPercent - 1}%`,
+                            width: `${Math.max(0, Math.min(100, newKeywordPercent))}%`,
                             borderRadius: '5px',
                             transition: 'width 1s ease-in-out'
                         }} />

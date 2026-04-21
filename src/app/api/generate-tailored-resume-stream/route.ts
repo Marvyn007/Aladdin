@@ -169,26 +169,34 @@ function createSSEStream(req: Request, userId: string) {
               jobTitle: body.jobTitle 
             });
             
-            const saved = await prisma.tailoredResume.create({
-              data: {
+            const keywordsData = {
+              matched: (payloadResume as any).ats?.matched_keywords ?? [],
+              missing: (payloadResume as any).missingSkills ?? [],
+              autoAdded: (payloadResume as any).autoAddedSkills ?? [],
+              atsScore: (payloadResume as any).ats ? {
+                raw: (payloadResume as any).ats.keyword_coverage ?? 0,
+                weighted: (payloadResume as any).ats.keyword_coverage ?? 0,
+                matchedCount: (payloadResume as any).ats.matched_keywords?.length ?? 0,
+                totalCount: ((payloadResume as any).ats.matched_keywords?.length ?? 0) + ((payloadResume as any).ats.missing_keywords?.length ?? 0),
+                skillsMatch: (payloadResume as any).ats.skills_match ?? (payloadResume as any).ats.keyword_coverage ?? 0,
+                formattingCheck: true
+              } : undefined,
+              honeypot: (payloadResume as any).honeypot || null,
+            } as any;
+
+            const persistedJobId = body.jobId || "manual";
+            const saved = await prisma.tailoredResume.upsert({
+              where: { userId_jobId: { userId, jobId: persistedJobId } },
+              create: {
                 userId,
-                jobId: body.jobId || "manual",
+                jobId: persistedJobId,
                 resumeData: editorData as any,
-                keywordsData: {
-                  matched: (payloadResume as any).ats?.matched_keywords ?? [],
-                  missing: (payloadResume as any).missingSkills ?? [],
-                  autoAdded: (payloadResume as any).autoAddedSkills ?? [],
-                  atsScore: (payloadResume as any).ats ? {
-                    raw: (payloadResume as any).ats.keyword_coverage ?? 0,
-                    weighted: (payloadResume as any).ats.keyword_coverage ?? 0,
-                    matchedCount: (payloadResume as any).ats.matched_keywords?.length ?? 0,
-                    totalCount: ((payloadResume as any).ats.matched_keywords?.length ?? 0) + ((payloadResume as any).ats.missing_keywords?.length ?? 0),
-                    skillsMatch: (payloadResume as any).ats.skills_match ?? (payloadResume as any).ats.keyword_coverage ?? 0,
-                    formattingCheck: true
-                  } : undefined,
-                  honeypot: (payloadResume as any).honeypot || null,
-                } as any,
-              }
+                keywordsData,
+              },
+              update: {
+                resumeData: editorData as any,
+                keywordsData,
+              },
             });
             savedResumeId = saved.id;
           } catch (saveError) {

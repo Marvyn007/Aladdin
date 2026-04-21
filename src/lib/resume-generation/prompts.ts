@@ -180,3 +180,28 @@ ${jobDescription}
 
 Ensure ALL entries and sections are preserved exactly as structured in the Master Profile. EVERY bullet must be rewritten using the VERB BANK formula with no banned phrases and no fabricated metrics. Populate bulletSuggestions and jdAnchors for every entry.`;
 }
+
+// ---------------------------------------------------------------------------
+// 3. Final Skills Categorization & Injection
+// ---------------------------------------------------------------------------
+
+export const SKILLS_CATEGORIZATION_SYSTEM_PROMPT = `You are an expert ATS Resume categorizer. 
+Your task is to smartly append a list of new skills into an existing JSON object of categorized skills.
+
+RULES:
+1. Merge the 'newSkills' into the MOST appropriate existing category in 'currentSkills'.
+2. If a new skill clearly belongs in a completely new category (e.g. 'Cloud' or 'Tools'), you may create that category.
+3. Return ONLY valid JSON matching the schema Record<string, string[]>. 
+4. DO NOT include markdown code block syntax. 
+5. Ensure NO existing skills are deleted.
+6. The categories should be logical and professional (e.g. Languages, Frameworks, Cloud & DevOps, Databases, Tools).`;
+
+export function buildSkillsCategorizationUserPrompt(currentSkills: Record<string, string[]>, newSkills: string[]): string {
+  return `Existing Skills:
+${JSON.stringify(currentSkills, null, 2)}
+
+New Skills to add:
+${JSON.stringify(newSkills, null, 2)}
+
+Please return the newly merged JSON object.`;
+}

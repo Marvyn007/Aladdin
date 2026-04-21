@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useRef, useState, useCallback } from 'react';
+import { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import type { ParsingStage } from '@/components/resume-editor/ParsingProgress';
 import type { TailoredResumeBundleV2, TailoredResumeData } from '@/types';
@@ -84,28 +84,68 @@ export function useResumeGeneration(): ResumeGenerationContextValue {
   return ctx;
 }
 
-function applyUpdateStage(stages: ParsingStage[], stageId: string): { stages: ParsingStage[], currentStageIndex: number } {
+function applyUpdateStage(stages: ParsingStage[], stageId: string): { stages: ParsingStage[], currentStageIndex: number, found: boolean } {
   const idx = stages.findIndex(s => s.id === stageId);
+  if (idx === -1) {
+    // If unknown stage, just keep current index but maybe add log to current stage?
+    return { stages, currentStageIndex: -1, found: false };
+  }
+
   const updated = stages.map((stage, i) => {
-    if (stage.id === stageId) return { ...stage, status: 'running' as const };
-    if (i < idx && stage.status === 'running') return { ...stage, status: 'completed' as const };
+    if (i === idx) return { ...stage, status: 'running' as const };
+    if (i < idx) return { ...stage, status: 'completed' as const };
     return stage;
   });
-  return { stages: updated, currentStageIndex: idx !== -1 ? idx : 0 };
+  return { stages: updated, currentStageIndex: idx, found: true };
 }
 
-function applyCompleteStage(stages: ParsingStage[], stageId: string): ParsingStage[] {
-  return stages.map(s => s.id === stageId ? { ...s, status: 'completed' as const } : s);
+function applyCompleteStage(
+  stages: ParsingStage[],
+  stageId: string,
+  prevCurrentStageIndex: number
+): { stages: ParsingStage[]; currentStageIndex: number; found: boolean } {
+  const idx = stages.findIndex(s => s.id === stageId);
+  if (idx === -1) {
+    return { stages, currentStageIndex: prevCurrentStageIndex, found: false };
+  }
+
+  // Completion means this stage has truly finished on the backend.
+  // Mark all prior stages completed as well so the UI never lags behind.
+  const updated = stages.map((stage, i) => {
+    if (i <= idx) return { ...stage, status: 'completed' as const };
+    return stage;
+  });
+
+  const isLastStage = idx === updated.length - 1;
+  const nextIndex = isLastStage ? updated.length : Math.max(prevCurrentStageIndex, idx + 1);
+  return { stages: updated, currentStageIndex: nextIndex, found: true };
 }
 
 function applyAddLog(stages: ParsingStage[], stageId: string, log: string): ParsingStage[] {
   return stages.map(s => s.id === stageId ? { ...s, logs: [...s.logs, log] } : s);
 }
 
+function applyOptimisticAdvance(
+  stages: ParsingStage[],
+  currentStageIndex: number
+): { stages: ParsingStage[]; currentStageIndex: number } {
+  const safeCurrent = Math.max(0, Math.min(currentStageIndex, stages.length - 1));
+  const nextIndex = Math.min(safeCurrent + 1, stages.length - 1);
+  if (nextIndex === safeCurrent) return { stages, currentStageIndex };
+
+  const updated = stages.map((stage, i) => {
+    if (i < nextIndex) return { ...stage, status: 'completed' as const };
+    if (i === nextIndex) return { ...stage, status: 'running' as const };
+    return stage;
+  });
+  return { stages: updated, currentStageIndex: nextIndex };
+}
+
 export function ResumeGenerationProvider({ children }: { children: React.ReactNode }) {
   const sub = useSubscription();
   const abortRef = useRef<AbortController | null>(null);
   const generatingRef = useRef(false);
+  const lastProgressTickRef = useRef<number>(0);
   const [blockedBy, setBlockedBy] = useState<GateBlock | null>(null);
   const clearBlockedBy = useCallback(() => setBlockedBy(null), []);
   const paramsRef = useRef<{
@@ -182,6 +222,7 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
     abortRef.current?.abort();
     abortRef.current = null;
     generatingRef.current = false;
+    lastProgressTickRef.current = 0;
     setState(prev => ({
       ...prev,
       status: 'idle',
@@ -190,6 +231,36 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
       isModalOpen: false,
     }));
   }, []);
+
+  // UX fallback: if early stages appear stuck with no backend events for ~9s, move one step forward.
+  // This does not change backend logic; it only prevents the UI from feeling frozen.
+  useEffect(() => {
+    if (state.status !== 'generating') return;
+    const STALL_MS = 9000;
+    const EARLY_STAGE_MAX_INDEX = 4; // stages 1..5 only
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      if (!lastProgressTickRef.current) {
+        lastProgressTickRef.current = now;
+        return;
+      }
+
+      const stalledFor = now - lastProgressTickRef.current;
+      if (stalledFor < STALL_MS) return;
+
+      setState(prev => {
+        if (prev.status !== 'generating') return prev;
+        if (prev.progress.currentStageIndex >= EARLY_STAGE_MAX_INDEX) return prev;
+        const advanced = applyOptimisticAdvance(prev.progress.stages, prev.progress.currentStageIndex);
+        return { ...prev, progress: { ...prev.progress, ...advanced } };
+      });
+
+      lastProgressTickRef.current = now;
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [state.status]);
 
   const startGeneration = useCallback(async (jobDescription: string) => {
     if (!sub.isLoading && sub.planType === 'LITE') {
@@ -211,6 +282,7 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
       error: null,
       progress: makeInitialProgress(),
     }));
+    lastProgressTickRef.current = Date.now();
 
     abortRef.current = new AbortController();
 
@@ -268,29 +340,43 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
             const eventType = currentEvent;
 
             if (eventType === 'stage') {
+              lastProgressTickRef.current = Date.now();
               flushSync(() => {
                 setState(prev => {
-                  const { stages, currentStageIndex } = applyUpdateStage(prev.progress.stages, data.stageId);
+                  const { stages, currentStageIndex, found } = applyUpdateStage(prev.progress.stages, data.stageId);
+                  if (!found) return prev; // Ignore unknown stages to prevent jumping back to step 1
                   return { ...prev, progress: { ...prev.progress, stages, currentStageIndex } };
                 });
               });
             } else if (eventType === 'log') {
+              lastProgressTickRef.current = Date.now();
               setState(prev => ({
                 ...prev,
                 progress: { ...prev.progress, stages: applyAddLog(prev.progress.stages, data.stageId, data.log) },
               }));
             } else if (eventType === 'complete') {
+              lastProgressTickRef.current = Date.now();
               flushSync(() => {
                 setState(prev => ({
                   ...prev,
-                  progress: { ...prev.progress, stages: applyCompleteStage(prev.progress.stages, data.stageId) },
+                  progress: (() => {
+                    const { stages, currentStageIndex, found } = applyCompleteStage(
+                      prev.progress.stages,
+                      data.stageId,
+                      prev.progress.currentStageIndex
+                    );
+                    if (!found) return prev.progress;
+                    return { ...prev.progress, stages, currentStageIndex };
+                  })(),
                 }));
               });
             } else if (eventType === 'done') {
+              lastProgressTickRef.current = Date.now();
               const parsed = data.final_resume_json;
               if (!parsed) {
                 setState(prev => ({ ...prev, status: 'error', error: 'Empty resume returned from server.' }));
                 generatingRef.current = false;
+                lastProgressTickRef.current = 0;
                 continue;
               }
 
@@ -346,10 +432,12 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
                 },
               }));
               generatingRef.current = false;
+              lastProgressTickRef.current = 0;
 
             } else if (eventType === 'error') {
               setState(prev => ({ ...prev, status: 'error', error: data.message ?? 'Stream error' }));
               generatingRef.current = false;
+              lastProgressTickRef.current = 0;
             }
           }
         }
@@ -359,6 +447,7 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
         setState(prev => ({ ...prev, status: 'error', error: err.message ?? 'Failed to generate resume.' }));
       }
       generatingRef.current = false;
+      lastProgressTickRef.current = 0;
     }
   }, [sub]);
 

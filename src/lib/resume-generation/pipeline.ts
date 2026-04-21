@@ -12,7 +12,9 @@ import {
   MASTER_PROFILE_SYSTEM_PROMPT,
   buildMasterProfileUserPrompt,
   FINAL_OPTIMIZATION_SYSTEM_PROMPT,
-  buildFinalOptimizationUserPrompt
+  buildFinalOptimizationUserPrompt,
+  SKILLS_CATEGORIZATION_SYSTEM_PROMPT,
+  buildSkillsCategorizationUserPrompt,
 } from "./prompts";
 import { scanJobDescription } from "./honeypot";
 import type {
@@ -140,26 +142,110 @@ export async function generateTailoredResume(
 
   const optimizedResume = JSON.parse(finalResponse) as Omit<TailoredResumeOutput, "missingSkills" | "ats">;
 
-  // Re-calculate missing skills post-optimization for final report (though categorization handled it)
-  let finalSkillsFlat: string[] = [];
-  if (Array.isArray(optimizedResume.skills)) {
-    finalSkillsFlat = optimizedResume.skills;
-  } else if (optimizedResume.skills && typeof optimizedResume.skills === 'object') {
-    finalSkillsFlat = Object.values(optimizedResume.skills).flat();
+  // ── Stage 7: Auto-inject Missing Keywords (with Guaranteed Fallback) ─────────────────────────
+  assertNotAborted(abortSignal);
+  let finalTailoredResume = optimizedResume as TailoredResumeOutput;
+  let autoAddedSkills: string[] = [];
+
+  // 1. Ensure skills is an object
+  if (!finalTailoredResume.skills || Array.isArray(finalTailoredResume.skills)) {
+    const existing = Array.isArray(finalTailoredResume.skills) ? finalTailoredResume.skills : [];
+    finalTailoredResume.skills = { "Skills": existing };
   }
-  const finalSkillsText = finalSkillsFlat.join(" ").toLowerCase();
-  const missingSkillsFinal = atsResult.missing_keywords.filter(kw => !finalSkillsText.includes(kw.toLowerCase()));
+
+  // 2. Identify what's STILL missing after the rewrite
+  const getResumeText = (r: any) => [
+    r.summary,
+    ...r.sections.flatMap((s: any) => s.entries.flatMap((e: any) => e.bullets)),
+    ...Object.values(r.skills).flat()
+  ].join(" ").toLowerCase();
+
+  const missingKeywordsBeforeInjection = atsResult.missing_keywords.filter(
+    kw => !getResumeText(finalTailoredResume).includes(kw.toLowerCase())
+  );
+
+  if (missingKeywordsBeforeInjection.length > 0) {
+    console.log(`[pipeline] Injecting ${missingKeywordsBeforeInjection.length} missing keywords...`);
+    if (params.onProgress) {
+      params.onProgress("stage", { stageId: "stage6_tailor", name: "Injecting Missing Keywords..." });
+    }
+
+    let injectionSuccess = false;
+    try {
+      const categorizationResponse = await callLLM(
+        [
+          { role: "system", content: SKILLS_CATEGORIZATION_SYSTEM_PROMPT },
+          { role: "user", content: buildSkillsCategorizationUserPrompt(finalTailoredResume.skills, missingKeywordsBeforeInjection) }
+        ],
+        { model, jsonMode: true, abortSignal }
+      );
+      
+      const updatedSkills = JSON.parse(categorizationResponse) as Record<string, string[]>;
+      if (updatedSkills && typeof updatedSkills === 'object') {
+        finalTailoredResume.skills = updatedSkills;
+        injectionSuccess = true;
+      }
+    } catch (e) {
+      console.error("[pipeline] LLM Skill injection failed, falling back to manual:", e);
+    }
+
+    // 3. Guaranteed Manual Fallback: Ensure everything is in there
+    const postLlmText = getResumeText(finalTailoredResume);
+    const stillMissing = missingKeywordsBeforeInjection.filter(kw => !postLlmText.includes(kw.toLowerCase()));
+    
+    if (stillMissing.length > 0) {
+      console.log(`[pipeline] Manual fallback for ${stillMissing.length} skills.`);
+      const targetCategory = Object.keys(finalTailoredResume.skills).find(k => k.toLowerCase().includes('skill')) || "Keywords";
+      if (!finalTailoredResume.skills[targetCategory]) finalTailoredResume.skills[targetCategory] = [];
+      finalTailoredResume.skills[targetCategory] = [...new Set([...finalTailoredResume.skills[targetCategory], ...stillMissing])];
+    }
+
+    autoAddedSkills = missingKeywordsBeforeInjection;
+  }
+
+  // ── Stage 8: Recalculate Final ATS Score ───────────────────────────
+  // We want the score to be 100% accurate to the FINAL content
+  const finalFinalResumeText = [
+    finalTailoredResume.summary,
+    ...finalTailoredResume.sections.flatMap(s => s.entries.flatMap(e => e.bullets)),
+    ...Object.values(finalTailoredResume.skills).flat()
+  ].join(" ").toLowerCase();
+
+  const matchedFinal: string[] = [];
+  const missingFinal: string[] = [];
+  const allJdKeywords = [...atsResult.matched_keywords, ...atsResult.missing_keywords];
+
+  for (const kw of allJdKeywords) {
+    if (finalFinalResumeText.includes(kw.toLowerCase())) {
+      matchedFinal.push(kw);
+    } else {
+      missingFinal.push(kw);
+    }
+  }
+
+  const finalKeywordCoverage = allJdKeywords.length > 0 
+    ? Math.round((matchedFinal.length / allJdKeywords.length) * 100)
+    : 100;
+
+  const finalAtsResult: any = {
+    ...atsResult,
+    keyword_coverage: finalKeywordCoverage,
+    matched_keywords: [...new Set(matchedFinal)],
+    missing_keywords: [...new Set(missingFinal)],
+    // Recalculate skills match if we have the breakdown, else approximate
+    skills_match: Math.max(atsResult.skills_match, finalKeywordCoverage)
+  };
 
   const finalOutput: TailoredResumeOutput = {
-    ...optimizedResume,
-    missingSkills: missingSkillsFinal,
-    autoAddedSkills: [], // In this version, LLM handles it during rewrite
-    ats: atsResult,
+    ...finalTailoredResume,
+    missingSkills: missingFinal,
+    autoAddedSkills: autoAddedSkills,
+    ats: finalAtsResult,
     honeypot: honeypotReport,
   };
 
   const duration = Date.now() - startTime;
-  console.log(`[pipeline] Optimized pipeline complete in ${duration}ms.`);
+  console.log(`[pipeline] Optimized pipeline (with injection) complete in ${duration}ms.`);
 
   if (params.onProgress) {
     params.onProgress("complete", { stageId: "stage6_tailor" });
