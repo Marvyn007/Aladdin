@@ -1,132 +1,143 @@
-/**
- * Hidden post-tailoring step: produce a denser resume JSON aimed at a single A4 page.
- * No SSE progress — invoked from generate-tailored-resume-stream after the main pipeline.
- */
+import type { TailoredResumeOutput, DynamicSection } from './types';
+import { assertNotAborted, callLLM, safeJsonParse } from './utils';
+import { measureResumeHeightPx, A4_HEIGHT_PX } from './measure-height';
+import { renderResumeHtml } from '../resume-templates';
+import { toEditorFormat } from './toEditorFormat';
+import { applyOnePageDesignFromFull } from '../tailored-resume-bundle';
 
-import type { TailoredResumeOutput } from "./types";
-import { assertNotAborted, callLLM, safeJsonParse } from "./utils";
-
-function deepCloneOutput(src: TailoredResumeOutput): TailoredResumeOutput {
-  return JSON.parse(JSON.stringify(src)) as TailoredResumeOutput;
-}
-
-function shrinkSkillsTable(skills: Record<string, string[]>, maxPerCategory: number): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const [k, arr] of Object.entries(skills || {})) {
-    out[k] = (arr || []).slice(0, maxPerCategory);
+export function scoreSectionRelevance(section: DynamicSection): number {
+  let totalBullets = 0;
+  let anchoredBullets = 0;
+  for (const entry of section.entries) {
+    totalBullets += entry.bullets.length;
+    anchoredBullets += (entry.jdAnchors ?? []).filter((a) => a.length > 0).length;
   }
-  return out;
+  return totalBullets === 0 ? 0 : anchoredBullets / totalBullets;
 }
 
-/** Hard cap bullets per entry so one-page JSON is visibly shorter when the model hedges. */
-function capBulletsPerEntry(
-  sections: TailoredResumeOutput["sections"],
-  maxPerEntry: number
-): TailoredResumeOutput["sections"] {
-  return (sections || []).map((sec) => ({
-    ...sec,
-    entries: (sec.entries || []).map((ent) => ({
-      ...ent,
-      bullets: (ent.bullets || []).slice(0, maxPerEntry),
-    })),
-  }));
-}
+export function microTrimSections(sections: DynamicSection[], lineBudget: number): DynamicSection[] {
+  const working: DynamicSection[] = JSON.parse(JSON.stringify(sections));
+  let removed = 0;
 
-function countBullets(sections: TailoredResumeOutput["sections"]): number {
-  let n = 0;
-  for (const sec of sections || []) {
-    for (const ent of sec.entries || []) {
-      n += (ent.bullets || []).length;
+  while (removed < lineBudget) {
+    type Candidate = { sectionScore: number; bulletLen: number; si: number; ei: number; bi: number };
+    const candidates: Candidate[] = [];
+
+    for (let si = 0; si < working.length; si++) {
+      const score = scoreSectionRelevance(working[si]);
+      for (let ei = 0; ei < working[si].entries.length; ei++) {
+        const entry = working[si].entries[ei];
+        for (let bi = 0; bi < entry.bullets.length; bi++) {
+          const anchors = entry.jdAnchors?.[bi] ?? [];
+          if (anchors.length === 0) {
+            candidates.push({ sectionScore: score, bulletLen: entry.bullets[bi].length, si, ei, bi });
+          }
+        }
+      }
     }
+
+    if (candidates.length === 0) break;
+
+    // Lowest relevance first; break ties by longest bullet first
+    candidates.sort((a, b) => a.sectionScore - b.sectionScore || b.bulletLen - a.bulletLen);
+    const { si, ei, bi } = candidates[0];
+
+    working[si].entries[ei].bullets.splice(bi, 1);
+    if (working[si].entries[ei].jdAnchors) {
+      working[si].entries[ei].jdAnchors!.splice(bi, 1);
+    }
+    removed++;
   }
-  return n;
+
+  return working;
 }
 
-/**
- * LLM compresses content; on failure falls back to clone + light deterministic trims.
- * Copies ATS / honeypot / missingSkills / autoAddedSkills from `full`.
- */
+function renderForMeasurement(output: TailoredResumeOutput, applyOnePage: boolean): string {
+  const editorData = toEditorFormat(output);
+  if (applyOnePage) {
+    const design = applyOnePageDesignFromFull(editorData.design);
+    return renderResumeHtml({ ...editorData, design });
+  }
+  return renderResumeHtml(editorData);
+}
+
 export async function compactTailoredResumeToOnePage(
   full: TailoredResumeOutput,
   jobDescription: string,
   abortSignal?: AbortSignal
-): Promise<TailoredResumeOutput> {
+): Promise<TailoredResumeOutput | null> {
   assertNotAborted(abortSignal);
-  const model = process.env.LLM_MODEL || "openai/gpt-4o-mini";
 
-  const slimInput = {
-    basics: full.basics,
-    summary: full.summary,
-    sections: full.sections,
-    skills: full.skills,
-  };
-
-  const inputBullets = countBullets(full.sections);
-
-  const system = `You are an expert resume editor. You receive a tailored resume (JSON) and a job description.
-
-Goal: produce a ONE-PAGE version: visibly shorter than the input — the hiring manager must see FEWER bullets and a tighter summary.
-
-Rules (strict):
-1) Preserve every employer, role title, institution, degree, and date range exactly as in the input (same strings).
-2) **Bullet budget:** Each entry must end with at most **3** bullets (prefer **2**). Merge overlapping bullets so the reader keeps the same facts with less text. If an entry has more than 3 bullets in the input, you MUST output at most 3.
-3) Shorten the summary to at most **2 short sentences** (max **320** characters).
-4) Trim skills: keep only the most job-relevant terms; cap each skills category at **8** items. Do not add skills that were not present.
-5) Prefer merge/compress over deletion. Do not invent metrics, tools, or employers.
-6) Never drop the only remaining mention of a critical job-description requirement that appears in the input resume (you may merge it into another bullet instead).
-
-Return ONLY valid JSON with this shape:
-{"basics":{...},"summary":"...","sections":[...],"skills":{...}}
-Use the same section/entry/bullet schema as the input (sections[].name, sections[].entries[] with title, subtitle, location, startDate, endDate, bullets string[], optional bulletSuggestions, jdAnchors).
-
-The input currently has about ${inputBullets} bullets total — your output must have **meaningfully fewer** bullet lines unless the input already has ≤12 bullets.`;
-
-  const user = `Job description:\n${jobDescription.slice(0, 14000)}\n\nResume JSON:\n${JSON.stringify(slimInput).slice(0, 120000)}`;
-
-  try {
-    const raw = await callLLM(
-      [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      { model, jsonMode: true, abortSignal, temperature: 0.15, max_tokens: 8000 }
-    );
-
-    const parsed = safeJsonParse<{
-      basics?: TailoredResumeOutput["basics"];
-      summary?: string;
-      sections?: TailoredResumeOutput["sections"];
-      skills?: Record<string, string[]>;
-    }>(raw);
-
-    if (!parsed?.basics || !Array.isArray(parsed.sections)) {
-      throw new Error("[one-page-compaction] Parsed JSON missing basics or sections.");
-    }
-
-    let sections = capBulletsPerEntry(parsed.sections, 3);
-    let skills = shrinkSkillsTable((parsed.skills ?? full.skills) as Record<string, string[]>, 8);
-
-    // If the model barely reduced bullets, enforce a harder cap
-    if (countBullets(sections) > Math.max(12, Math.floor(inputBullets * 0.72))) {
-      sections = capBulletsPerEntry(sections, 2);
-    }
-
-    return {
-      ...full,
-      basics: parsed.basics,
-      summary: parsed.summary ?? full.summary,
-      sections,
-      skills,
-    };
-  } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") throw e;
-    console.error("[one-page-compaction] LLM compaction failed, using fallback:", e);
-    const fb = deepCloneOutput(full);
-    fb.sections = capBulletsPerEntry(fb.sections, 3);
-    fb.skills = shrinkSkillsTable(fb.skills as Record<string, string[]>, 8);
-    if (fb.summary && fb.summary.length > 360) {
-      fb.summary = `${fb.summary.slice(0, 320).trim()}…`;
-    }
-    return fb;
+  // Phase 0: measure full resume — return null if it already fits
+  const fullHeight = await measureResumeHeightPx(renderForMeasurement(full, false));
+  if (fullHeight === null || fullHeight <= A4_HEIGHT_PX) {
+    return null;
   }
+
+  assertNotAborted(abortSignal);
+
+  // Phase 1: clone + design overrides (deterministic, no measurement)
+  const onePage: TailoredResumeOutput = JSON.parse(JSON.stringify(full));
+
+  // Phase 2: measure with one-page design — return early if it fits
+  const height2 = await measureResumeHeightPx(renderForMeasurement(onePage, true));
+  if (height2 !== null && height2 <= A4_HEIGHT_PX) {
+    return onePage;
+  }
+
+  assertNotAborted(abortSignal);
+
+  // Phase 3: score sections and compute line budget from remaining overflow
+  const overflowPx = (height2 ?? fullHeight) - A4_HEIGHT_PX;
+  const lineBudget = Math.ceil(overflowPx / 20);
+
+  const lowRelevanceSections = onePage.sections.filter((s) => scoreSectionRelevance(s) < 0.5);
+
+  // Phase 4: targeted LLM reduction on low-relevance sections
+  let llmSucceeded = false;
+  if (lowRelevanceSections.length > 0) {
+    try {
+      const model = process.env.LLM_MODEL || 'openai/gpt-4o-mini';
+      const raw = await callLLM(
+        [
+          {
+            role: 'system',
+            content: `You are a resume editor. Reduce total content by approximately ${lineBudget} lines.
+Rules:
+1. Preserve every employer, role title, institution, degree, and date exactly.
+2. Never remove or shorten a bullet with non-empty jdAnchors.
+3. For entries with 3+ bullets and no anchored bullets: reduce to 2 bullets.
+4. For entries with 2 bullets and no anchored bullets: reduce to 1 bullet only if the budget requires it.
+5. Prefer merging two bullets into one condensed bullet over deleting entirely.
+6. Shorten bullet text by removing filler phrases, not facts or metrics.
+7. Return ONLY the modified sections array. Same schema as input.`,
+          },
+          { role: 'user', content: JSON.stringify(lowRelevanceSections) },
+        ],
+        { model, jsonMode: true, abortSignal, temperature: 0.15, max_tokens: 8000 }
+      );
+
+      const parsed = safeJsonParse<DynamicSection[]>(raw);
+      if (Array.isArray(parsed)) {
+        const sectionMap = new Map(parsed.map((s) => [s.name, s]));
+        onePage.sections = onePage.sections.map((s) => sectionMap.get(s.name) ?? s);
+        llmSucceeded = true;
+      }
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') throw e;
+      console.error('[one-page-compaction] LLM call failed:', e);
+    }
+  }
+
+  // If LLM did not help, apply deterministic micro-trim
+  if (!llmSucceeded) {
+    onePage.sections = microTrimSections(onePage.sections, lineBudget);
+  }
+
+  assertNotAborted(abortSignal);
+
+  // Phase 5: final measurement — ship best-effort regardless of result
+  await measureResumeHeightPx(renderForMeasurement(onePage, true));
+
+  return onePage;
 }
