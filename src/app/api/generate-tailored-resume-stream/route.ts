@@ -160,13 +160,20 @@ function createSSEStream(req: Request, userId: string) {
 
           // Hidden one-page variant (no extra SSE stages — runs before `done`)
           // Returns null when the full resume already fits on one page → toggle hidden
+          // Hard 90s timeout so `done` always fires even if Puppeteer hangs.
           let finalResumeJsonOnePage: typeof payloadResume | null = null;
           try {
-            const onePageOut = await compactTailoredResumeToOnePage(
-              { ...result, skills: finalSkills },
-              plainJobDescription,
-              abortSignal
+            const compactionTimeout = new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), 90_000)
             );
+            const onePageOut = await Promise.race([
+              compactTailoredResumeToOnePage(
+                { ...result, skills: finalSkills },
+                plainJobDescription,
+                abortSignal
+              ),
+              compactionTimeout,
+            ]);
             if (onePageOut !== null) {
               let oneSkills = onePageOut.skills || {};
               if (Array.isArray(oneSkills)) {
