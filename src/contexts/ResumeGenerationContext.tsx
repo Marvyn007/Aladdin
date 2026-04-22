@@ -8,6 +8,7 @@ import { toEditorFormat } from '@/lib/resume-generation/toEditorFormat';
 import { applyOnePageDesignFromFull, buildTailoredResumeSavePayload } from '@/lib/tailored-resume-bundle';
 import { useSubscription } from '@/hooks/useSubscription';
 import type { UsageFeature } from '@/lib/subscription/tier-config';
+import { announcePriorityModalOpening } from '@/lib/priority-modal';
 
 export interface GateBlock {
   reason: 'UNAUTHORIZED' | 'LIMIT_REACHED';
@@ -232,6 +233,22 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
     }));
   }, []);
 
+  const blockWithPriorityModal = useCallback((block: GateBlock) => {
+    announcePriorityModalOpening();
+    abortRef.current?.abort();
+    abortRef.current = null;
+    generatingRef.current = false;
+    lastProgressTickRef.current = 0;
+    setState(prev => ({
+      ...prev,
+      status: 'idle',
+      progress: makeInitialProgress(),
+      error: null,
+      isModalOpen: false,
+    }));
+    setBlockedBy(block);
+  }, []);
+
   // UX fallback: if early stages appear stuck with no backend events for ~9s, move one step forward.
   // This does not change backend logic; it only prevents the UI from feeling frozen.
   useEffect(() => {
@@ -264,11 +281,11 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
 
   const startGeneration = useCallback(async (jobDescription: string) => {
     if (!sub.isLoading && sub.planType === 'LITE') {
-      setBlockedBy({ reason: 'UNAUTHORIZED', feature: 'resumesGenerated', resetDate: null });
+      blockWithPriorityModal({ reason: 'UNAUTHORIZED', feature: 'resumesGenerated', resetDate: null });
       return;
     }
     if (!sub.isLoading && sub.usage.resumesGenerated >= sub.limits.resumesGenerated) {
-      setBlockedBy({ reason: 'LIMIT_REACHED', feature: 'resumesGenerated', resetDate: sub.currentPeriodEnd });
+      blockWithPriorityModal({ reason: 'LIMIT_REACHED', feature: 'resumesGenerated', resetDate: sub.currentPeriodEnd });
       return;
     }
     if (generatingRef.current) return;
@@ -297,12 +314,11 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
       if (!response.ok) {
         if (response.status === 403) {
           const body = await response.json().catch(() => ({})) as { error?: string; resetDate?: string };
-          setBlockedBy({
+          blockWithPriorityModal({
             reason: body.error === 'UNAUTHORIZED' ? 'UNAUTHORIZED' : 'LIMIT_REACHED',
             feature: 'resumesGenerated',
             resetDate: body.resetDate ?? null,
           });
-          generatingRef.current = false;
           return;
         }
         throw new Error(`Server returned ${response.status}`);
@@ -449,7 +465,7 @@ export function ResumeGenerationProvider({ children }: { children: React.ReactNo
       generatingRef.current = false;
       lastProgressTickRef.current = 0;
     }
-  }, [sub]);
+  }, [blockWithPriorityModal, sub]);
 
   const value: ResumeGenerationContextValue = {
     ...state,

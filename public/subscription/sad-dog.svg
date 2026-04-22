@@ -1,0 +1,26 @@
+<svg width="360" height="260" viewBox="0 0 360 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="196" cy="207" rx="103" ry="27" fill="#DDE8EA"/>
+  <path d="M99 88C103 47 148 28 183 52C206 43 245 50 261 80C291 88 303 122 286 151C291 195 252 219 206 217C153 226 105 205 108 158C89 143 84 111 99 88Z" fill="#C78645"/>
+  <path d="M112 104C103 99 88 89 82 103C75 121 92 135 113 127L112 104Z" fill="#A66C38"/>
+  <path d="M245 91C267 91 292 110 287 133C283 153 265 149 249 132L245 91Z" fill="#A66C38"/>
+  <path d="M113 138C118 181 154 207 207 206C250 205 276 181 282 144C269 170 235 184 197 184C157 184 126 169 113 138Z" fill="#F7F1DF"/>
+  <path d="M122 150C139 132 184 134 192 160C196 173 186 187 167 190C144 194 123 177 122 150Z" fill="#70472E"/>
+  <path d="M121 120C129 111 144 109 154 119C164 128 163 144 153 151C140 161 122 151 119 136C118 130 118 124 121 120Z" fill="#1F2326"/>
+  <path d="M205 114C214 105 230 107 238 119C247 132 242 149 230 154C216 160 201 149 199 133C198 125 200 119 205 114Z" fill="#1F2326"/>
+  <circle cx="141" cy="124" r="6" fill="white"/>
+  <circle cx="225" cy="120" r="6" fill="white"/>
+  <circle cx="147" cy="139" r="3" fill="white" fill-opacity=".85"/>
+  <circle cx="231" cy="136" r="3" fill="white" fill-opacity=".85"/>
+  <path d="M152 165C158 155 177 154 187 163C193 169 190 180 179 184C166 190 151 181 152 165Z" fill="#2B2928"/>
+  <path d="M179 183C182 196 198 198 206 188" stroke="#5A3A27" stroke-width="4" stroke-linecap="round"/>
+  <path d="M165 183C160 196 143 197 136 188" stroke="#5A3A27" stroke-width="4" stroke-linecap="round"/>
+  <path d="M136 78C154 69 180 69 197 78" stroke="#5A3A27" stroke-width="4" stroke-linecap="round"/>
+  <path d="M150 94C163 88 180 88 192 95" stroke="#5A3A27" stroke-width="3" stroke-linecap="round"/>
+  <path d="M203 88C212 80 231 80 246 91" stroke="#5A3A27" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="135" cy="164" r="2" fill="#4E3424"/>
+  <circle cx="145" cy="174" r="2" fill="#4E3424"/>
+  <circle cx="178" cy="168" r="2" fill="#4E3424"/>
+  <circle cx="190" cy="177" r="2" fill="#4E3424"/>
+  <path d="M106 182C91 190 88 218 116 221C134 223 142 207 132 192" fill="#F7F1DF"/>
+  <path d="M253 181C270 190 273 218 245 221C227 223 219 207 229 192" fill="#F7F1DF"/>
+</svg>

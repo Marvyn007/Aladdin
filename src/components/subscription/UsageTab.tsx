@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Lock } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Lock, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useSubscription, isUnlimited } from '@/hooks/useSubscription';
 import { LimitReachedModal } from './LimitReachedModal';
+import { SquishyCard } from '@/components/ui/squishy-card-component';
 
 interface UsageBarProps {
   label: string;
@@ -19,8 +21,8 @@ function UsageBar({ label, used, limit, isLite }: UsageBarProps) {
   const displayRight = isLite
     ? '0 / 0'
     : unlimited
-    ? '∞ / Unlimited'
-    : `${used} / ${limit}`;
+      ? '∞ / Unlimited'
+      : `${used} / ${limit}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -56,13 +58,100 @@ const PLAN_LABELS: Record<string, string> = {
   CAPTAIN: 'Aladdin Captain',
 };
 
+interface CancelSubscriptionModalProps {
+  open: boolean;
+  planLabel: string;
+  periodEndLabel: string | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+function CancelSubscriptionModal({
+  open,
+  planLabel,
+  periodEndLabel,
+  loading,
+  error,
+  onClose,
+  onConfirm,
+}: CancelSubscriptionModalProps) {
+  if (!open) return null;
+
+  const accessText = periodEndLabel
+    ? `You will keep ${planLabel} until ${periodEndLabel}.`
+    : `You will keep ${planLabel} until the end of this billing period.`;
+  const reassuranceText = `But don't worry, ${accessText} At least we can do that much for you.`;
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        background: 'rgba(17, 24, 39, 0.58)',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()}>
+        <SquishyCard
+          badge="We are sad to see you go"
+          title={<>Cancel<br />renewal?</>}
+          imageSrc="/sad-puppy.png"
+          description={reassuranceText}
+          subtext="You will not be charged for the next billing period."
+          errorText={error}
+          primaryLabel="Keep my plan"
+          secondaryLabel={loading ? 'Canceling...' : 'Cancel renewal'}
+          loading={loading}
+          onPrimary={onClose}
+          onSecondary={onConfirm}
+        />
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function UsageTab() {
   const sub = useSubscription();
   const router = useRouter();
   const [captainModalOpen, setCaptainModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const isLite = sub.planType === 'LITE';
   const isCopilot = sub.planType === 'COPILOT';
   const isCaptain = sub.planType === 'CAPTAIN';
+  const periodEndLabel = sub.currentPeriodEnd
+    ? new Date(sub.currentPeriodEnd).toLocaleDateString()
+    : null;
+  const planLabel = PLAN_LABELS[sub.planType] ?? sub.planType;
+
+  async function handleCancelSubscription() {
+    setCancelLoading(true);
+    setCancelError(null);
+    try {
+      const res = await fetch('/api/stripe/cancel-subscription', { method: 'POST' });
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) {
+        setCancelError(data.error ?? 'Could not cancel subscription.');
+        return;
+      }
+      setCancelModalOpen(false);
+      window.dispatchEvent(new CustomEvent('aladdin:subscription-refresh'));
+    } catch {
+      setCancelError('Could not cancel subscription.');
+    } finally {
+      setCancelLoading(false);
+    }
+  }
 
   if (sub.isLoading) {
     return (
@@ -74,15 +163,20 @@ export function UsageTab() {
 
   return (
     <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
         <div>
           <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Current plan</div>
           <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text)' }}>
-            {PLAN_LABELS[sub.planType] ?? sub.planType}
+            {planLabel}
           </div>
-          {sub.currentPeriodEnd && !isLite && (
+          {periodEndLabel && !isLite && !sub.cancelAtPeriodEnd && (
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Resets on {new Date(sub.currentPeriodEnd).toLocaleDateString()}
+              Resets on {periodEndLabel}
+            </div>
+          )}
+          {periodEndLabel && !isLite && sub.cancelAtPeriodEnd && (
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Access until {periodEndLabel}
             </div>
           )}
         </div>
@@ -110,6 +204,19 @@ export function UsageTab() {
             }}
           >
             Upgrade to Captain
+          </button>
+        )}
+
+        {isCaptain && (
+          <button
+            onClick={() => router.push('/upgrade')}
+            style={{
+              padding: '8px 14px', borderRadius: '8px', border: 'none',
+              background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer',
+              fontSize: '13px', fontWeight: 600,
+            }}
+          >
+            Change plan
           </button>
         )}
       </div>
@@ -147,12 +254,67 @@ export function UsageTab() {
         </p>
       )}
 
+      {!isLite && (
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {sub.cancelAtPeriodEnd ? (
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              Your subscription is canceled and will not renew. You keep {planLabel}
+              {periodEndLabel ? ` until ${periodEndLabel}` : ' until the end of this billing period'}.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setCancelError(null);
+                setCancelModalOpen(true);
+              }}
+              disabled={cancelLoading}
+              style={{
+                alignSelf: 'flex-start',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                cursor: cancelLoading ? 'default' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                opacity: cancelLoading ? 0.7 : 1,
+              }}
+            >
+              <XCircle size={15} aria-hidden />
+              {cancelLoading ? 'Canceling...' : 'Cancel subscription'}
+            </button>
+          )}
+          {cancelError && (
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--danger, #dc2626)' }}>
+              {cancelError}
+            </p>
+          )}
+        </div>
+      )}
+
       <LimitReachedModal
         open={captainModalOpen}
         onClose={() => setCaptainModalOpen(false)}
         feature="resumesGenerated"
         resetDate={sub.currentPeriodEnd}
         mode="upgrade"
+      />
+
+      <CancelSubscriptionModal
+        open={cancelModalOpen}
+        planLabel={planLabel}
+        periodEndLabel={periodEndLabel}
+        loading={cancelLoading}
+        error={cancelError}
+        onClose={() => {
+          if (!cancelLoading) setCancelModalOpen(false);
+        }}
+        onConfirm={handleCancelSubscription}
       />
     </div>
   );

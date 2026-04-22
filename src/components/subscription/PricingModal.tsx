@@ -18,7 +18,6 @@ const PLANS = [
     price: 'Free',
     icon: <Star size={20} />,
     features: ['Job board & map', 'Application tracker', 'Interview prep', 'Static resume editor'],
-    priceId: null as string | null,
   },
   {
     id: 'COPILOT' as const,
@@ -26,7 +25,7 @@ const PLANS = [
     price: '$6.99/mo',
     icon: <Zap size={20} />,
     features: ['Everything in Lite', '15 AI resume tailorings', '30 cover letters', '60 LinkedIn profiles', '30 email reveals'],
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_COPILOT ?? null,
+    plan: 'copilot' as const,
     highlight: true,
   },
   {
@@ -35,7 +34,7 @@ const PLANS = [
     price: '$16.99/mo',
     icon: <Rocket size={20} />,
     features: ['Everything in Co-pilot', '60 AI resume tailorings', '∞ cover letters*', '150 email reveals', '∞ LinkedIn profiles*'],
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_CAPTAIN ?? null,
+    plan: 'captain' as const,
   },
 ];
 
@@ -44,13 +43,17 @@ export function PricingModal({ isOpen, onClose, sub }: PricingModalProps) {
 
   if (!isOpen) return null;
 
-  const handleUpgrade = async (priceId: string) => {
-    setLoading(priceId);
+  const handleUpgrade = async (plan: 'copilot' | 'captain') => {
+    setLoading(plan);
     try {
       const res = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId }),
+        body: JSON.stringify({
+          plan,
+          successPath: '/upgrade?checkout=success&session_id={CHECKOUT_SESSION_ID}',
+          cancelPath: '/upgrade',
+        }),
       });
       const data = await res.json() as { url?: string };
       if (data.url) window.location.href = data.url;
@@ -149,9 +152,9 @@ export function PricingModal({ isOpen, onClose, sub }: PricingModalProps) {
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: 'auto' }}>
                   Current plan
                 </div>
-              ) : plan.priceId ? (
+              ) : 'plan' in plan ? (
                 <button
-                  onClick={() => handleUpgrade(plan.priceId!)}
+                  onClick={() => handleUpgrade((plan as { plan: 'copilot' | 'captain' }).plan)}
                   disabled={loading !== null}
                   style={{
                     marginTop: 'auto', padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer',
@@ -161,7 +164,7 @@ export function PricingModal({ isOpen, onClose, sub }: PricingModalProps) {
                     opacity: loading !== null ? 0.6 : 1,
                   }}
                 >
-                  {loading === plan.priceId ? 'Redirecting…' : 'Upgrade'}
+                  {loading === (plan as { plan: 'copilot' | 'captain' }).plan ? 'Redirecting…' : 'Upgrade'}
                 </button>
               ) : null}
             </div>

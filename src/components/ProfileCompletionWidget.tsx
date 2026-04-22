@@ -579,8 +579,7 @@ export function ProfileCompletionWidget() {
     }
   }, [setupComplete]);
 
-  if (pathname === '/onboarding') return null;
-  if (pathname.startsWith('/admin')) return null;
+  if (pathname !== '/') return null;
   if (setupComplete !== false) return null;
 
   const markStepDone = (key: 'resume' | 'linkedin' | 'prefs') => {

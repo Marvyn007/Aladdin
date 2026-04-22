@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: resolved.error }, { status: 400 });
   }
   const { priceId } = resolved;
+  const requestedPlan = body.plan?.toLowerCase();
 
   const origin = request.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -53,6 +54,12 @@ export async function POST(request: NextRequest) {
     success_url: `${origin}${safeSuccessPath}`,
     cancel_url: `${origin}${safeCancelPath}`,
     metadata: { userId },
+    subscription_data: {
+      metadata: {
+        userId,
+        ...(requestedPlan ? { plan: requestedPlan } : {}),
+      },
+    },
   });
 
   if (!session.url) {

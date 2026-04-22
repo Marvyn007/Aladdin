@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -12,6 +12,7 @@ import { LiteUpgradeModal } from '@/components/subscription/LiteUpgradeModal';
 import { LimitReachedModal } from '@/components/subscription/LimitReachedModal';
 import { CaptainLimitModal } from '@/components/subscription/CaptainLimitModal';
 import type { UsageFeature } from '@/lib/subscription/tier-config';
+import { announcePriorityModalOpening, usePriorityModalCleanup } from '@/lib/priority-modal';
 
 interface ContactLocation {
   city: string | null;
@@ -332,6 +333,23 @@ export function ReferralsView() {
 
   const hasFilters = activeSeniorities.size > 0 || activeCountries.size > 0 || activeCities.size > 0;
 
+  const closePriorityGateModals = useCallback(() => {
+    setLiteModalOpen(false);
+    setLimitModal(null);
+  }, []);
+
+  usePriorityModalCleanup(closePriorityGateModals);
+
+  const showLiteModal = useCallback(() => {
+    announcePriorityModalOpening();
+    setLiteModalOpen(true);
+  }, []);
+
+  const showLimitModal = useCallback((modal: { feature: UsageFeature; resetDate: string | null }) => {
+    announcePriorityModalOpening();
+    setLimitModal(modal);
+  }, []);
+
   function clearFilters() {
     setActiveSeniorities(new Set());
     setActiveCountries(new Set());
@@ -393,9 +411,9 @@ export function ReferralsView() {
 
     // Client-side pre-check (skip if sub still loading — server guard will enforce)
     if (!sub.isLoading) {
-      if (sub.planType === 'LITE') { setLiteModalOpen(true); return; }
+      if (sub.planType === 'LITE') { showLiteModal(); return; }
       if (sub.usage.emailsRetrieved >= sub.limits.emailsRetrieved) {
-        setLimitModal({ feature: 'emailsRetrieved', resetDate: sub.currentPeriodEnd });
+        showLimitModal({ feature: 'emailsRetrieved', resetDate: sub.currentPeriodEnd });
         return;
       }
     }
@@ -406,8 +424,8 @@ export function ReferralsView() {
       if (!res.ok) {
         if (res.status === 403) {
           const body = await res.json().catch(() => ({})) as { error?: string; resetDate?: string };
-          if (body.error === 'UNAUTHORIZED') { setLiteModalOpen(true); return; }
-          setLimitModal({ feature: 'emailsRetrieved', resetDate: body.resetDate ?? null });
+          if (body.error === 'UNAUTHORIZED') { showLiteModal(); return; }
+          showLimitModal({ feature: 'emailsRetrieved', resetDate: body.resetDate ?? null });
           return;
         }
         const data = await res.json().catch(() => ({}));
@@ -427,9 +445,9 @@ export function ReferralsView() {
 
     // Client-side pre-check (skip if sub still loading — server guard will enforce)
     if (!sub.isLoading) {
-      if (sub.planType === 'LITE') { setLiteModalOpen(true); return; }
+      if (sub.planType === 'LITE') { showLiteModal(); return; }
       if (sub.usage.linkedinRetrieved >= sub.limits.linkedinRetrieved) {
-        setLimitModal({ feature: 'linkedinRetrieved', resetDate: sub.currentPeriodEnd });
+        showLimitModal({ feature: 'linkedinRetrieved', resetDate: sub.currentPeriodEnd });
         return;
       }
     }
@@ -440,8 +458,8 @@ export function ReferralsView() {
       if (!res.ok) {
         if (res.status === 403) {
           const body = await res.json().catch(() => ({})) as { error?: string; resetDate?: string };
-          if (body.error === 'UNAUTHORIZED') { setLiteModalOpen(true); return; }
-          setLimitModal({ feature: 'linkedinRetrieved', resetDate: body.resetDate ?? null });
+          if (body.error === 'UNAUTHORIZED') { showLiteModal(); return; }
+          showLimitModal({ feature: 'linkedinRetrieved', resetDate: body.resetDate ?? null });
           return;
         }
         return;
@@ -685,8 +703,8 @@ export function ReferralsView() {
                                       type="button"
                                       className="referrals-linkedin-btn referrals-linkedin-btn--locked"
                                       onClick={() => {
-                                        if (sub.planType === 'LITE') { setLiteModalOpen(true); return; }
-                                        setLimitModal({ feature: 'linkedinRetrieved', resetDate: sub.currentPeriodEnd });
+                                        if (sub.planType === 'LITE') { showLiteModal(); return; }
+                                        showLimitModal({ feature: 'linkedinRetrieved', resetDate: sub.currentPeriodEnd });
                                       }}
                                     >
                                       <Image src={LINKEDIN_LOGO_SRC} alt="" width={14} height={14} className="referrals-linkedin-logo" style={{ opacity: 0.4 }} />

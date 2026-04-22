@@ -11,6 +11,7 @@ import { LiteUpgradeModal } from '@/components/subscription/LiteUpgradeModal';
 import { LimitReachedModal } from '@/components/subscription/LimitReachedModal';
 import { CaptainLimitModal } from '@/components/subscription/CaptainLimitModal';
 import { AuthModal } from '@/components/modals/AuthModal';
+import { announcePriorityModalOpening, usePriorityModalCleanup } from '@/lib/priority-modal';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -296,6 +297,20 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
   // Local counter so the UI updates immediately after each reveal without waiting for a refetch
   const [localLinkedinCount, setLocalLinkedinCount] = useState(0);
 
+  const closeNonPriorityModals = useCallback(() => {
+    setIsModalOpen(false);
+    setAuthModalOpen(false);
+    setGateModal(null);
+  }, []);
+
+  usePriorityModalCleanup(closeNonPriorityModals);
+
+  const showGateModal = useCallback((modal: GateModal) => {
+    announcePriorityModalOpening();
+    closeNonPriorityModals();
+    setGateModal(modal);
+  }, [closeNonPriorityModals]);
+
   const linkedinUsed = sub.usage.linkedinRetrieved + localLinkedinCount;
   const canViewLinkedin = !sub.isLoading
     && sub.planType !== 'LITE'
@@ -304,9 +319,9 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
   function handleLinkedinLocked() {
     if (sub.isLoading) return;
     if (sub.planType === 'LITE') {
-      setGateModal({ type: 'lite' });
+      showGateModal({ type: 'lite' });
     } else {
-      setGateModal({ type: 'limit', resetDate: sub.currentPeriodEnd });
+      showGateModal({ type: 'limit', resetDate: sub.currentPeriodEnd });
     }
   }
 
@@ -316,9 +331,9 @@ export function ReferralTeaser({ companyDomain, companyName }: ReferralTeaserPro
       if (res.status === 403) {
         const body = await res.json().catch(() => ({})) as { error?: string; resetDate?: string };
         if (body.error === 'UNAUTHORIZED') {
-          setGateModal({ type: 'lite' });
+          showGateModal({ type: 'lite' });
         } else {
-          setGateModal({ type: 'limit', resetDate: body.resetDate ?? null });
+          showGateModal({ type: 'limit', resetDate: body.resetDate ?? null });
         }
         return;
       }

@@ -96,7 +96,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan: checkoutPlan,
-          successPath: '/upgrade?session_id={CHECKOUT_SESSION_ID}',
+          successPath: '/upgrade?checkout=success&session_id={CHECKOUT_SESSION_ID}',
           cancelPath: '/upgrade',
         }),
       });
@@ -171,8 +171,26 @@ export function UpgradePlans() {
   useEffect(() => {
     const sid = searchParams.get('session_id');
     if (!sid) return;
-    window.dispatchEvent(new CustomEvent('aladdin:subscription-refresh'));
-    router.replace('/upgrade');
+    let cancelled = false;
+
+    async function sync() {
+      try {
+        await fetch('/api/stripe/sync-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sid }),
+        });
+      } catch (error) {
+        console.error('[UpgradePlans] Checkout sync failed:', error);
+      } finally {
+        if (cancelled) return;
+        window.dispatchEvent(new CustomEvent('aladdin:subscription-refresh'));
+        router.replace('/');
+      }
+    }
+
+    sync();
+    return () => { cancelled = true; };
   }, [searchParams, router]);
 
   return (

@@ -35,6 +35,7 @@ import { LiteUpgradeModal } from '@/components/subscription/LiteUpgradeModal';
 import { LimitReachedModal } from '@/components/subscription/LimitReachedModal';
 import { CaptainLimitModal } from '@/components/subscription/CaptainLimitModal';
 import type { UsageFeature } from '@/lib/subscription/tier-config';
+import { announcePriorityModalOpening, usePriorityModalCleanup } from '@/lib/priority-modal';
 import { useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -375,7 +376,12 @@ export function Dashboard({
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
-    const { openModal: openResumeModal, blockedBy: resumeBlockedBy, clearBlockedBy: clearResumeBlockedBy } = useResumeGeneration();
+    const {
+        openModal: openResumeModal,
+        blockedBy: resumeBlockedBy,
+        clearBlockedBy: clearResumeBlockedBy,
+        cancelGeneration: cancelResumeGeneration,
+    } = useResumeGeneration();
     const sub = useSubscription();
 
     // Derive active state mainly from props/URL
@@ -468,6 +474,30 @@ export function Dashboard({
         ],
         currentStageIndex: 0,
     });
+    const [isScoring, setIsScoring] = useState(false);
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const coverLetterAbortRef = useRef<AbortController | null>(null);
+
+    const closeNonPriorityModals = useCallback(() => {
+        coverLetterAbortRef.current?.abort();
+        coverLetterAbortRef.current = null;
+        setAuthModalOpen(false);
+        setCoverLetterSetupModal(prev => ({ ...prev, isOpen: false }));
+        setCoverLetterModal(prev => ({ ...prev, isOpen: false, isGenerating: false }));
+        setActiveModal(null);
+        setIsFilterModalOpen(false);
+        setGateModal(null);
+        clearResumeBlockedBy();
+        cancelResumeGeneration();
+    }, [cancelResumeGeneration, clearResumeBlockedBy, setActiveModal]);
+
+    usePriorityModalCleanup(closeNonPriorityModals);
+
+    const showGateModal = useCallback((modal: { type: 'lite' | 'limit'; feature: UsageFeature; resetDate: string | null }) => {
+        announcePriorityModalOpening();
+        closeNonPriorityModals();
+        setGateModal(modal);
+    }, [closeNonPriorityModals]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -962,11 +992,11 @@ export function Dashboard({
     const handleConfirmGenerateCoverLetter = async (jobId: string, jobDescription: string, queue: boolean = false) => {
         if (!isSignedIn) return;
         if (!sub.isLoading && sub.planType === 'LITE') {
-            setGateModal({ type: 'lite', feature: 'coverLettersGenerated', resetDate: null });
+            showGateModal({ type: 'lite', feature: 'coverLettersGenerated', resetDate: null });
             return;
         }
         if (!sub.isLoading && sub.usage.coverLettersGenerated >= sub.limits.coverLettersGenerated) {
-            setGateModal({ type: 'limit', feature: 'coverLettersGenerated', resetDate: sub.currentPeriodEnd });
+            showGateModal({ type: 'limit', feature: 'coverLettersGenerated', resetDate: sub.currentPeriodEnd });
             return;
         }
         const job = jobs.find(j => j.id === jobId) || (selectedJob?.id === jobId ? selectedJob : null);
@@ -985,7 +1015,7 @@ export function Dashboard({
                 });
                 const data = await res.json();
                 if (res.status === 403) {
-                    setGateModal({
+                    showGateModal({
                         type: data.error === 'UNAUTHORIZED' ? 'lite' : 'limit',
                         feature: 'coverLettersGenerated',
                         resetDate: data.resetDate ?? null,
@@ -1030,7 +1060,11 @@ export function Dashboard({
             currentStageIndex: 0,
         }));
 
+        let controller: AbortController | null = null;
         try {
+            coverLetterAbortRef.current?.abort();
+            controller = new AbortController();
+            coverLetterAbortRef.current = controller;
             const response = await fetch('/api/generate-cover-letter-stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1038,13 +1072,14 @@ export function Dashboard({
                     job_id: jobId,
                     job_description: normalizedJobDescription
                 }),
+                signal: controller.signal,
             });
 
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({})) as { error?: string; message?: string; resetDate?: string };
                 if (response.status === 403) {
                     setCoverLetterModal(prev => ({ ...prev, isOpen: false, isGenerating: false }));
-                    setGateModal({
+                    showGateModal({
                         type: errData.error === 'UNAUTHORIZED' ? 'lite' : 'limit',
                         feature: 'coverLettersGenerated',
                         resetDate: errData.resetDate ?? null,
@@ -1133,6 +1168,9 @@ export function Dashboard({
             }));
 
         } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                return;
+            }
             console.error('Error generating cover letter:', error);
             setCoverLetterProgress(prev => ({
                 ...prev,
@@ -1144,6 +1182,10 @@ export function Dashboard({
                 isGenerating: false,
                 error: error.message || 'Failed to communicate with server. Please try again.',
             }));
+        } finally {
+            if (coverLetterAbortRef.current === controller) {
+                coverLetterAbortRef.current = null;
+            }
         }
     };
 
@@ -1253,9 +1295,6 @@ export function Dashboard({
             loadApplications();
         }
     };
-
-    const [isScoring, setIsScoring] = useState(false);
-    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
     const handleScoreJobs = async () => {
         if (!isSignedIn) {
