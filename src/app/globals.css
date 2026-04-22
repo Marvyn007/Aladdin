@@ -1070,6 +1070,40 @@ body {
   }
 }
 
+/* Job detail header actions become an icon toolbar on narrow screens. */
+@media (max-width: 1024px) {
+  .job-detail-action-bar {
+    padding: 8px 24px 12px !important;
+  }
+
+  .job-detail-action-bar .action-buttons {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .job-detail-action-bar .action-buttons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .job-detail-action-bar .action-buttons .btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .job-detail-action-bar .job-detail-action-label {
+    display: none;
+  }
+}
+
 /* ===== SMALL MOBILE (< 375px) ===== */
 @media (max-width: 374px) {
   .sidebar {

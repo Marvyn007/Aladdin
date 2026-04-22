@@ -32,7 +32,6 @@ function getJobPostedTimestamp(job: Job): number | null {
 }
 
 function matchesStatusFilter(job: Job, filter: JobStatus): boolean {
-    if (filter === 'recommended') return false; // handled separately via recommendedJobs prop
     if (filter === 'saved') {
         return job.status === 'saved';
     }
@@ -82,9 +81,6 @@ function MatchBadge({ matchedFields }: { matchedFields: MatchField[] }) {
 
 interface JobListProps {
     onJobClick: (job: Job) => void;
-    recommendedJobs?: Job[];
-    recommendedStatus?: 'idle' | 'loading' | 'ready' | 'pending';
-    recommendedMessage?: string | null;
 }
 
 // Get dynamic color based on company name
@@ -248,7 +244,7 @@ function JobTagPill({ tag }: { tag: JobCardTag }) {
     );
 }
 
-export function JobList({ onJobClick, recommendedJobs = [], recommendedStatus = 'idle', recommendedMessage = null }: JobListProps) {
+export function JobList({ onJobClick }: JobListProps) {
     const isSignedIn = useAuth().isSignedIn;
     const jobs = useStore(state => state.jobs);
     const searchMode = useStore(state => state.searchMode);
@@ -289,18 +285,11 @@ export function JobList({ onJobClick, recommendedJobs = [], recommendedStatus = 
         return baseJobs.filter(job => matchesStatusFilter(job, jobStatus));
     }, [searchMode, searchResults, filteredJobs, jobStatus]);
 
-    const statusAwareCount = jobStatus === 'recommended'
-        ? recommendedJobs.length
-        : searchMode ? statusFilteredJobs.length : (pagination.total || statusFilteredJobs.length);
+    const statusAwareCount = searchMode ? statusFilteredJobs.length : (pagination.total || statusFilteredJobs.length);
     const statusTotalPages = searchMode ? Math.ceil(statusAwareCount / paginationLimit) : (pagination.totalPages || 1);
 
     // Determine which jobs to display
     let displayedJobs = statusFilteredJobs;
-
-    // For the recommended tab, use pre-scored jobs from the API
-    if (jobStatus === 'recommended') {
-        displayedJobs = recommendedJobs;
-    }
 
     // Apply client-side pagination and sorting for search results
     if (searchMode) {
@@ -363,9 +352,6 @@ export function JobList({ onJobClick, recommendedJobs = [], recommendedStatus = 
                                     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                                 }}
                             >
-                                <button onClick={() => setJobStatus('recommended')} style={getStatusTabStyle('recommended')}>
-                                    For You
-                                </button>
                                 <button onClick={() => setJobStatus('fresh')} style={getStatusTabStyle('fresh')}>
                                     Fresh
                                 </button>
@@ -473,28 +459,10 @@ export function JobList({ onJobClick, recommendedJobs = [], recommendedStatus = 
                     padding: '12px',
                 }}
             >
-                {jobStatus === 'recommended' && recommendedStatus === 'pending' && (
-                    <div style={{
-                        margin: '0 0 12px 0',
-                        padding: '12px 16px',
-                        borderRadius: '10px',
-                        background: 'color-mix(in srgb, var(--accent) 8%, var(--surface))',
-                        border: '1px solid color-mix(in srgb, var(--accent) 20%, var(--border))',
-                        fontSize: '13px',
-                        color: 'var(--text-secondary)',
-                    }}>
-                        {recommendedMessage ?? 'Your personalized feed is being prepared. Showing recent jobs in the meantime.'}
-                    </div>
-                )}
-                {(jobStatus === 'recommended' && recommendedStatus === 'loading') || isLoadingJobs ? (
+                {isLoadingJobs ? (
                     <JobLoadingState />
                 ) : displayedJobs.length === 0 ? (
-                    jobStatus === 'recommended' ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                            <p style={{ fontSize: '14px', marginBottom: '8px' }}>No recommendations yet</p>
-                            <p style={{ fontSize: '12px' }}>Complete onboarding to see your personalized feed</p>
-                        </div>
-                    ) : searchMode ? (
+                    searchMode ? (
                         <SearchEmptyState />
                     ) : (
                         <div

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { JobEditModal } from '@/components/modals/JobEditModal';
 import { useStoreActions } from '@/store/useStore';
 import { useResumeGeneration } from '@/contexts/ResumeGenerationContext';
@@ -15,6 +15,7 @@ import DOMPurify from 'isomorphic-dompurify';
 import he from 'he';
 import { CompanyLogo } from '@/components/shared/CompanyLogo';
 import { ReferralTeaser } from '@/components/layout/ReferralTeaser';
+import { Wand2 } from 'lucide-react';
 
 /** Extract domain from a logo.dev CDN URL (direct or behind /api/proxy-image). */
 function extractDomainFromLogoDevUrl(logoUrl: string | null | undefined): string | null {
@@ -608,11 +609,33 @@ export function JobDetail({
     const [isGeneratingResume, setIsGeneratingResume] = useState(false);
     const [hasTailoredResume, setHasTailoredResume] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const jobDetailScrollRef = useRef<HTMLDivElement | null>(null);
     const { toggleJobStatus } = useStoreActions();
     const { status: resumeStatus } = useResumeGeneration();
 
     // The DB row spreads posted_by_user_id (snake_case); postedByUserId (camelCase) is only set in some mappers.
     const jobPosterId = job?.posted_by_user_id || job?.postedByUserId || job?.postedBy?.id || null;
+
+    useLayoutEffect(() => {
+        if (!job?.id) return;
+
+        const scrollTargets: Array<HTMLElement | Window | null | undefined> = [
+            jobDetailScrollRef.current,
+            document.querySelector('.job-detail-container'),
+            document.querySelector('.main-content'),
+            document.scrollingElement as HTMLElement | null,
+            window,
+        ];
+
+        for (const target of scrollTargets) {
+            if (!target) continue;
+            if (target instanceof Window) {
+                target.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            } else {
+                target.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            }
+        }
+    }, [job?.id]);
 
     useEffect(() => {
         if (!job?.id) {
@@ -779,7 +802,12 @@ export function JobDetail({
             {/* Relative wrapper — gives the inline ApplyPilot overlay a positioning context */}
             <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
-            <div className="job-detail-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            <div
+                key={job.id}
+                ref={jobDetailScrollRef}
+                className="job-detail-scroll"
+                style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}
+            >
                 {/* Header Info (Static) */}
                 <div
                     style={{
@@ -886,19 +914,23 @@ export function JobDetail({
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn btn-primary"
+                            title="View Original"
+                            aria-label="View Original"
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
                                 <polyline points="15 3 21 3 21 9" />
                                 <line x1="10" y1="14" x2="21" y2="3" />
                             </svg>
-                            View Original
+                            <span className="job-detail-action-label">View Original</span>
                         </a>
 
                         {isAuthenticated && (
                             <button
                                 onClick={() => toggleJobStatus(job.id, job.status === 'saved' ? 'fresh' : 'saved')}
                                 className="btn btn-secondary"
+                                title={job.status === 'saved' ? 'Saved Job' : 'Save Job'}
+                                aria-label={job.status === 'saved' ? 'Saved Job' : 'Save Job'}
                                 style={{
                                     color: job.status === 'saved' ? 'var(--accent)' : undefined,
                                     borderColor: job.status === 'saved' ? 'var(--accent)' : undefined,
@@ -907,7 +939,7 @@ export function JobDetail({
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill={job.status === 'saved' ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
                                 </svg>
-                                {job.status === 'saved' ? 'Saved Job' : 'Save Job'}
+                                <span className="job-detail-action-label">{job.status === 'saved' ? 'Saved Job' : 'Save Job'}</span>
                             </button>
                         )}
 
@@ -916,11 +948,13 @@ export function JobDetail({
                             disabled={isGenerating} // Don't disable for auth check, we want the click
                             className="btn btn-secondary"
                             style={gatedStyle}
+                            title="Generate Cover Letter"
+                            aria-label="Generate Cover Letter"
                         >
                             {isGenerating ? (
                                 <>
                                     <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                                    Generating...
+                                    <span className="job-detail-action-label">Generating...</span>
                                 </>
                             ) : (
                                 <>
@@ -930,7 +964,7 @@ export function JobDetail({
                                         <line x1="16" y1="13" x2="8" y2="13" />
                                         <line x1="16" y1="17" x2="8" y2="17" />
                                     </svg>
-                                    Generate Cover Letter
+                                    <span className="job-detail-action-label">Generate Cover Letter</span>
                                     {gatedIcon}
                                 </>
                             )}
@@ -949,38 +983,37 @@ export function JobDetail({
                                     alignItems: 'center',
                                     gap: '6px'
                                 }}
+                                title="View Tailored Resume"
+                                aria-label="View Tailored Resume"
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                                     <polyline points="20 6 9 17 4 12" />
                                 </svg>
-                                View Tailored Resume
+                                <span className="job-detail-action-label">View Tailored Resume</span>
                                 {gatedIcon}
                             </Link>
                         ) : (
                             <button
                                 onClick={handleGenerateTailoredResume}
                                 disabled={isGeneratingResume || resumeStatus === 'generating'}
-                                title={resumeStatus === 'generating' ? 'Resume generation in progress' : undefined}
+                                title={resumeStatus === 'generating' ? 'Resume generation in progress' : 'Tailor Resume'}
                                 className="btn btn-secondary"
                                 style={{
                                     ...gatedStyle,
                                     opacity: resumeStatus === 'generating' ? 0.5 : undefined,
                                     cursor: resumeStatus === 'generating' ? 'not-allowed' : undefined,
                                 }}
+                                aria-label="Tailor Resume"
                             >
                                 {isGeneratingResume ? (
                                     <>
                                         <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                                        Loading...
+                                        <span className="job-detail-action-label">Loading...</span>
                                     </>
                                 ) : (
                                     <>
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                                            <polyline points="14 2 14 8 20 8" />
-                                            <path d="M16 13H8M16 17H8M10 9H8" />
-                                        </svg>
-                                        Tailor Resume
+                                        <Wand2 size={16} />
+                                        <span className="job-detail-action-label">Tailor Resume</span>
                                         {gatedIcon}
                                     </>
                                 )}
@@ -997,18 +1030,20 @@ export function JobDetail({
                                 borderColor: applicationStatus === 'applied' ? 'var(--success)' : undefined,
                                 ...gatedStyle
                             }}
+                            title={applicationStatus === 'applied' ? 'Applied' : 'Add to Tracker'}
+                            aria-label={applicationStatus === 'applied' ? 'Applied' : 'Add to Tracker'}
                         >
                             {applicationStatus === 'loading' ? (
                                 <>
                                     <span className="loading-spin" style={{ width: 16, height: 16, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                                    Adding...
+                                    <span className="job-detail-action-label">Adding...</span>
                                 </>
                             ) : applicationStatus === 'applied' ? (
                                 <>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <polyline points="20 6 9 17 4 12" />
                                     </svg>
-                                    Applied
+                                    <span className="job-detail-action-label">Applied</span>
                                 </>
                             ) : (
                                 <>
@@ -1018,7 +1053,7 @@ export function JobDetail({
                                         <line x1="8" y1="2" x2="8" y2="6" />
                                         <line x1="3" y1="10" x2="21" y2="10" />
                                     </svg>
-                                    Add to Tracker
+                                    <span className="job-detail-action-label">Add to Tracker</span>
                                 </>
                             )}
                         </button>
@@ -1031,12 +1066,13 @@ export function JobDetail({
                                     borderColor: 'var(--border)',
                                 }}
                                 title="Edit Job Details"
+                                aria-label="Edit Job Details"
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                                 </svg>
-                                Edit
+                                <span className="job-detail-action-label">Edit</span>
                             </button>
                         )}
 
