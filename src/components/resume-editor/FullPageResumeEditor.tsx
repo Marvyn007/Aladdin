@@ -41,8 +41,8 @@ interface FullPageResumeEditorProps {
 
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.0;
-const MIN_PANEL_WIDTH = 240;
-const MAX_PANEL_WIDTH = 420;
+const MIN_PANEL_WIDTH = 300;
+const MAX_PANEL_WIDTH = 520;
 const COLLAPSE_THRESHOLD = 100;
 const RESUME_WIDTH = 794; // A4 width at 96 DPI
 const RESUME_HEIGHT = 1123; // A4 height at 96 DPI
@@ -71,8 +71,8 @@ export function FullPageResumeEditor({
     const [leftCollapsed, setLeftCollapsed] = useState(false);
     const [rightCollapsed, setRightCollapsed] = useState(false);
     
-    const [leftPanelWidth, setLeftPanelWidth] = useState(420);
-    const [rightPanelWidth, setRightPanelWidth] = useState(380);
+    const [leftPanelWidth, setLeftPanelWidth] = useState(500);
+    const [rightPanelWidth, setRightPanelWidth] = useState(460);
     const [isResizingLeft, setIsResizingLeft] = useState(false);
     const [isResizingRight, setIsResizingRight] = useState(false);
     
@@ -424,6 +424,85 @@ export function FullPageResumeEditor({
             setIsDownloading(false);
         }
     };
+
+    const handleEnhanceBullet = useCallback(async ({
+        section,
+        item,
+        bullet,
+    }: {
+        section: { title: string; type: string };
+        item: { title: string; subtitle?: string; technologies?: string };
+        bullet: { text: string };
+    }) => {
+        const response = await fetch('/api/enhance-resume-bullet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jobId,
+                bulletText: bullet.text,
+                context: {
+                    jobTitle,
+                    company,
+                    sectionTitle: section.title,
+                    sectionType: section.type,
+                    itemTitle: item.title,
+                    itemSubtitle: item.subtitle,
+                    technologies: item.technologies,
+                    keywords: {
+                        matched: keywords?.matched ?? [],
+                        missing: keywords?.missing ?? [],
+                        autoAdded: keywords?.autoAdded ?? [],
+                        matchedCritical: keywords?.matchedCritical ?? [],
+                        missingCritical: keywords?.missingCritical ?? [],
+                    },
+                },
+            }),
+        });
+
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+            throw new Error(data?.error || 'Could not enhance this bullet.');
+        }
+
+        if (!data?.bullet || typeof data.bullet !== 'string') {
+            throw new Error('The AI response did not include a usable bullet.');
+        }
+
+        return data.bullet;
+    }, [company, jobId, jobTitle, keywords]);
+
+    const handleEnhanceSummary = useCallback(async (summary: string) => {
+        const response = await fetch('/api/enhance-resume-summary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jobId,
+                summary,
+                context: {
+                    jobTitle,
+                    company,
+                    keywords: {
+                        matched: keywords?.matched ?? [],
+                        missing: keywords?.missing ?? [],
+                        autoAdded: keywords?.autoAdded ?? [],
+                        matchedCritical: keywords?.matchedCritical ?? [],
+                        missingCritical: keywords?.missingCritical ?? [],
+                    },
+                },
+            }),
+        });
+
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+            throw new Error(data?.error || 'Could not enhance this summary.');
+        }
+
+        if (!data?.summary || typeof data.summary !== 'string') {
+            throw new Error('The AI response did not include a usable summary.');
+        }
+
+        return data.summary;
+    }, [company, jobId, jobTitle, keywords]);
 
     return (
         <div 
@@ -896,6 +975,8 @@ export function FullPageResumeEditor({
                                 <ContentPanel
                                     resume={editorResume}
                                     onChange={(data) => updatePreview({ ...data, updatedAt: new Date().toISOString() })}
+                                    onEnhanceBullet={handleEnhanceBullet}
+                                    onEnhanceSummary={handleEnhanceSummary}
                                 />
                             </div>
                         </div>

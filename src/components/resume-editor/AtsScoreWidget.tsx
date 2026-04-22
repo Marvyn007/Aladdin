@@ -53,16 +53,31 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
     const newMatchedCount = dedupeKeywords([...matchedKeywords, ...autoAddedKeywords]).length;
     const newKeywordPercent = totalCount > 0 ? Math.round((newMatchedCount / totalCount) * 100) : 0;
 
+    const addSkillOptimistically = (skills: TailoredResumeData['skills'], skill: string): TailoredResumeData['skills'] => {
+        const currentSkills = (skills && !Array.isArray(skills)) ? skills : {};
+        const alreadyExists = Object.values(currentSkills).some(categorySkills =>
+            Array.isArray(categorySkills) && categorySkills.some(existing => existing.toLowerCase() === skill.toLowerCase())
+        );
+
+        if (alreadyExists) return currentSkills;
+
+        const targetCategory = Object.keys(currentSkills)[0] || 'Additional Skills';
+        return {
+            ...currentSkills,
+            [targetCategory]: [...(currentSkills[targetCategory] || []), skill],
+        };
+    };
+
     return (
         <div style={{ padding: '20px 14px', borderBottom: '1px solid #f1f5f9', background: '#ffffff', display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%', boxSizing: 'border-box', gap: '24px' }}>
 
             {/* BEFORE SECTION */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '16px 14px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Original Profile Analytics</span>
+                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Profile Analytics</span>
                 </div>
 
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b', marginBottom: '5px', textAlign: 'center' }}>Original Resume ATS Score</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b', marginBottom: '5px', textAlign: 'center' }}>ATS Score</h3>
 
 
                 {/* Circular Progress */}
@@ -140,7 +155,7 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
 
             {/* AFTER SECTION: Consolidated Results and Keywords */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '16px 14px', background: '#f5f3ff', borderRadius: '12px', border: '1px solid #ddd6fe' }}>
-                
+
                 {/* Unified Header and Keywords Block */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
@@ -165,7 +180,7 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
                                         type="button"
                                         aria-label={`Remove ${k} from resume`}
                                         onClick={() => {
-                                            let updatedSkills = { ...resume.skills } as any;
+                                            const updatedSkills: TailoredResumeData['skills'] = { ...resume.skills };
                                             if (resume.skills && !Array.isArray(resume.skills)) {
                                                 for (const cat in updatedSkills) {
                                                     if (updatedSkills[cat].includes(k)) {
@@ -229,23 +244,9 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
                         </div>
                     )}
                 </div>
-
+                {/*
                 {/* Aladdin Optimized Match Line */}
-                <div style={{ width: '100%', marginBottom: '4px', marginTop: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#1e293b', marginBottom: '6px' }}>
-                        <span style={{ fontWeight: 600 }}>New Keyword Score:</span>
-                        <span style={{ fontWeight: 600 }}>{Math.max(0, Math.min(100, newKeywordPercent))}%</span>
-                    </div>
-                    <div style={{ height: '10px', background: '#ffffff', borderRadius: '5px', overflow: 'hidden', border: '1px solid #ddd6fe' }}>
-                        <div style={{
-                            background: '#8ad617ff',
-                            height: '100%',
-                            width: `${Math.max(0, Math.min(100, newKeywordPercent))}%`,
-                            borderRadius: '5px',
-                            transition: 'width 1s ease-in-out'
-                        }} />
-                    </div>
-                </div>
+
 
             </div>
 
@@ -262,20 +263,27 @@ export function AtsScoreWidget({ keywords, resume, editorResume, updatePreview, 
                                 type="button"
                                 aria-label={`Add ${k} to resume`}
                                 onClick={async () => {
+                                    const currentSkillsObj = (editorResume.skills && !Array.isArray(editorResume.skills)) ? editorResume.skills : {};
+                                    const optimisticSkills = addSkillOptimistically(currentSkillsObj, k);
+
+                                    updatePreview({ ...editorResume, skills: optimisticSkills, updatedAt: new Date().toISOString() });
+                                    setKeywords(prev => ({
+                                        ...prev!,
+                                        matched: dedupeKeywords([...(prev!.matched || []), k]),
+                                        missing: (prev!.missing || []).filter(missingKey => missingKey !== k),
+                                        autoAdded: dedupeKeywords([...(prev!.autoAdded || []), k])
+                                    }));
+
                                     try {
-                                        const currentSkillsObj = (resume.skills && !Array.isArray(resume.skills)) ? resume.skills : {};
                                         const res = await fetch('/api/categorize-skills', {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ currentSkills: currentSkillsObj, newSkills: [k] })
                                         });
                                         const data = await res.json();
-                                        updatePreview({ ...editorResume, skills: data.updatedSkills || currentSkillsObj, updatedAt: new Date().toISOString() });
-                                        setKeywords(prev => ({
-                                            ...prev!,
-                                            matched: [...prev!.matched, k],
-                                            missing: prev!.missing.filter(missingKey => missingKey !== k)
-                                        }));
+                                        if (data.updatedSkills) {
+                                            updatePreview({ ...editorResume, skills: data.updatedSkills, updatedAt: new Date().toISOString() });
+                                        }
                                     } catch (e) { console.error('Categorize failed', e); }
                                 }}
                                 style={{
