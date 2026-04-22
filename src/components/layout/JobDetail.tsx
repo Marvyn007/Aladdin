@@ -621,8 +621,8 @@ export function JobDetail({
 
         const scrollTargets: Array<HTMLElement | Window | null | undefined> = [
             jobDetailScrollRef.current,
-            document.querySelector('.job-detail-container'),
-            document.querySelector('.main-content'),
+            document.querySelector<HTMLElement>('.job-detail-container'),
+            document.querySelector<HTMLElement>('.main-content'),
             document.scrollingElement as HTMLElement | null,
             window,
         ];
